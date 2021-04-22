@@ -5,3 +5,4 @@ jupyterlab
 matplotlib
 nbstripout
 # nbstripout --install --attributes .gitattributes
+scipy

@@ -31,13 +31,20 @@ def between_a(first, second, candidate):
     :return:
     """
     projection = orthogonal_project(first, second, candidate)
+    if cosine_similiarity(projection-first, second-first) > 0 and cosine_similiarity(first-projection, projection-second) > 0:
+        return np.linalg.norm(candidate-projection)
+    return math.inf
 
 
+
+def cosine_similiarity(first,second):
+    """https://stackoverflow.com/a/43043160/5122790"""
+    return np.dot(first, second)/(np.linalg.norm(first)*np.linalg.norm(second))
 
 def orthogonal_project(first, second, candidate):
     """see https://www.geeksforgeeks.org/vector-projection-using-python/"""
     vector_first_second = second-first #with startingpoint first
     # Task: Project vector candidate onto vector_first_second
-    v_norm = np.sqrt(sum(vector_first_second**2))
+    v_norm = np.linalg.norm(vector_first_second)
     projected  = (np.dot(candidate, vector_first_second)/v_norm**2)*vector_first_second
     return projected
