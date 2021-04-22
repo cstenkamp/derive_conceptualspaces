@@ -1,2 +1,7 @@
 numpy
 pytest
+jupyter
+jupyterlab
+matplotlib
+nbstripout
+# nbstripout --install --attributes .gitattributes
