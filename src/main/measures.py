@@ -30,9 +30,9 @@ def between_a(first, second, candidate):
     :param candidate:
     :return:
     """
-    projection = orthogonal_project(first, second, candidate)
-    if cosine_similiarity(projection-first, second-first) > 0 and cosine_similiarity(first-projection, projection-second) > 0:
-        return np.linalg.norm(candidate-projection)
+    rejection = ortho_rejection(first, second, candidate)
+    if cosine_similiarity(second-first, candidate-first) > 0 and cosine_similiarity(first-second, candidate-second) > 0:
+        return np.linalg.norm(rejection)
     return math.inf
 
 
@@ -41,10 +41,22 @@ def cosine_similiarity(first,second):
     """https://stackoverflow.com/a/43043160/5122790"""
     return np.dot(first, second)/(np.linalg.norm(first)*np.linalg.norm(second))
 
-def orthogonal_project(first, second, candidate):
-    """see https://www.geeksforgeeks.org/vector-projection-using-python/"""
-    vector_first_second = second-first #with startingpoint first
-    # Task: Project vector candidate onto vector_first_second
-    v_norm = np.linalg.norm(vector_first_second)
-    projected  = (np.dot(candidate, vector_first_second)/v_norm**2)*vector_first_second
-    return projected
+
+def ortho_rejection(first, second, candidate):
+    """https://en.wikipedia.org/wiki/Vector_projection"""
+    b = second-first
+    a = candidate
+    a1_sc = np.dot(a,(b/np.linalg.norm(b)))
+    b_hat = b/np.linalg.norm(b)
+    a1 = a1_sc*b_hat
+    a2 = a-a1
+    return a2*-1
+
+def ortho_projection(first, second, candidate):
+    """https://en.wikipedia.org/wiki/Vector_projection"""
+    b = second-first
+    a = candidate
+    a1_sc = np.dot(a,(b/np.linalg.norm(b)))
+    b_hat = b/np.linalg.norm(b)
+    a1 = a1_sc*b_hat
+    return a1
