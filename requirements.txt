@@ -6,3 +6,10 @@ matplotlib
 nbstripout
 # nbstripout --install --attributes .gitattributes
 scipy
+pandas
+nltk
+HanTa #Lemmatizer for german
+tqdm
+sklearn
+
+python-Levenshtein #für data_exploration.ipynb in data

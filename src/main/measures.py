@@ -34,7 +34,7 @@ def between_a(first, second, candidate):
     :param candidate:
     :return:
     """
-    rejection = ortho_rejection(first, second, candidate)
+    rejection = ortho_rejection(first-second, candidate-second)
     if cosine_similiarity(second-first, candidate-first) > 0 and cosine_similiarity(first-second, candidate-second) > 0:
         return np.linalg.norm(rejection)
     return math.inf
@@ -44,9 +44,9 @@ def cosine_similiarity(first,second):
     return np.dot(first, second)/(np.linalg.norm(first)*np.linalg.norm(second))
 
 
-def ortho_rejection(first, second, candidate):
+def ortho_rejection(first, candidate):
     """https://en.wikipedia.org/wiki/Vector_projection"""
-    b = second-first
+    b = first
     a = candidate
     a1_sc = np.dot(a,(b/np.linalg.norm(b)))
     b_hat = b/np.linalg.norm(b)
@@ -54,9 +54,9 @@ def ortho_rejection(first, second, candidate):
     a2 = a-a1
     return a2*-1
 
-def ortho_projection(first, second, candidate):
+def ortho_projection(first, candidate):
     """https://en.wikipedia.org/wiki/Vector_projection"""
-    b = second-first
+    b = first
     a = candidate
     a1_sc = np.dot(a,(b/np.linalg.norm(b)))
     b_hat = b/np.linalg.norm(b)
