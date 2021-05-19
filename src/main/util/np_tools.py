@@ -4,7 +4,7 @@ import math
 def np_divide(first, second, buffersize=10000):
     """in pmi, we want to just say `df = df/expected`, however that gives a sigkill.
     so this function will do first = first / second, but split up"""
-    assert first.shape == second.shape
+    assert first.shape == second.shape or second.shape == ()
     res = np.empty(first.shape)
     for rowsplit in range(1, math.ceil(first.shape[0]/buffersize)+1):
         from_row = (rowsplit-1)*buffersize
@@ -12,7 +12,8 @@ def np_divide(first, second, buffersize=10000):
         for colsplit in range(1, math.ceil(first.shape[1]/buffersize)+1):
             from_col = (colsplit-1)*buffersize
             to_col = colsplit*buffersize
-            res[from_row: to_row, from_col: to_col] = first[from_row: to_row, from_col: to_col] / second[from_row: to_row, from_col: to_col]
+            divisor = second if second.shape == () else second[from_row: to_row, from_col: to_col]
+            res[from_row: to_row, from_col: to_col] = first[from_row: to_row, from_col: to_col] / divisor
     return res
 
 
