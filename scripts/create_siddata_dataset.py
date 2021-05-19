@@ -8,28 +8,29 @@ import logging
 import numpy as np
 import pandas as pd
 
-from src.static.settings import SID_DATA_BASE
-from static.settings import DEBUG, RANDOM_SEED
+from src.static.settings import SID_DATA_BASE, DEBUG, RANDOM_SEED
 from src.main.util.logging import setup_logging
 from src.main.util.pretty_print import pretty_print as print
 from src.main.data_prep.create_mds import preprocess_data
-from src.main.data_prep.jsonloadstore import json_dump, json_dumps, json_load
+from src.main.data_prep.jsonloadstore import json_dump, json_load
 
 logger = logging.getLogger(basename(__file__))
 
 def main():
     setup_logging("INFO")
     random.seed(RANDOM_SEED)
-    # df = get_data()
-    # kwargs = {"max_elems": 100} if DEBUG else {}
-    # names, descriptions, mds = preprocess_data(df, **kwargs)
-    # json_dump({"names": names, "descriptions": descriptions, "mds": mds}, "arg.json")
-    loaded = json_load("arg.json")
-    names, descriptions, mds = loaded["names"], loaded["descriptions"], loaded["mds"]
+    df = get_data()
+    kwargs = {"max_elems": 100} if DEBUG else {}
+    names, descriptions, mds = preprocess_data(df, **kwargs)
+    json_dump({"names": names, "descriptions": descriptions, "mds": mds}, join(SID_DATA_BASE, "siddata_names_descriptions_mds.json"))
+    # loaded = json_load(join(SID_DATA_BASE, "siddata_names_descriptions_mds.json"))
+    # names, descriptions, mds = loaded["names"], loaded["descriptions"], loaded["mds"]
 
     mins = np.argmin(np.ma.masked_equal(mds.dissimilarity_matrix_, 0.0, copy=False), axis=0)
     for cmp1, cmp2 in enumerate(mins):
         print(f"*b*{names[cmp1]}*b* is most similar to *b*{names[cmp2]}*b*")
+        if cmp1 > 30:
+            break
     print()
 
 
