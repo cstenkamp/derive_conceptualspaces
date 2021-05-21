@@ -1,14 +1,15 @@
 import numpy as np
 import logging
 
-from main.load_semanticspaces import load_mds_representation, get_names
-from static.settings import DATA_BASE, DATA_SET, MDS_DIMENSIONS
-
-from main.measures import simple_similiarity, ortho_rejection, ortho_projection, between_a
+from src.main.load_semanticspaces import load_mds_representation, get_names
+from src.static.settings import DATA_BASE, DATA_SET, MDS_DIMENSIONS
+from src.main.measures import simple_similiarity, ortho_rejection, ortho_projection, between_a
+from src.main.util.pretty_print import pretty_print as print, fmt
 
 ###################################### own realistic-looking tests ######################################
 
 def test_simplesimiliarity_for_movies():
+    """tests if a star wars movie is more similar to another star wars movie than a random one."""
     for n_dims in [20,50,100,200]:
         tmp = load_mds_representation(DATA_BASE, "movies", n_dims)
         tmp2 = get_names(DATA_BASE, "movies")
@@ -89,19 +90,22 @@ def test_paper_table1_claims():
     assert sum(betweeness_positions)/len(betweeness_positions) < 25
 
 
-def find_betweenness_position(name_mds, first, second, third, betweenness_measure=between_a):
-        logging.debug(f"Question: Is `{third}` between `{first}` and `{second}`?")
-        a, b = name_mds[first], name_mds[second]
-        scores = {}
-        for name, candidate in name_mds.items():
-            if any(candidate != a) and any(candidate != b):
-                scores[name] = betweenness_measure(a, b, candidate)
-        valid_scores = [val for val in scores.values() if val < np.inf]
-        logging.debug("Mean Betweenness:", sum(valid_scores)/len(valid_scores), "| Candidate betweeness:", scores[third])
-        sorted_items = [i[0] for i in sorted(scores.items(), key=lambda x:x[1])]
-        logging.debug("Top Between Candidates:", ", ".join(sorted_items[:5]))
-        logging.debug(f"Their Candidate is betweenness place:", f"{sorted_items.index(third)+1}/{len(scores)}")
-        return sorted_items.index(third)+1
+def find_betweenness_position(name_mds, first, second, third, betweenness_measure=between_a, descriptions=None):
+    logging.info(fmt(f"Question: Is *b*{third}*b* between *b*{first}*b* and *b*{second}*b*?"))
+    a, b = name_mds[first], name_mds[second]
+    scores = {}
+    for name, candidate in name_mds.items():
+        if any(candidate != a) and any(candidate != b):
+            scores[name] = betweenness_measure(a, b, candidate)
+    valid_scores = [val for val in scores.values() if val < np.inf]
+    logging.info(fmt("Mean Betweenness:", sum(valid_scores) / len(valid_scores), "| Candidate betweeness:", scores[third]))
+    sorted_items = [i[0] for i in sorted(scores.items(), key=lambda x: x[1])]
+    logging.info(fmt("Top Between Candidates: *d*", "*d*, *d*".join(sorted_items[:5])+"*d*"))
+    if descriptions:
+        for item in [first, second, third] + sorted_items[:2]:
+            logging.debug(fmt(f"Description of *b*{item}*b*: *d*{descriptions[item]}*d*"))
+    logging.info(fmt(f"Their Candidate is betweenness place:", f"{sorted_items.index(third) + 1}/{len(scores)}"))
+    return sorted_items.index(third) + 1
 
 if __name__ == '__main__':
     test_between_a_for_numbers()

@@ -62,10 +62,11 @@ def get_commithash():
 def get_settings():
     return {k: v for k, v in settings.__dict__.items() if k.isupper()}
 
-def json_load(*args, **kwargs):
+def json_load(*args, assert_meta=(), **kwargs):
     with open(args[0], "r") as rfile:
         tmp = json.load(rfile, **kwargs)
     if isinstance(tmp, dict) and all(i in tmp for i in ["git_hash", "settings", "content"]):
-        #TODO maybe allow some assertions or smth?
+        for i in assert_meta:
+            assert getattr(settings, i) == tmp["settings"][i], f"The setting {i} does not correspond to what was saved!"
         return npify_rek(tmp["content"])
     return npify_rek(tmp)

@@ -62,8 +62,8 @@ def load_mds_representation(data_base, data_set, n_dims, return_array=True):
 
 
 def get_names(data_base, data_set):
-    TRANSLATE_FNAME = {"movies": "filmNames.txt", "places": "placeNames.txt", "wines": "wineNames.txt"}
-    fname = join(data_base, data_set, TRANSLATE_FNAME[data_set])
+    TRANSLATE_FNAME = {"movies": "filmNames.txt"}
+    fname = join(data_base, data_set, TRANSLATE_FNAME.get(data_set, f"{data_set[:-1]}Names.txt"))
     with open(fname, "r") as rfile:
         names = [i.strip() for i in rfile.readlines()]
     return names

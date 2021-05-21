@@ -11,5 +11,6 @@ nltk
 HanTa #Lemmatizer for german
 tqdm
 sklearn
+seaborn
 
 python-Levenshtein #für data_exploration.ipynb in data

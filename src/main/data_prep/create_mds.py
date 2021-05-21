@@ -7,14 +7,14 @@ import numpy as np
 from tqdm import tqdm
 from sklearn.manifold import MDS
 
-from static.settings import MDS_DIMENSIONS, RANDOM_SEED
+from static.settings import RANDOM_SEED
 from src.main.util.np_tools import np_divide, np_log
 from src.main.data_prep.tokenizers import tokenize_sentences_countvectorizer, tokenize_sentences_nltk
 from src.main.data_prep.jsonloadstore import json_dump, json_dumps, Struct
 
 logger = logging.getLogger(basename(__file__))
 
-def preprocess_data(df, use_nltk_tokenizer=False, n_dims=MDS_DIMENSIONS, max_elems=None):
+def preprocess_data(df, n_dims, use_nltk_tokenizer=False, max_elems=None):
     """3.4 in [DESC15]"""
     # TODO there's https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html
     name_sent_dict = df.set_index("Name")["Beschreibung"].to_dict()
