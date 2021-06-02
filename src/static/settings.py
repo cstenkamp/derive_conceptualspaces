@@ -10,7 +10,7 @@ DATA_SET = "courses" # "movies", "places", "wines", "courses"
 MDS_DIMENSIONS = 20 #20,50,100,200
 
 DEBUG = True
-RANDOM_SEED = 1
+RANDOM_SEED = None
 
 
 # checkers etc

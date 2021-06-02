@@ -12,5 +12,9 @@ HanTa #Lemmatizer for german
 tqdm
 sklearn
 seaborn
+sacred
+ipyparams
+nbdime
+#nbdime config-git --enable --global
 
 python-Levenshtein #für data_exploration.ipynb in data

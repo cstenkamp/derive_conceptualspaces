@@ -58,16 +58,25 @@ def create_mds(data_path, n_dims):
     json_dump({"names": names, "descriptions": descriptions, "mds": mds}, data_path)
     return names, descriptions, mds
 
+
 def load_mds(data_path, assert_meta=()):
     loaded = json_load(data_path, assert_meta=assert_meta)
     names, descriptions, mds = loaded["names"], loaded["descriptions"], loaded["mds"]
     return names, descriptions, mds
 
 def display_mds(mds, names, max_elems=30):
-    mins = np.argmin(np.ma.masked_equal(mds.dissimilarity_matrix_, 0.0, copy=False), axis=0)
+    """
+    Args:
+         mds: np.array or data_prep.jsonloadstore.Struct created from sklearn.manifold.MDS or sklearn.manifold.MSD
+         name: list of names
+         max_elems (int): how many to display
+    """
+    if hasattr(mds, "dissimilarity_matrix_"):
+        mds = mds.dissimilarity_matrix_
+    mins = np.argmin(np.ma.masked_equal(mds, 0.0, copy=False), axis=0)
     for cmp1, cmp2 in enumerate(mins):
         print(f"*b*{names[cmp1]}*b* is most similar to *b*{names[cmp2]}*b*")
-        if max_elems and cmp1 > max_elems:
+        if max_elems and cmp1 >= max_elems-1:
             break
 
 
