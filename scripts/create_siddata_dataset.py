@@ -71,8 +71,8 @@ def display_mds(mds, names, max_elems=30):
          name: list of names
          max_elems (int): how many to display
     """
-    if hasattr(mds, "dissimilarity_matrix_"):
-        mds = mds.dissimilarity_matrix_
+    if hasattr(mds, "embedding_"):
+        mds = mds.embedding_
     mins = np.argmin(np.ma.masked_equal(mds, 0.0, copy=False), axis=0)
     for cmp1, cmp2 in enumerate(mins):
         print(f"*b*{names[cmp1]}*b* is most similar to *b*{names[cmp2]}*b*")

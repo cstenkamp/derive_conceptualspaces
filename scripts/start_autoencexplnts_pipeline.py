@@ -33,8 +33,8 @@ def get_descriptions():
 def make_tsne_df(mds, names, n_dims=3):
     # TODO argument um gleich viele Kurse pro FB zu plotten
     # name_mds = dict(zip(tmp2, tmp))
-    if hasattr(mds, "dissimilarity_matrix_"):
-        mds = mds.dissimilarity_matrix_
+    if hasattr(mds, "embedding_"):
+        mds = mds.embedding_
     name_number = get_data().set_index("Name")["VeranstaltungsNummer"].to_dict()
     fachbereich_per_course = {k: int(v.split(".", 1)[0]) for k, v in name_number.items() if
                               v.split(".", 1)[0].isdigit() and int(v.split(".", 1)[0]) <= 10}  # There are 10 FBs
