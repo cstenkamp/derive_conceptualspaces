@@ -34,7 +34,7 @@ def load_ppmi_weighted_feature_vectors(data_base, data_set, return_array=True):
     return np.array(result) if return_array else result
 
 
-def load_mds_representation(data_base, data_set, n_dims, return_array=True):
+def load_mds_representation(data_base, data_set, n_dims, return_array=True, fname_out=[]):
     """
     We cannot use the `load_ppmi_weighted_feature_vectors` directly, because they are too sparse and we need a geometric
     representation in which entities correspond to points and in which Euclidean distance is a meaningful measure of
@@ -52,13 +52,14 @@ def load_mds_representation(data_base, data_set, n_dims, return_array=True):
     TRANSLATE_FNAME = {"movies": "films"}
     assert str(n_dims) in ["20", "50", "100", "200"]
     fname = join(data_base, data_set, f"d{n_dims}", f"{TRANSLATE_FNAME.get(data_set, data_set)}{n_dims}.mds")
+    fname_out.append(fname)
     res = []
     with open(fname, "r") as rfile:
         for line in rfile.readlines():
             l = [float(i) for i in line.strip().split("\t")]
             assert len(l) == n_dims
             res.append(l)
-    return np.array(res) if return_array else res
+    return (np.array(res) if return_array else res), fname
 
 
 def get_names(data_base, data_set):
@@ -66,4 +67,4 @@ def get_names(data_base, data_set):
     fname = join(data_base, data_set, TRANSLATE_FNAME.get(data_set, f"{data_set[:-1]}Names.txt"))
     with open(fname, "r") as rfile:
         names = [i.strip() for i in rfile.readlines()]
-    return names
+    return names, fname

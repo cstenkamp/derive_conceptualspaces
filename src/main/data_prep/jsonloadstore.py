@@ -63,8 +63,11 @@ def get_settings():
     return {k: v for k, v in settings.__dict__.items() if k.isupper()}
 
 def json_load(*args, assert_meta=(), **kwargs):
-    with open(args[0], "r") as rfile:
-        tmp = json.load(rfile, **kwargs)
+    if isinstance(args[0], str):
+        with open(args[0], "r") as rfile:
+            tmp = json.load(rfile, **kwargs)
+    else: #then it may be a sacred opened resource (https://sacred.readthedocs.io/en/stable/apidoc.html#sacred.Experiment.open_resource)
+        tmp = json.load(args[0], **kwargs)
     if isinstance(tmp, dict) and all(i in tmp for i in ["git_hash", "settings", "content"]):
         for i in assert_meta:
             assert getattr(settings, i) == tmp["settings"][i], f"The setting {i} does not correspond to what was saved!"
