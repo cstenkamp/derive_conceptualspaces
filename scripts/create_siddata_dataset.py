@@ -1,6 +1,9 @@
 """The purpose of this file is to create a dataset from the Siddata-data that looks like the three datasets used in [DESC15],
 available at http://www.cs.cf.ac.uk/semanticspaces/. Meaning: MDS, ..."""
-from os.path import join, isdir, isfile, abspath, dirname, splitext, basename, split
+
+#TODO make (snakemake?) Pipeline that runs start to finish and creates the complete directory
+
+from os.path import join, isfile, dirname, basename
 import re
 import random
 import logging
@@ -9,11 +12,11 @@ import os
 import numpy as np
 import pandas as pd
 
-from src.static.settings import SID_DATA_BASE, DEBUG, RANDOM_SEED, DATA_BASE, DATA_SET, MDS_DIMENSIONS
-from src.main.util.logging import setup_logging
+from src.static.settings import SID_DATA_BASE, DEBUG, RANDOM_SEED, DATA_BASE
+from main.util.logging import setup_logging
 from src.main.util.pretty_print import pretty_print as print
-from src.main.data_prep.create_mds import preprocess_data
-from src.main.data_prep.jsonloadstore import json_dump, json_load
+from src.main.load_data.siddata_data_prep.create_mds import preprocess_data
+from src.main.load_data.siddata_data_prep.jsonloadstore import json_dump, json_load
 
 logger = logging.getLogger(basename(__file__))
 

@@ -1,7 +1,7 @@
 import numpy as np
 import logging
 
-from src.main.load_semanticspaces import load_mds_representation, get_names
+from src.main.load_data.load_semanticspaces import load_mds_representation, get_names
 from src.static.settings import DATA_BASE, DATA_SET, MDS_DIMENSIONS
 from src.main.measures import simple_similiarity, ortho_rejection, ortho_projection, between_a
 from src.main.util.pretty_print import pretty_print as print, fmt

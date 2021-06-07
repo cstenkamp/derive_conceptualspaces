@@ -2,7 +2,7 @@ from os.path import join, isdir, isfile, abspath, dirname, splitext, basename, s
 
 import numpy as np
 
-from main.load_semanticspaces import load_mds_representation
+from main.load_data.load_semanticspaces import load_mds_representation
 from src.static.settings import DATA_BASE, MDS_DIMENSIONS, SID_DATA_BASE
 from scripts.create_siddata_dataset import load_mds, display_mds
 

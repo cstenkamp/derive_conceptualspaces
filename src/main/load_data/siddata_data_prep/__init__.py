@@ -1,0 +1,1 @@
+#The files in this directory are necessary to create the Siddata-Dataset, such that it can be loaded and used just like the other datasets from DESC15.
