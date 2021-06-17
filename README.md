@@ -1,3 +1,42 @@
+## How to get the data
+
+* Data comes from [DESC15] and can be obtained from http://www.cs.cf.ac.uk/semanticspaces/.
+* Download everything there, and make the directory-structure look like this:
+```
+    movies
+        classesGenres
+        classesKeywords
+        classesRatings
+        d20
+            DirectionsHeal
+            clusters20.txt
+            films20.mds
+            films20.projected
+            projections20.data
+        d50
+            ...
+        d100
+            ...
+        d200
+            ...
+        Tokens
+        filmNames.txt
+        tokens.json
+    wines
+        classes
+        d20
+            ...
+        d50
+            ...
+        d100
+            ...
+        d200
+            ...
+        Tokens
+        wineNames.txt
+    places
+        ...
+```
 ## Contributing
 
 ### Set up development-environment
@@ -12,3 +51,5 @@ nbdime config-git --enable --global
 ### Set up Sacred
 
 See https://sacred.readthedocs.io/en/stable/examples.html#docker-setup for the easiest way to get the MongoDB and boards to run. The */docker*-directory here is a clone of the respective *examples*-directory from the sacred-repo. To have the same `.env`-file in your local files, I can recommend PyCharm's **EnvFile**-Plugin.
+
+

@@ -14,6 +14,6 @@ def get_classes(data_base, what):
 
 
 if __name__ == "__main__":
-    from src.static.settings import DATA_BASE
-    tmp = get_classes(DATA_BASE, "Fachbereich")
+    from src.static.settings import SPACES_DATA_BASE
+    tmp = get_classes(SPACES_DATA_BASE, "Fachbereich")
     print(tmp)

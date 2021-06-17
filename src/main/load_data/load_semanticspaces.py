@@ -11,7 +11,7 @@ import numpy as np
 
 def load_ppmi_weighted_feature_vectors(data_base, data_set, return_array=True):
     """
-    Step 1 to obtain a vector-space representation of the documents is PPMI, where words that occur in the documents
+    Step 1 to obtain a vector-space representation of  documents is PPMI, where words that occur in the documents
     are weighted by how relevant for this one entity they are (frequent with entity e while being infrequent in the overall corpus).
     See [DESC15] Section 3.4, source: http://www.cs.cf.ac.uk/semanticspaces/ Step after this is MDS.
     :param data_base: base-dir for the data
@@ -80,3 +80,52 @@ def get_classes(data_base, data_set, **kwargs):
         return get_courses_classes(data_base, **kwargs)
     raise NotImplementedError()
 
+
+def get_candidateterms(data_base, data_set, n_dims, **kwargs):
+    if data_set == "movies":
+        from src.main.load_data.dataset_specifics.movies import get_candidateterms as get_movie_candidateterms
+        return get_movie_candidateterms(data_base, data_set, n_dims, **kwargs)
+    if data_set == "courses":
+        # from src.main.load_data.dataset_specifics.courses import get_classes as get_courses_classes
+        raise NotImplementedError() #TODO what are good candidate terms for courses??
+    raise NotImplementedError()
+
+
+def get_clusters(data_base, data_set, n_dims):
+    clusters = {}
+    fname = join(data_base, data_set, f"d{n_dims}", "clusters20.txt")
+    with open(fname, "r") as rfile:
+        txt = [i.strip() for i in rfile.readlines()]
+    iterator = iter(txt)
+    clustername = None
+    for line in iterator:
+        if line.startswith("Cluster"):
+            ncluster = int(line[len("Cluster "):line.find(":")])
+            assert ncluster == len(clusters)+1
+            assert next(iterator) == ""
+            clustername = line[line.find(":")+1:].strip()
+            clusters[clustername] = set()
+        else:
+            clusters[clustername].add(line)
+    return clusters
+
+
+def get_grouped_candidates(data_base, data_set, mds_dimensions):
+    canditerms = get_candidateterms(data_base, data_set, mds_dimensions)
+    clusters = get_clusters(data_base, data_set, mds_dimensions)
+    canditerm_clusters = []
+    cluster_directions = {key: None for key in clusters.keys()}
+    for words, poss, vec, origname in zip(*canditerms):
+        for clustername, clustercont in clusters.items():
+            if origname == clustername:
+                canditerm_clusters.append(clustername)
+                cluster_directions[clustername] = vec
+                break
+            if origname in clustercont:
+                canditerm_clusters.append(clustername)
+                break
+        #get here if no cluster applies
+        canditerm_clusters.append(None)
+    canditerms = [i for i in zip(*canditerms, canditerm_clusters) if i[4] is not None]
+    assert not any(i is None for i in cluster_directions.keys())
+    return canditerms, cluster_directions

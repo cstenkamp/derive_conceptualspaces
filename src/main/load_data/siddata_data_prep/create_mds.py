@@ -7,7 +7,7 @@ import numpy as np
 from tqdm import tqdm
 from sklearn.manifold import MDS
 
-from static.settings import RANDOM_SEED
+from src.static.settings import RANDOM_SEED
 from src.main.util.np_tools import np_divide, np_log
 from src.main.load_data.siddata_data_prep.tokenizers import tokenize_sentences_countvectorizer, tokenize_sentences_nltk
 from src.main.load_data.siddata_data_prep.jsonloadstore import json_dump, json_dumps, Struct

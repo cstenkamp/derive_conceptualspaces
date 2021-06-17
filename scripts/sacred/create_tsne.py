@@ -6,7 +6,7 @@ import pandas as pd
 from sklearn.manifold import TSNE
 
 from os.path import join
-from src.static.settings import DATA_BASE, DATA_DUMP_DIR, MONGO_URI
+from src.static.settings import SPACES_DATA_BASE, DATA_DUMP_DIR, MONGO_URI
 from src.main.load_data.load_semanticspaces import load_mds_representation, get_names
 
 ########################################################################################################################
@@ -40,8 +40,8 @@ def make_tsne_df(mds, names, n_dims=3):
 def main(mds_dimensions, data_set, tsne_dims):
     exp_inf_str = "__".join([f"{key}_{val}" for key, val in cfg().items()])
     dump_name = join(DATA_DUMP_DIR, f"tsne_{exp_inf_str}.csv")
-    mds, mds_path = load_mds_representation(DATA_BASE, data_set, mds_dimensions)
-    names, names_path = get_names(DATA_BASE, data_set)
+    mds, mds_path = load_mds_representation(SPACES_DATA_BASE, data_set, mds_dimensions)
+    names, names_path = get_names(SPACES_DATA_BASE, data_set)
     ex.add_resource(mds_path)
     ex.add_resource(names_path)
     df = make_tsne_df(mds, names, tsne_dims)

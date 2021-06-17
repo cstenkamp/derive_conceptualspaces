@@ -2,7 +2,7 @@ import numpy as np
 import logging
 
 from src.main.load_data.load_semanticspaces import load_mds_representation, get_names
-from src.static.settings import DATA_BASE, DATA_SET, MDS_DIMENSIONS
+from src.static.settings import SPACES_DATA_BASE, DATA_SET, MDS_DIMENSIONS
 from src.main.measures import simple_similiarity, ortho_rejection, ortho_projection, between_a
 from src.main.util.pretty_print import pretty_print as print, fmt
 
@@ -11,8 +11,8 @@ from src.main.util.pretty_print import pretty_print as print, fmt
 def test_simplesimiliarity_for_movies():
     """tests if a star wars movie is more similar to another star wars movie than a random one."""
     for n_dims in [20,50,100,200]:
-        tmp = load_mds_representation(DATA_BASE, "movies", n_dims)
-        tmp2 = get_names(DATA_BASE, "movies")
+        tmp = load_mds_representation(SPACES_DATA_BASE, "movies", n_dims)
+        tmp2 = get_names(SPACES_DATA_BASE, "movies")
         name_mds = dict(zip(tmp2, tmp))
         starwars = [i for i in name_mds.keys() if "Star Wars" in i]
         starwarssims = [simple_similiarity(name_mds[starwars[0]], name_mds[starwars[i]]) for i in range(1, len(starwars))]
@@ -56,8 +56,8 @@ def test_between_a_for_numbers():
 
 #TODO also do test for movies, that's table 2 in the paper
 def test_paper_table1_claims():
-    tmp = load_mds_representation(DATA_BASE, "places", 50)
-    tmp2 = get_names(DATA_BASE, "places")
+    tmp = load_mds_representation(SPACES_DATA_BASE, "places", 50)
+    tmp2 = get_names(SPACES_DATA_BASE, "places")
     name_mds = dict(zip(tmp2, tmp))
     paper_candidates = [
         ("fast food restaurant", "french restaurant", "american restaurant"),

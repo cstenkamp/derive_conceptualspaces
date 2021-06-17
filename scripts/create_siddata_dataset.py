@@ -2,7 +2,7 @@
 available at http://www.cs.cf.ac.uk/semanticspaces/. Meaning: MDS, ..."""
 
 #TODO make (snakemake?) Pipeline that runs start to finish and creates the complete directory
-
+import hashlib
 from os.path import join, isfile, dirname, basename
 import re
 import random
@@ -11,12 +11,18 @@ import os
 
 import numpy as np
 import pandas as pd
+from langdetect import detect
+from langdetect.lang_detect_exception import LangDetectException
+from tqdm import tqdm
+import html
+import json
 
-from src.static.settings import SID_DATA_BASE, DEBUG, RANDOM_SEED, DATA_BASE
-from main.util.logging import setup_logging
+from src.static.settings import SID_DATA_BASE, DEBUG, RANDOM_SEED, SPACES_DATA_BASE
+from src.main.util.logutils import setup_logging
 from src.main.util.pretty_print import pretty_print as print
 from src.main.load_data.siddata_data_prep.create_mds import preprocess_data
 from src.main.load_data.siddata_data_prep.jsonloadstore import json_dump, json_load
+from src.main.util.google_translate import translate_text
 
 logger = logging.getLogger(basename(__file__))
 
@@ -25,8 +31,38 @@ logger = logging.getLogger(basename(__file__))
 def main():
     setup_logging("INFO")
     random.seed(RANDOM_SEED)
-    for n_dims in [20, 100]: #[20,50,100,200]: #TODO #PRECOMMIT
-        create_dataset(n_dims, "courses")
+    # for n_dims in [20, 100]: #[20,50,100,200]: #TODO #PRECOMMIT
+    #     create_dataset(n_dims, "courses")
+    translate_descriptions()
+
+
+def translate_descriptions():
+    names, descriptions, mds = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_20.json"))
+    assert len(set(names)) == len(names)
+    descriptions = [html.unescape(i) for i in descriptions]
+    name_desc = dict(zip(names, descriptions))
+    if isfile((translationsfile := join(SID_DATA_BASE, "translated_descriptions.json"))):
+        with open(translationsfile, "r") as rfile:
+            translateds = json.load(rfile)
+    else:
+        translateds = {}
+    unknown = {}
+    print("Checking Language of descriptions...")
+    for name, desc in tqdm(name_desc.items()):
+        if name not in translateds:
+            try:
+                if (lan := detect(desc)) != "en":
+                    unknown[name] = [desc, lan]
+            except LangDetectException as e:
+                unknown[name] = [desc, "unk"]
+    print(f"There are {len(''.join([i[0] for i in unknown.values()]))} signs to be translated.")
+    to_translate = [i for i in unknown.keys() if i not in translateds]
+    translations = translate_text([unknown[i][0] for i in to_translate])
+    # hash_translates = dict(zip([hashlib.sha256(i.encode("UTF-8")).hexdigest() for i in to_translate], translations))
+    translateds.update(dict(zip(to_translate, translations)))
+    with open(join(SID_DATA_BASE, "translated_descriptions.json"), "w") as wfile:
+        json.dump(translateds, wfile)
+    print()
 
 
 def create_dataset(n_dims, dsetname):
@@ -34,7 +70,7 @@ def create_dataset(n_dims, dsetname):
     names, descriptions, mds = create_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_{n_dims}.json"), n_dims=n_dims)
         # names, descriptions, mds = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_{n_dims}.json")) #TODO #PRECOMMIT comment out other line
     display_mds(mds, names)
-    fname = join(DATA_BASE, dsetname, f"d{n_dims}", f"{dsetname}{n_dims}.mds")
+    fname = join(SPACES_DATA_BASE, dsetname, f"d{n_dims}", f"{dsetname}{n_dims}.mds")
     os.makedirs(dirname(fname), exist_ok=True)
     embedding = list(mds.embedding_)
     # indices = np.argsort(np.array(names))
