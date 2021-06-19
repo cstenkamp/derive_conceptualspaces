@@ -1,4 +1,9 @@
+# Derive Conceptual spaces
+
+Master's thesis deriving conceptual spaces from course data, following [DESC15] and others.
+
 ## How to run
+(Instructions tested on Ubuntu 20.04)
 
 * You need to have `git`, `docker` and `docker-compose` installed
 ```
@@ -14,18 +19,21 @@ sudo chmod +x /usr/local/bin/docker-compose
 sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
 sudo apt-get install git -y
 ```
-* Then you can check out this repo and build the container
+* Then you can check out this repo, set the env-file with the variables, and build the container
+Note that you can overwrite all variables in the *settings.py* by setting corresponding env-vars in your *.env*-file.
 ```
 cd to/your/path
 mkdir data
 git clone git@github.com:cstenkamp/derive_conceptualspaces.git
-cd derive_conceputalspaces
+cd derive_conceptualspaces
+cp docker/sample.env docker/.env
+#edit the .env to enter correct passwords etc
 docker build -f Dockerfile --build-arg uid=${COMPOSE_UID:-1000} --build-arg gid=${COMPOSE_GID:-1000} --rm --tag derive_conceptualspaces .
-docker run -it --name derive_conceptualspaces_cont -v $(realpath ../data):/opt/data derive_conceptualspaces bash
+docker run -it --name derive_conceptualspaces_cont -v $(realpath ../data):/opt/data --env-file ./docker/.env  derive_conceptualspaces zsh
 ```
-* ...which brings you into the shell of the container, in which you can then run
+* ...which brings you into the shell of the container, in which you can then start downloading data and run everything:
 ```
-
+python scripts/download_model.py
 ```
 
 
@@ -83,4 +91,6 @@ nbdime config-git --enable --global
 
 See https://sacred.readthedocs.io/en/stable/examples.html#docker-setup for the easiest way to get the MongoDB and boards to run. The */docker*-directory here is a clone of the respective *examples*-directory from the sacred-repo. To have the same `.env`-file in your local files, I can recommend PyCharm's **EnvFile**-Plugin.
 
+## References
 
+[DESC15] J. Derrac and S. Schockaert, Inducing semantic relations from conceptual spaces: a data-driven approach to plausible reasoning. 2015.

@@ -9,8 +9,8 @@ load_dotenv(ENV_FILE_PATH)
 
 
 DATA_BASE = abspath(join(dirname(__file__), "..", "..", "..", "data"))
-SPACES_DATA_BASE = join(DATA_BASE, "siddata_semspaces")
-SID_DATA_BASE = join(DATA_BASE, "siddata")
+SPACES_DATA_BASE = join(DATA_BASE, "semspaces")
+SID_DATA_BASE = join(DATA_BASE, "siddata_semspaces")
 DATA_DUMP_DIR = abspath(join(dirname(__file__), "..", "..", "data_dump"))
 GOOGLE_CREDENTIALS_FILE = join(DATA_BASE, "gloud_tools_key.json")
 
@@ -32,9 +32,10 @@ SIDDATA_SEAFILE_REPOREAD_PASSWORD = os.environ["SIDDATA_SEAFILE_REPOWRITE_PASSWO
 SIDDATA_SEAFILE_REPO_BASEPATH = "backend_synced_models"
 SIDDATA_SEAFILE_MODEL_VERSIONS = {"siddata_semspaces": 1} #"semanticspaces": 1,
 
-
-
-
+#overwriting with env-vars
+all_vars = [key for key,val in locals().items() if not callable(val) and not key.startswith("_") and key.isupper()]
+for key, val in {i: os.getenv(i) for i in all_vars if os.getenv(i)}.items():
+    locals()[key] = val
 
 # checkers etc (THIS AT BOTTOM!!!)
 import os
