@@ -1,31 +1,4 @@
-numpy
 pytest
-jupyter
-jupyterlab
-matplotlib
 nbstripout
 # nbstripout --install --attributes .gitattributes
-scipy
-pandas
-nltk
-HanTa #Lemmatizer for german
-tqdm
-sklearn
-seaborn
-ipyparams
 nbdime
-#nbdime config-git --enable --global
-langdetect
-google-cloud-translate==2.0.1
-
-python-Levenshtein #für data_exploration.ipynb in data
-python-dotenv
-
-#sacred
-sacred
-pymongo
-incense
-
-#model-downloader
-#how to install seafile-cli on your system: see https://download.seafile.com/published/seafile-user-manual/syncing_client/install_linux_client.md
-git+https://github.com/cstenkamp/python-seafile.git@v0.1.2#egg=python_seafile #on pypi there's only v0.1.0, which is broken, and even the original repo has an error with binary files

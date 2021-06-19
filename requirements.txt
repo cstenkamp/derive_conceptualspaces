@@ -1,10 +1,7 @@
 numpy
-pytest
 jupyter
 jupyterlab
 matplotlib
-nbstripout
-# nbstripout --install --attributes .gitattributes
 scipy
 pandas
 nltk
@@ -13,8 +10,6 @@ tqdm
 sklearn
 seaborn
 ipyparams
-nbdime
-#nbdime config-git --enable --global
 langdetect
 google-cloud-translate==2.0.1
 
@@ -25,6 +20,7 @@ python-dotenv
 sacred
 pymongo
 incense
+
 
 #model-downloader
 #how to install seafile-cli on your system: see https://download.seafile.com/published/seafile-user-manual/syncing_client/install_linux_client.md

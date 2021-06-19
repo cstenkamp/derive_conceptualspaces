@@ -1,5 +1,5 @@
 #docker build -f Dockerfile --build-arg uid=${COMPOSE_UID:-1000} --build-arg gid=${COMPOSE_GID:-1000} --rm --tag derive_conceptualspaces .
-#docker run -it --name derive_conceptualspaces_cont -v /home/chris/Documents/UNI_neu/Masterarbeit/data/:/opt/data derive_conceptualspaces bash
+#docker run -it --name derive_conceptualspaces_cont -v /home/chris/Documents/UNI_neu/Masterarbeit/data/:/opt/data derive_conceptualspaces zsh
 #docker start derive_conceptualspaces_cont -i
 #docker container rm derive_conceptualspaces_cont -f && docker build -f Dockerfile --build-arg uid=${COMPOSE_UID:-1000} --build-arg gid=${COMPOSE_GID:-1000} --rm --tag derive_conceptualspaces .
 
@@ -22,6 +22,7 @@ RUN ln -sf /usr/local/bin/python3 /usr/bin/python3
 RUN ln -sf /usr/bin/python3 /usr/bin/python
 RUN python3 -m pip install --upgrade pip
 RUN ln -sf /usr/bin/pip3 /usr/bin/pip
+RUN pip install -r ./requirements-dev.txt
 RUN pip install -r ./requirements.txt
 
 RUN groupadd -g ${gid} developer \

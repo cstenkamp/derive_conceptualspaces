@@ -3,12 +3,15 @@ import os
 from dotenv import load_dotenv
 
 ## Paths
+ENV_FILE_PATH = os.getenv("ENV_FILE_PATH") or abspath(join(dirname(__file__), "..", "..", "docker", ".env"))
+#you can specify a custom path to an env-file using ENV_FILE_PATH = xyz python ...
+load_dotenv(ENV_FILE_PATH)
+
+
 DATA_BASE = abspath(join(dirname(__file__), "..", "..", "..", "data"))
 SPACES_DATA_BASE = join(DATA_BASE, "siddata_semspaces")
 SID_DATA_BASE = join(DATA_BASE, "siddata")
 DATA_DUMP_DIR = abspath(join(dirname(__file__), "..", "..", "data_dump"))
-ENV_FILE_PATH = abspath(join(dirname(__file__), "..", "..", "docker", ".env"))
-load_dotenv(ENV_FILE_PATH)
 GOOGLE_CREDENTIALS_FILE = join(DATA_BASE, "gloud_tools_key.json")
 
 DATA_SET = "movies" # "movies", "places", "wines", "courses"
