@@ -27,7 +27,7 @@ SIDDATA_SEAFILE_REPOWRITE_PASSWORD = os.environ["SIDDATA_SEAFILE_REPOWRITE_PASSW
 SIDDATA_SEAFILE_REPOREAD_ACC = 'cstenkamp@uni-osnabrueck.de'
 SIDDATA_SEAFILE_REPOREAD_PASSWORD = os.environ["SIDDATA_SEAFILE_REPOWRITE_PASSWORD"]
 SIDDATA_SEAFILE_REPO_BASEPATH = "backend_synced_models"
-SIDDATA_SEAFILE_MODEL_VERSIONS = {"semanticspaces": 1, "siddata_semspaces": 1}
+SIDDATA_SEAFILE_MODEL_VERSIONS = {"siddata_semspaces": 1} #"semanticspaces": 1,
 
 
 
