@@ -19,11 +19,15 @@ sudo chmod +x /usr/local/bin/docker-compose
 sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
 sudo apt-get install git -y
 ```
-* Then you can check out this repo, set the env-file with the variables, and build the container
+* Then you can check out this repo, set the env-file with the variables, and build the container.  
+To use the Google Translate API you need a gcloud-credentials-json.  
+To download data, you need an account for the Myshare of the University of Osnabrück as the data is currently hosted there.   
+You can set such things using the *.env*-file.  
 Note that you can overwrite all variables in the *settings.py* by setting corresponding env-vars in your *.env*-file.
 ```
 cd to/your/path
 mkdir data
+#put your gcloud-credentials file under the name `gcloud_tools_key.json` into the data-directory
 git clone git@github.com:cstenkamp/derive_conceptualspaces.git
 cd derive_conceptualspaces
 cp docker/sample.env docker/.env
@@ -34,6 +38,7 @@ docker run -it --name derive_conceptualspaces_cont -v $(realpath ../data):/opt/d
 * ...which brings you into the shell of the container, in which you can then start downloading data and run everything:
 ```
 python scripts/download_model.py
+python scripts/create_siddata_dataset.py translate_descriptions
 ```
 
 

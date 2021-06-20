@@ -1,8 +1,9 @@
 import os
 from src.main.util.model_downloader_seafile import get_write_account_data, SeafileModelSyncer, model_downloader_logger
 from src.static import settings
+from main.util.logutils import setup_logging
 
-model_downloader_logger.setLevel("INFO")
+setup_logging("INFO")
 localpath = settings.DATA_BASE
 account, password, server, repoid, repopath, modelversions = get_write_account_data()
 modelsyncer = SeafileModelSyncer(server, account, password, repoid, repopath)

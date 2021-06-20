@@ -8,6 +8,8 @@ import re
 import random
 import logging
 import os
+import json
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -15,7 +17,7 @@ from langdetect import detect
 from langdetect.lang_detect_exception import LangDetectException
 from tqdm import tqdm
 import html
-import json
+import click
 
 from src.static.settings import SID_DATA_BASE, DEBUG, RANDOM_SEED, SPACES_DATA_BASE
 from src.main.util.logutils import setup_logging
@@ -23,19 +25,56 @@ from src.main.util.pretty_print import pretty_print as print
 from src.main.load_data.siddata_data_prep.create_mds import preprocess_data
 from src.main.load_data.siddata_data_prep.jsonloadstore import json_dump, json_load
 from src.main.util.google_translate import translate_text
+from src.main.create_spaces.get_candidates import get_continuous_chunks_a, get_continuous_chunks_b, stanford_extract_nounphrases
 
 logger = logging.getLogger(basename(__file__))
 
 ##################################################################################################
+#cli main
 
-def main():
-    setup_logging("INFO")
+@click.group()
+@click.option(
+    "--log",
+    type=str,
+    default="INFO",
+    help="log-level for logging-module. one of [DEBUG, INFO, WARNING, ERROR, CRITICAL]",
+)
+@click.option(
+    "--logfile",
+    type=str,
+    default="",
+    help="logfile to log to. If not set, it will be logged to standard stdout/stderr",
+)
+def cli(log="INFO", logfile=None):
+    print("Starting up at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
+    setup_logging(log, logfile)
     random.seed(RANDOM_SEED)
-    # for n_dims in [20, 100]: #[20,50,100,200]: #TODO #PRECOMMIT
-    #     create_dataset(n_dims, "courses")
-    translate_descriptions()
 
 
+@cli.resultcallback()
+def process_result(*args, **kwargs):
+    """gets executed after the actual code. Prints time for bookkeeping"""
+    print("Done at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
+
+########################################################################################################################
+#commands
+
+@cli.command()
+def extract_candidateterms():
+    names, descriptions, _ = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_20.json"))
+    descriptions = [html.unescape(i) for i in descriptions]
+    #TODO change the load_mds such that I have the possibility to a) get all descriptions in orig language b) get only
+    # those that are english, or c) get the english ones and the translated ones
+    print(stanford_extract_nounphrases(descriptions[1]))
+
+
+
+@cli.command()
+def create_all_datasets():
+    for n_dims in [20,50,100,200]:
+        create_dataset(n_dims, "courses")
+
+@cli.command()
 def translate_descriptions():
     names, descriptions, mds = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_20.json"))
     assert len(set(names)) == len(names)
@@ -64,6 +103,7 @@ def translate_descriptions():
         json.dump(translateds, wfile)
     print()
 
+########################################################################################################################
 
 def create_dataset(n_dims, dsetname):
     # assert not DEBUG #TODO #PRECOMMIT
@@ -137,7 +177,7 @@ def get_data(min_desc_len=10):
 
 
 if __name__ == '__main__':
-    main()
+    cli()
 
 
 
