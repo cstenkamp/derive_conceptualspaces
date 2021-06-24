@@ -1,8 +1,9 @@
 mkdir data
+set /p DUMMY="Now, please put your gcloud-credentials file under the name `gcloud_tools_key.json` into the `data`-directory which was just created, then come back here and press enter."
 git clone https://github.com/cstenkamp/derive_conceptualspaces.git
 cd derive_conceptualspaces
 cp docker/sample.env docker/.env
-set /p DUMMY="After you click enter, a notepad opens with a file where you have to enter your seafile-credentials. Please enter them, then come back to this window and press any key."
+set /p DUMMY="After you click enter, a notepad opens with a file where you have to enter your seafile-credentials. Please enter them, then close that notepad and come back to this window and press any key."
 notepad docker/.env
 pause
 docker build -f Dockerfile --rm --tag derive_conceptualspaces .
