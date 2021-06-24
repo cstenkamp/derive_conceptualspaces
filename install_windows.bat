@@ -6,5 +6,7 @@ set /p DUMMY="After you click enter, a notepad opens with a file where you have 
 notepad docker/.env
 pause
 docker build -f Dockerfile --rm --tag derive_conceptualspaces .
-for /f "tokens=*" %f in ('realpath ../data') do @(set data_path="%f")
+FOR /F "tokens=* USEBACKQ" %%F IN (realpath ../data) DO (
+SET data_path=%%F
+)
 docker run -it --name derive_conceptualspaces_cont -v %data_path%:/opt/data --env-file ./docker/.env  derive_conceptualspaces zsh

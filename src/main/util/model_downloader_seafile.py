@@ -77,9 +77,9 @@ def get_readwrite_account_data(accvarname, pwvarname, servervarname, repoidvarna
     for varname in [accvarname, pwvarname, servervarname, repoidvarname, repopathvarname, versionsvarname]:
         if os.environ.get(varname):
             res.append(os.environ[varname])
-            if hasattr(settings, varname):
+            if hasattr(settings, varname) and getattr(settings, varname) and getattr(settings, varname) != os.environ[varname]:
                 warnings.warn(f"!! Note that the variable '{varname}' is specified as environment-variable as well as the settings.py! The environment-variable is taken !!")
-        elif hasattr(settings, varname):
+        elif hasattr(settings, varname) and getattr(settings, varname):
             res.append(getattr(settings, varname))
         else:
             raise ValueError(f"The variable '{varname}' was not found! As specified in {DOCUMENTATIONLINK}, please add it to your 'settings.py' at '{abspath(settings.__file__)}' (note that env-vars precede over vars in settings).")
@@ -139,10 +139,12 @@ class SeafileModelSyncer():
                 traceback.print_exc()
                 print("Got an Error 502 from Seafile, is it possible that Seafile is down? Check https://myshare.uni-osnabrueck.de/, and if it's down, have patience!", file=sys.stderr)
                 raise
-            else:
-                print('Original Error:', '\n', file=sys.stderr)
-                traceback.print_exc()
+            elif e.code == 400 and "Unable to login with provided credentials" in e.message.decode("UTF-8"):
+                # print('Original Error:', '\n', file=sys.stderr)
+                # traceback.print_exc()
                 raise WrongPasswordException(f"You have a wrong username/password-combination. Note that (1) Env-vars precede over what you specified in 'settings.py' and (2) The caveats as listed in {DOCUMENTATIONLINK}.")
+            else:
+                raise e
 
         self.repo = self.client.repos.get_repo(remoterepo)
         try:
