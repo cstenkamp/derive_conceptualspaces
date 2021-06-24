@@ -103,7 +103,36 @@ def translate_descriptions():
     translateds.update(dict(zip(to_translate, translations)))
     with open(join(SID_DATA_BASE, "translated_descriptions.json"), "w") as wfile:
         json.dump(translateds, wfile)
-    print()
+    translation_new_len = len("".join(translations))
+    translated_descs = [name_desc[i] for i in name_desc.keys() if i in set(dict(zip(to_translate, translations)).keys())]
+    print(f"You translated {len('.'.join(translated_descs))} (becoming {translation_new_len}) Chars from {len(translated_descs)} descriptions.")
+
+
+@cli.command()
+def count_translations():
+    names, descriptions, mds = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_20.json"))
+    assert len(set(names)) == len(names)
+    descriptions = [html.unescape(i) for i in descriptions]
+    name_desc = dict(zip(names, descriptions))
+    if isfile((translationsfile := join(SID_DATA_BASE, "translated_descriptions.json"))):
+        with open(translationsfile, "r") as rfile:
+            translateds = json.load(rfile)
+    else:
+        translateds = {}
+    unknown = {}
+    translated_texts = [val for key, val in name_desc.items() if key in set(translateds.keys())]
+    n_translateds = len("".join(translated_texts))
+    for name, desc in tqdm(name_desc.items()):
+        if name not in translateds:
+            try:
+                if (lan := detect(desc)) != "en":
+                    unknown[name] = [desc, lan]
+            except LangDetectException as e:
+                unknown[name] = [desc, "unk"]
+    n_untranslateds = len("".join([i[0] for i in unknown.values()]))
+    percent = f"{round((n_translateds/(n_untranslateds+n_translateds))*100)}%"
+    print(f"You have translated {n_translateds}/{n_translateds+n_untranslateds} ({percent})")
+
 
 ########################################################################################################################
 

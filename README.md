@@ -30,7 +30,7 @@ Note that you can overwrite all variables in the *settings.py* by setting corres
 cd to/your/path
 mkdir data
 #put your gcloud-credentials file under the name `gcloud_tools_key.json` into the data-directory
-git clone git@github.com:cstenkamp/derive_conceptualspaces.git
+git clone https://github.com/cstenkamp/derive_conceptualspaces.git
 cd derive_conceptualspaces
 cp docker/sample.env docker/.env
 #edit the .env to enter correct passwords etc
@@ -49,9 +49,7 @@ docker run -it --name derive_conceptualspaces_cont -v $(realpath ../data):/opt/d
   shells when coding and committing to git. Further use one of the two commit unix style options. Other than that, 
   you'll probably go for the openSSL as well as Windows default console as terminal emulator options.
 * After installing, use the Explorer to change to a directory of your choice. Download the `install_windows.bat` file 
-  from here, paste it into that directory and execute it by double-clicking. Eventually it will tell you to read the 
-  instructions and subsequently opens a text-editor in which you have to enter some data. Make sure to do that and 
-  to close the editor afterwards, and press <kbd>Enter</kbd> to continue.
+  from [here](https://raw.githubusercontent.com/cstenkamp/derive_conceptualspaces/main/install_windows.bat) (right click -> save as), paste it into that directory and execute it by double-clicking. Eventually it will tell you to read the instructions and subsequently opens a text-editor in which you have to enter some data. Make sure to do that and to close the editor afterwards, and press <kbd>Enter</kbd> to continue.
 * ...that should bring you into the shell of the container, in which you can then start downloading data and run 
   everything (see below).
   

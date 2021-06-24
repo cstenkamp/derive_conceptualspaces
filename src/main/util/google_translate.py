@@ -7,7 +7,7 @@ import html
 
 from src.static.settings import GOOGLE_CREDENTIALS_FILE
 
-def translate_text(text, target="en", charlim=490000):
+def translate_text(text, target="en", charlim=200000): #TODO set to 490000
     # and I can still use the data from THIS call!!
     """Translates text into the target language. Target must be an ISO 639-1 language code.
     See https://g.co/cloud/translate/v2/translate-reference#supported_languages
@@ -15,6 +15,7 @@ def translate_text(text, target="en", charlim=490000):
     """
     BYTELIM = int(204800*0.9) #if a request is bigger than google API will raise an Error!
     SEGLIM = 128 #https://github.com/googleapis/google-cloud-python/issues/5425#issuecomment-562745220
+    TEXT_LEN_LIM = 3000 #google, this is getting ridiculus.
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = GOOGLE_CREDENTIALS_FILE
     if isinstance(text, six.binary_type):
         text = text.decode("utf-8")
@@ -39,7 +40,26 @@ def translate_text(text, target="en", charlim=490000):
         while len("|".join(text).encode('utf-8')) > BYTELIM or len(text) > SEGLIM:
             rest.insert(0, text[-1])
             text = text[:-1]
-        translated = translate_client.translate(text, target_language=target)
+        if any([len(i) > TEXT_LEN_LIM for i in text]):
+            print("Fuck you google.")
+            flatten = lambda l: [item for sublist in l for item in sublist]
+            split_text = [i.split(". ") if len(i) > TEXT_LEN_LIM else [i] for i in text]
+            assert all(len(i) <= TEXT_LEN_LIM for i in split_text)
+            longer_index = {ind: len(elem) - 1 for ind, elem in enumerate(split_text) if len(elem) > 1}
+            text = [i[0] if isinstance(i, list) else i for i in split_text]
+            latterparts = flatten([i[1:] for i in split_text if isinstance(i, list) and len(i) > 1])
+            #TODO die sätze einzelnd zu übersetzen macht die übersetzung definitiv schlechter.
+            assert len(latterparts) <= SEGLIM, "fuck this."
+            translations = translate_client.translate(text, target_language=target)
+            translations2 = translate_client.translate(latterparts, target_language=target)
+            assert sum(longer_index.values()) == len(translations2)
+            latterparts_iter = iter(translations2)
+            for index, ntranslations in longer_index.items():
+                for i in range(ntranslations):
+                    translations[index]["translatedText"] += ". " + next(latterparts_iter)["translatedText"]
+            translated = translations
+        else:
+            translated = translate_client.translate(text, target_language=target)
         assert len(translated) == len(text)
         res.extend(translated)
         assert len(res)+len(rest) == len(prelimtext)

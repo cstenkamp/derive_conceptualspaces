@@ -10,7 +10,7 @@ DATA_BASE = abspath(join(dirname(__file__), "..", "..", "..", "data"))
 SPACES_DATA_BASE = join(DATA_BASE, "semanticspaces")
 SID_DATA_BASE = join(DATA_BASE, "siddata_semspaces")
 DATA_DUMP_DIR = abspath(join(dirname(__file__), "..", "..", "data_dump"))
-GOOGLE_CREDENTIALS_FILE = join(DATA_BASE, "gloud_tools_key.json")
+GOOGLE_CREDENTIALS_FILE = join(DATA_BASE, "gcloud_tools_key.json")
 
 ## model-updown
 SIDDATA_SEAFILE_SERVER = 'https://myshare.uni-osnabrueck.de'
