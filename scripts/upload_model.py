@@ -1,7 +1,7 @@
 import os
 from src.main.util.model_downloader_seafile import get_write_account_data, SeafileModelSyncer, model_downloader_logger
 from src.static import settings
-from main.util.logutils import setup_logging
+from src.main.util.logutils import setup_logging
 
 setup_logging("INFO")
 localpath = settings.DATA_BASE

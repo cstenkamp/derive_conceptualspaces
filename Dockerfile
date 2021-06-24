@@ -25,8 +25,8 @@ RUN ln -sf /usr/bin/pip3 /usr/bin/pip
 RUN pip install -r ./requirements-dev.txt
 RUN pip install -r ./requirements.txt
 
-RUN groupadd -g ${gid} developer \
-    && useradd -g developer -u ${uid} -m developer
+RUN groupadd -g ${gid:-1000} developer \
+    && useradd -g developer -u ${uid:-1000} -m developer
 USER developer
 
 #https://dev.to/arctic_hen7/setting-up-zsh-in-docker-263f

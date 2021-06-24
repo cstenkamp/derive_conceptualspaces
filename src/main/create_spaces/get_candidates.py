@@ -62,8 +62,7 @@ def extract_phrase(tree_str, label):
     return phrases
 
 #TODO also verbrphrase
-def stanford_extract_nounphrases(sentence):
-    nlp = download_activate_stanfordnlp(DATA_BASE, ["english", "german"])
+def stanford_extract_nounphrases(nlp, sentence):
     tree_str = nlp.parse(sentence)
     nps = extract_phrase(tree_str, 'NP')
     return nps

@@ -7,7 +7,7 @@ ENV_FILE_PATH = os.getenv("ENV_FILE_PATH") or abspath(join(dirname(__file__), ".
 #you can specify a custom path to an env-file using ENV_FILE_PATH = xyz python ...
 load_dotenv(ENV_FILE_PATH)
 DATA_BASE = abspath(join(dirname(__file__), "..", "..", "..", "data"))
-SPACES_DATA_BASE = join(DATA_BASE, "semspaces")
+SPACES_DATA_BASE = join(DATA_BASE, "semanticspaces")
 SID_DATA_BASE = join(DATA_BASE, "siddata_semspaces")
 DATA_DUMP_DIR = abspath(join(dirname(__file__), "..", "..", "data_dump"))
 GOOGLE_CREDENTIALS_FILE = join(DATA_BASE, "gloud_tools_key.json")
@@ -15,10 +15,10 @@ GOOGLE_CREDENTIALS_FILE = join(DATA_BASE, "gloud_tools_key.json")
 ## model-updown
 SIDDATA_SEAFILE_SERVER = 'https://myshare.uni-osnabrueck.de'
 SIDDATA_SEAFILE_REPOID = '0b3948a7-9483-4e26-a7bb-a123496ddfcf' #for modelupdown v2
-SIDDATA_SEAFILE_REPOWRITE_ACC = 'cstenkamp@uni-osnabrueck.de'
-SIDDATA_SEAFILE_REPOWRITE_PASSWORD = os.environ["SIDDATA_SEAFILE_REPOWRITE_PASSWORD"]
-SIDDATA_SEAFILE_REPOREAD_ACC = 'cstenkamp@uni-osnabrueck.de'
-SIDDATA_SEAFILE_REPOREAD_PASSWORD = os.environ["SIDDATA_SEAFILE_REPOWRITE_PASSWORD"]
+SIDDATA_SEAFILE_REPOWRITE_ACC = os.getenv("SIDDATA_SEAFILE_REPOWRITE_ACC")
+SIDDATA_SEAFILE_REPOWRITE_PASSWORD = os.getenv("SIDDATA_SEAFILE_REPOWRITE_PASSWORD")
+SIDDATA_SEAFILE_REPOREAD_ACC = os.getenv("SIDDATA_SEAFILE_REPOWRITE_ACC")
+SIDDATA_SEAFILE_REPOREAD_PASSWORD = os.getenv("SIDDATA_SEAFILE_REPOWRITE_PASSWORD")
 SIDDATA_SEAFILE_REPO_BASEPATH = "backend_synced_models"
 SIDDATA_SEAFILE_MODEL_VERSIONS = {"siddata_semspaces": 1} #"semanticspaces": 1,
 

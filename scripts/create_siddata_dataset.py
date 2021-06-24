@@ -19,13 +19,14 @@ from tqdm import tqdm
 import html
 import click
 
-from src.static.settings import SID_DATA_BASE, DEBUG, RANDOM_SEED, SPACES_DATA_BASE
+from src.static.settings import SID_DATA_BASE, DEBUG, RANDOM_SEED, SPACES_DATA_BASE, DATA_BASE
 from src.main.util.logutils import setup_logging
 from src.main.util.pretty_print import pretty_print as print
 from src.main.load_data.siddata_data_prep.create_mds import preprocess_data
 from src.main.load_data.siddata_data_prep.jsonloadstore import json_dump, json_load
 from src.main.util.google_translate import translate_text
-from src.main.create_spaces.get_candidates import get_continuous_chunks_a, get_continuous_chunks_b, stanford_extract_nounphrases
+from src.main.create_spaces.get_candidates import get_continuous_chunks_a, get_continuous_chunks_b, \
+    stanford_extract_nounphrases, download_activate_stanfordnlp
 
 logger = logging.getLogger(basename(__file__))
 
@@ -65,7 +66,8 @@ def extract_candidateterms():
     descriptions = [html.unescape(i) for i in descriptions]
     #TODO change the load_mds such that I have the possibility to a) get all descriptions in orig language b) get only
     # those that are english, or c) get the english ones and the translated ones
-    print(stanford_extract_nounphrases(descriptions[1]))
+    nlp = download_activate_stanfordnlp(DATA_BASE, ["english", "german"])
+    print(stanford_extract_nounphrases(nlp, descriptions[1]))
 
 
 

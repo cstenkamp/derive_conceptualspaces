@@ -3,6 +3,8 @@
 Master's thesis deriving conceptual spaces from course data, following [DESC15] and others.
 
 ## How to run
+
+### Linux
 (Instructions tested on Ubuntu 20.04)
 
 * You need to have `git`, `docker` and `docker-compose` installed
@@ -35,7 +37,26 @@ cp docker/sample.env docker/.env
 docker build -f Dockerfile --build-arg uid=${COMPOSE_UID:-1000} --build-arg gid=${COMPOSE_GID:-1000} --rm --tag derive_conceptualspaces .
 docker run -it --name derive_conceptualspaces_cont -v $(realpath ../data):/opt/data --env-file ./docker/.env  derive_conceptualspaces zsh
 ```
-* ...which brings you into the shell of the container, in which you can then start downloading data and run everything:
+* ...which brings you into the shell of the container, in which you can then start downloading data and run 
+  everything (see below).
+  
+### Windows
+
+* Install Docker Desktop for Windows (https://docs.docker.com/docker-for-windows/install). Installer is >500mb so 
+  quite big, and installation requires a restart (and afterwards it prompted me to install https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi ), but just follow the instructions of the installer.
+* Install Git for Windows: Download the `.exe` from https://git-scm.com/download/win and run the installer. In the 
+  install wizard, make sure that git can be used from the command prompt, otherwise you'd have to switch between 
+  shells when coding and committing to git. Further use one of the two commit unix style options. Other than that, 
+  you'll probably go for the openSSL as well as Windows default console as terminal emulator options.
+* After installing, use the Explorer to change to a directory of your choice. Download the `install_windows.bat` file 
+  from here, paste it into that directory and execute it by double-clicking. Eventually it will tell you to read the 
+  instructions and subsequently opens a text-editor in which you have to enter some data. Make sure to do that and 
+  to close the editor afterwards, and press <kbd>Enter</kbd> to continue.
+* ...that should bring you into the shell of the container, in which you can then start downloading data and run 
+  everything (see below).
+  
+### All OS:
+
 ```
 python scripts/download_model.py
 python scripts/create_siddata_dataset.py translate_descriptions
