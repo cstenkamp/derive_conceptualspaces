@@ -3,7 +3,6 @@ import logging
 from datetime import datetime
 import pandas as pd
 from tqdm import tqdm
-from sacred.stflow import LogFileWriter
 
 from src.static.classifier_config import ANN_EPOCHS, CLASSIFIER_CHECKPOINT_PATH, CHECKPOINT_ALL_EPOCHS, LABEL_NAME, DPOINT_NAME, \
     DEBUG_SHOW_ANN_INPUT, SUMMARY_PATH, LOG_ALL_EPOCHS, CHECKPOINT_LOG_ALL_TIME, DOMINANT_METRIC
@@ -19,8 +18,6 @@ METRICS_DISPLAYSTYLE = {
     'loss': lambda i: f'{i:.3f}',
     'accuracy': lambda i: f'{i*100:.2f}%'
 }
-
-flatten_dict = lambda data: dict((key,d[key]) for d in data for key in d)
 
 def display_metrics(metrics):
     return ' || '.join([
@@ -80,7 +77,7 @@ class TrainPipeline():
             logging.error("The checkpoint already has as many epochs as necessary!")
             self.epoch('test')
             logging.info(f'Metrics: {display_metrics(self.metrics)}')
-            return
+            return True
 
         for epoch in range(self._ckpt.step.numpy(), ANN_EPOCHS):
             start_time = datetime.now()
@@ -88,9 +85,9 @@ class TrainPipeline():
             self.epoch('test')
             if self.ex:
                 for name, result in flatten_dict([{f"{key}_{k2}": v2.result() for k2,v2 in val.items()} for key, val  in self.metrics.items()]).items():
-                    self.ex.log_scalar(name, float(result))
+                    self.ex.log_scalar(name, float(result), step=epoch+1)
             end_time = datetime.now()
-            self.ex.log_scalar("episode_seconds", round((end_time-start_time).total_seconds()))
+            self.ex.log_scalar("episode_seconds", round((end_time-start_time).total_seconds()), step=epoch+1)
             logging.info(f'Epoch {str(epoch+1).rjust(3)} - Metrics: {display_metrics(self.metrics)}')
             self._ckpt.step.assign_add(1)
             self.checkpoint_summary()

@@ -7,7 +7,7 @@ PARAGRAPH_ENCODER = 'https://tfhub.dev/google/universal-sentence-encoder-multili
 TRAIN_ENCODER = False
 ENCODER_OUTDIM = 512
 BATCH_SIZE = 32
-ANN_EPOCHS = 5
+ANN_EPOCHS = 10
 
 CHECKPOINT_ALL_EPOCHS = 1
 LOG_ALL_EPOCHS = 1

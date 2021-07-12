@@ -7,7 +7,7 @@ import html
 
 from src.static.settings import GOOGLE_CREDENTIALS_FILE
 
-def translate_text(text, target="en", charlim=490000):
+def translate_text(text, target="en", charlim=49000): #TODO charlim=490000
     # and I can still use the data from THIS call!!
     """Translates text into the target language. Target must be an ISO 639-1 language code.
     See https://g.co/cloud/translate/v2/translate-reference#supported_languages

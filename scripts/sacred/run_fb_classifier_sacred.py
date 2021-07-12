@@ -49,8 +49,12 @@ def run_experiment(_run):
         classifier_checkpoint_path = join(CLASSIFIER_CHECKPOINT_PATH, str(_run._id))
         summary_path = join(SUMMARY_PATH, str(_run._id))
     else:
-        raise NotImplementedError()
-        #get the latest run & set up CLASSIFIER_CHECKPOINT_PATH, SUMMARY_PATH from that
+        latest_exp = max(int(i) for i in os.listdir(CLASSIFIER_CHECKPOINT_PATH))
+        classifier_checkpoint_path = join(CLASSIFIER_CHECKPOINT_PATH, str(latest_exp))
+        assert latest_exp == max(int(i) for i in os.listdir(SUMMARY_PATH))
+        summary_path = join(SUMMARY_PATH, str(latest_exp))
+        logging.warning(f"Continuing run {latest_exp}")
+        #TODO check if the configs are the same and the run is not through yet!
 
     if DEBUG:
         tf.config.run_functions_eagerly(True)
@@ -60,16 +64,27 @@ def run_experiment(_run):
     data = preprocess_data(traintest, os.path.join(SID_DATA_BASE, "preprocessed_dataset"), force_overwrite=False)
 
     pipeline = TrainPipeline(*load_data(data), ex=ex, classifier_checkpoint_path=classifier_checkpoint_path, summary_path=summary_path)
-    pipeline.train()
 
-    logging.info("Adding Checkpoint and Metrics to Sacred...")
-    for fname in os.listdir(pipeline.summary_writer._metadata["logdir"]._numpy().decode("UTF-8")):
-        ex.add_artifact(join(pipeline.summary_writer._metadata["logdir"]._numpy().decode("UTF-8"), fname))
-    for fname in [join(dirname(pipeline.last_save_path),i) for i in os.listdir(dirname(pipeline.last_save_path)) if splitext(i)[0] == splitext(basename(pipeline.last_save_path))[0]]+[join(dirname(pipeline.last_save_path), "checkpoint")]:
-        ex.add_artifact(fname)
+    didnt_train = False
+    try:
+        didnt_train = pipeline.train()
+    except KeyboardInterrupt:
+        pass #ensure to still save checkpoints & metrics
+
+    if not didnt_train:
+        logging.info("Adding Checkpoint and Metrics to Sacred...")
+        for fname in os.listdir(pipeline.summary_writer._metadata["logdir"]._numpy().decode("UTF-8")):
+            ex.add_artifact(join(pipeline.summary_writer._metadata["logdir"]._numpy().decode("UTF-8"), fname))
+        for fname in [join(dirname(pipeline.last_save_path),i) for i in os.listdir(dirname(pipeline.last_save_path)) if splitext(i)[0] == splitext(basename(pipeline.last_save_path))[0]]+[join(dirname(pipeline.last_save_path), "checkpoint")]:
+            ex.add_artifact(fname)
+    else:
+        pass
+        #TODO abort & delete sacred run
 
 
 def parse_command_line_args():
+    global NON_SACRED_ARGV, SACRED_ARGV
+    sys.argv = NON_SACRED_ARGV
     parser = argparse.ArgumentParser()
     parser.add_argument('--log', dest='loglevel', default='WARNING',
                         help='log-level for logging-module. one of [DEBUG, INFO, WARNING, ERROR, CRITICAL]',)
@@ -77,9 +92,11 @@ def parse_command_line_args():
                         help='logfile to log to. If not set, it will be logged to standard stdout/stderr')
     # parser.add_argument('--restart', default=False, action='store_true',
     #                     help='If you want to delete checkpoint and logging and restart from scratch',)
-    parser.add_argument('--no-continue', default=True, action='store_true',
+    parser.add_argument('--no-continue', default=False, action='store_true',
                          help='If you dont want to continue from the last checkpoint (default True)',)
-    return parser.parse_args()
+    parsed_args = parser.parse_args()
+    sys.argv = SACRED_ARGV
+    return parsed_args
 
 
 def setup_logging(loglevel='WARNING', logfile=None):
@@ -94,5 +111,10 @@ def setup_logging(loglevel='WARNING', logfile=None):
 
 
 if __name__ == '__main__':
+    if sys.argv.index("--log") > 0:
+        # NON_SACRED_ARGV = sys.argv[:sys.argv.index("--log")] + [sys.argv[sys.argv.index("--log") + 2]]
+        NON_SACRED_ARGV = sys.argv
+        sys.argv = SACRED_ARGV = [sys.argv[0]]+sys.argv[sys.argv.index("--log"):sys.argv.index("--log")+2]
+        #we pass the log-level to sacred but the rest we don't.
     ex.run_commandline()
     #TODO early stopping https://www.tensorflow.org/api_docs/python/tf/keras/callbacks/EarlyStopping

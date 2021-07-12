@@ -25,7 +25,7 @@ SIDDATA_SEAFILE_MODEL_VERSIONS = {"siddata_semspaces": 1} #"semanticspaces": 1,
 ## other
 DATA_SET = "movies" # "movies", "places", "wines", "courses"
 MDS_DIMENSIONS = 20 #20,50,100,200
-DEBUG = True
+DEBUG = False
 RANDOM_SEED = None
 MONGO_URI = f"mongodb://{os.environ['MONGO_INITDB_ROOT_USERNAME']}:{os.environ['MONGO_INITDB_ROOT_PASSWORD']}@127.0.0.1/?authMechanism=SCRAM-SHA-1"
 
