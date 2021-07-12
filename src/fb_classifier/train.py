@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 import pandas as pd
 from tqdm import tqdm
+from sacred.stflow import LogFileWriter
 
 from src.static.classifier_config import ANN_EPOCHS, CLASSIFIER_CHECKPOINT_PATH, CHECKPOINT_ALL_EPOCHS, LABEL_NAME, DPOINT_NAME, \
     DEBUG_SHOW_ANN_INPUT, SUMMARY_PATH, LOG_ALL_EPOCHS, CHECKPOINT_LOG_ALL_TIME, DOMINANT_METRIC
@@ -10,6 +11,9 @@ from src.fb_classifier.model import FB_Classifier
 from src.fb_classifier.util.debug_tools import debug_tf_function
 from src.fb_classifier.dataset import get_dset_len
 from src.fb_classifier.util.misc import check_config, get_git_revision_short_hash, get_ann_configs
+
+flatten_dict = lambda data: dict((key,d[key]) for d in data for key in d)
+
 
 METRICS_DISPLAYSTYLE = {
     'loss': lambda i: f'{i:.3f}',
@@ -31,13 +35,16 @@ def display_metrics(metrics):
 class TrainPipeline():
     '''See https://www.tensorflow.org/tutorials/quickstart/advanced and https://www.tensorflow.org/guide/effective_tf2'''
 
-    def __init__(self, dataset, n_classes):
+    def __init__(self, dataset, n_classes, ex=None, classifier_checkpoint_path=None, summary_path=None):
+        self.classifier_checkpoint_path = classifier_checkpoint_path or CLASSIFIER_CHECKPOINT_PATH
+        self.summary_path = summary_path or SUMMARY_PATH
         self.dataset = dataset
         self.model = FB_Classifier(output_dim=n_classes)
         self.loss_object = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True) #TODO from_logits? yes? no?
         self.optimizer = tf.keras.optimizers.Adam()
         self.last_checkpoint_at = datetime.now()
         self.last_logging_at = datetime.now()
+        self.ex = ex
 
         self.metrics = {
             'train': {
@@ -49,20 +56,21 @@ class TrainPipeline():
                 'accuracy': tf.keras.metrics.SparseCategoricalAccuracy(name='test_accuracy', dtype=tf.float32)
             }
         }
-        self.summary_writer = tf.summary.create_file_writer(SUMMARY_PATH)
+        self.summary_writer = tf.summary.create_file_writer(self.summary_path)
 
     def save_modelinfo(self):
         dset, metric = DOMINANT_METRIC.split('.')
         dominant_metric = self.metrics[dset][metric].result().numpy()
         #timestamp, git-commit, some settings, dominant_metric, ANN-structure
-        print()
+        #TODO save this model-info!!!
+        raise NotImplementedError()
 
 
     def train(self):
         # train_iterator = iter(self.dataset['train'])
-        check_config(CLASSIFIER_CHECKPOINT_PATH)
+        check_config(self.classifier_checkpoint_path)
         self._ckpt = tf.train.Checkpoint(step=tf.Variable(0), optimizer=self.optimizer, net=self.model) #, iterator=train_iterator (see to-do in train_epoch)
-        self._manager = tf.train.CheckpointManager(self._ckpt, CLASSIFIER_CHECKPOINT_PATH, max_to_keep=3)
+        self._manager = tf.train.CheckpointManager(self._ckpt, self.classifier_checkpoint_path, max_to_keep=3)
         if self._manager.latest_checkpoint:
             self._ckpt.restore(self._manager.latest_checkpoint)
             logging.info(f'Restored from {self._manager.latest_checkpoint} ({self._ckpt.step.numpy()} steps already done)')
@@ -75,20 +83,26 @@ class TrainPipeline():
             return
 
         for epoch in range(self._ckpt.step.numpy(), ANN_EPOCHS):
+            start_time = datetime.now()
             self.epoch('train', size=get_dset_len(self.dataset['train']))
             self.epoch('test')
+            if self.ex:
+                for name, result in flatten_dict([{f"{key}_{k2}": v2.result() for k2,v2 in val.items()} for key, val  in self.metrics.items()]).items():
+                    self.ex.log_scalar(name, float(result))
+            end_time = datetime.now()
+            self.ex.log_scalar("episode_seconds", round((end_time-start_time).total_seconds()))
             logging.info(f'Epoch {str(epoch+1).rjust(3)} - Metrics: {display_metrics(self.metrics)}')
             self._ckpt.step.assign_add(1)
             self.checkpoint_summary()
-            self.save_modelinfo()
+            # self.save_modelinfo() #TODO do
         self.checkpoint_summary(force=True)
 
 
     def checkpoint_summary(self, in_epoch=False, force=False):
         if ((not in_epoch and int(self._ckpt.step) > 0 and int(self._ckpt.step) % CHECKPOINT_ALL_EPOCHS == 0) or
                 (datetime.now() - self.last_checkpoint_at > pd.to_timedelta(CHECKPOINT_LOG_ALL_TIME)) or force):
-            save_path = self._manager.save()
-            logging.debug(f"Saved checkpoint for step {int(self._ckpt.step)} at {save_path}")
+            self.last_save_path = self._manager.save()
+            logging.debug(f"Saved checkpoint for step {int(self._ckpt.step)} at {self.last_save_path}")
             self.last_checkpoint_at = datetime.now()
         if ((not in_epoch and tf.equal(self.optimizer.iterations % LOG_ALL_EPOCHS, 0)) or
                 (datetime.now() - self.last_logging_at > pd.to_timedelta(CHECKPOINT_LOG_ALL_TIME)) or force):

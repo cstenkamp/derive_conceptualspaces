@@ -3,7 +3,7 @@ from os.path import join
 from types import ModuleType
 
 import src.static.classifier_config
-from src.static.classifier_config import CLASSIFIER_CHECKPOINT_PATH, SUMMARY_PATH
+# from src.static.classifier_config import CLASSIFIER_CHECKPOINT_PATH, SUMMARY_PATH
 import subprocess
 
 def write_config(dest_path, config):
@@ -23,24 +23,26 @@ def get_all_debug_confs():
     return {i:eval('main.config.'+i) for i in dir(main.config) if i.startswith('DEBUG')}
 
 
-def get_all_configs():
+def get_all_configs(as_string=True):
     config = {i: eval('src.static.classifier_config.' + i) for i in dir(src.static.classifier_config) if not i.startswith('_')}
     config = {key: val for key, val in config.items() if
               not callable(val) and not isinstance(val, ModuleType) and key.isupper()}
+    if not as_string:
+        return config
     config_str = '\n'.join(f'{key}: {val}' for key, val in config.items())
     return config_str
 
 
 
-def clear_checkpoints_summary():
-    for dir in [CLASSIFIER_CHECKPOINT_PATH, SUMMARY_PATH]:
-        if os.path.isdir(dir):
-            for f in [f for f in os.listdir(dir) if f.endswith(".bak")]:
-                os.remove(os.path.join(dir, f))
+# def clear_checkpoints_summary():
+#     for dir in [CLASSIFIER_CHECKPOINT_PATH, SUMMARY_PATH]:
+#         if os.path.isdir(dir):
+#             for f in [f for f in os.listdir(dir) if f.endswith(".bak")]:
+#                 os.remove(os.path.join(dir, f))
 
 
 def check_config(path):
-    if read_config(path) != get_all_configs():
+    if read_config(path) and read_config(path) != get_all_configs():
         print('The config of the last run differs from this one!')
         oldconf = {key: val for key, val in [(i.split(':')[0], ':'.join(i.split(':')[1:])) for i in read_config(path).split("\n")]}
         newconf = {key: val for key, val in [(i.split(':')[0], ':'.join(i.split(':')[1:])) for i in get_all_configs().split("\n")]}
