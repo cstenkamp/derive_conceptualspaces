@@ -32,6 +32,7 @@ MONGO_URI = f"mongodb://{os.environ['MONGO_INITDB_ROOT_USERNAME']}:{os.environ['
 STANFORDNLP_VERSION = "4.2.2" #whatever's newest at https://stanfordnlp.github.io/CoreNLP/history.html
 
 
+
 ########################################################################################################################
 # KEEP THIS AT THE BOTTOM!
 
@@ -48,3 +49,9 @@ if not os.environ.get("SETTINGS_WARNINGS_GIVEN"):
     if RANDOM_SEED:
         print("Using a random seed!!!")
 os.environ["SETTINGS_WARNINGS_GIVEN"] = "1"
+
+#actually make all defined directories (global vars that end in "_PATH")
+for key, val in dict(locals()).items():
+    if key.endswith('_PATH') and not isfile(val):
+        locals()[key] = abspath(val)
+        os.makedirs(locals()[key], exist_ok=True)

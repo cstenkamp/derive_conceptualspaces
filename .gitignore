@@ -1,5 +1,6 @@
 data_dump
 sacred_data
+docker/mongodb
 
 .idea/
 # Byte-compiled / optimized / DLL files

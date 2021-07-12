@@ -106,7 +106,7 @@ def translate_descriptions():
     translation_new_len = len("".join(translations))
     translated_descs = [name_desc[i] for i in name_desc.keys() if i in set(dict(zip(to_translate, translations)).keys())]
     print(f"You translated {len('.'.join(translated_descs))} (becoming {translation_new_len}) Chars from {len(translated_descs)} descriptions.")
-
+from collections import defaultdict
 
 @cli.command()
 def count_translations():

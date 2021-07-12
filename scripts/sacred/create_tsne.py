@@ -22,7 +22,7 @@ from src.static.settings import DATA_SET
 def cfg():
     mds_dimensions = 100
     data_set = "movies"
-    tsne_dims = 2
+    tsne_dims = 3 
 
 
 def make_tsne_df(mds, names, n_dims=3):

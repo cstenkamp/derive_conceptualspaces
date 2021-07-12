@@ -1,4 +1,4 @@
-version: '3.6'
+version: '3.8'
 
 services:
 
@@ -8,6 +8,11 @@ services:
       - 127.0.0.1:27017:27017
     restart: unless-stopped
     env_file: .env
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - ./mongodb:/data/db
 
   mongo-express:
     image: mongo-express
@@ -39,4 +44,3 @@ services:
     env_file: .env
     depends_on:
       - mongo
-

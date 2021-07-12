@@ -1,0 +1,10 @@
+seaborn
+tensorflow>=2.3
+#tensorflow-gpu>=2.3
+numpy<1.19.0
+pandas
+matplotlib
+tensorflow-hub
+tensorflow_text
+tqdm
+tensorflow_text>=2.0.0rc0
