@@ -14,6 +14,7 @@ langdetect
 google-cloud-translate==2.0.1
 click
 stanfordcorenlp
+keybert
 
 python-Levenshtein #für data_exploration.ipynb in data
 python-dotenv

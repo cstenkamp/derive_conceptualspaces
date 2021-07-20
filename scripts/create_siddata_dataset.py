@@ -3,6 +3,7 @@ available at http://www.cs.cf.ac.uk/semanticspaces/. Meaning: MDS, ..."""
 
 #TODO make (snakemake?) Pipeline that runs start to finish and creates the complete directory
 import hashlib
+from collections import Counter
 from os.path import join, isfile, dirname, basename
 import re
 import random
@@ -18,6 +19,7 @@ from langdetect.lang_detect_exception import LangDetectException
 from tqdm import tqdm
 import html
 import click
+from sklearn.svm import SVC
 
 from src.static.settings import SID_DATA_BASE, DEBUG, RANDOM_SEED, SPACES_DATA_BASE, DATA_BASE
 from src.main.util.logutils import setup_logging
@@ -25,10 +27,19 @@ from src.main.util.pretty_print import pretty_print as print
 from src.main.load_data.siddata_data_prep.create_mds import preprocess_data
 from src.main.load_data.siddata_data_prep.jsonloadstore import json_dump, json_load
 from src.main.util.google_translate import translate_text
-from src.main.create_spaces.get_candidates import get_continuous_chunks_a, get_continuous_chunks_b, \
+from src.main.create_spaces.get_candidates_stanfordnlp import get_continuous_chunks_a, get_continuous_chunks_b, \
     stanford_extract_nounphrases, download_activate_stanfordnlp
+from src.main.create_spaces.get_candidates_keybert import KeyBertExtractor
+from src.main.create_spaces.get_candidates_rules import extract_coursetype
+
 
 logger = logging.getLogger(basename(__file__))
+
+ORIGLAN = 1
+ONLYENG = 2
+TRANSL = 3
+
+flatten = lambda l: [item for sublist in l for item in sublist]
 
 ##################################################################################################
 #cli main
@@ -61,13 +72,41 @@ def process_result(*args, **kwargs):
 #commands
 
 @cli.command()
-def extract_candidateterms():
-    names, descriptions, _ = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_20.json"))
-    descriptions = [html.unescape(i) for i in descriptions]
-    #TODO change the load_mds such that I have the possibility to a) get all descriptions in orig language b) get only
-    # those that are english, or c) get the english ones and the translated ones
+def extract_candidateterms_stanfordlp():
+    names, descriptions, _, _ = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_20.json"))
     nlp = download_activate_stanfordnlp(DATA_BASE, ["english", "german"])
     print(stanford_extract_nounphrases(nlp, descriptions[1]))
+
+@cli.command()
+def stuff():
+    names, descriptions, _, _ = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_20.json"), translate_policy=TRANSL)
+    with open(join(SID_DATA_BASE, "candidate_terms.json"), "r") as rfile:
+        candidate_terms = json.load(rfile)
+    names = names[:len(candidate_terms)]
+    descriptions = descriptions[:len(candidate_terms)] #TODO remove this this is baad
+    assert all(j in descriptions[i].lower() for i in range(len(descriptions)) for j in candidate_terms[i])
+    print("Top 25: ", sorted(dict(Counter(flatten(candidate_terms))).items(), key=lambda x:x[1], reverse=True)[:25])
+    all_terms = set(flatten(candidate_terms))
+    for term in all_terms:
+        print()
+
+@cli.command()
+def extract_candidateterms_keybert():
+    names, descriptions, _, _ = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_20.json"), translate_policy=TRANSL)
+    extractor = KeyBertExtractor(False, faster=True)
+    candidateterms = []
+    for desc in tqdm(descriptions):
+        tmp = extractor(desc)
+        keyberts = tmp[0]
+        if len(keyberts) < 5:
+            print("ARGH")
+        if (ct := extract_coursetype(desc)) and ct not in keyberts:
+            keyberts += [ct]
+        candidateterms.append(keyberts)
+    with open(join(SID_DATA_BASE, "candidate_terms.json"), "w") as wfile:
+        json.dump([list(i) for i in candidateterms], wfile)
+
+
 
 
 
@@ -78,7 +117,8 @@ def create_all_datasets():
 
 @cli.command()
 def translate_descriptions():
-    names, descriptions, mds = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_20.json"))
+    names, descriptions, mds, languages = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_20.json"))
+    #TODO use langauges
     assert len(set(names)) == len(names)
     descriptions = [html.unescape(i) for i in descriptions]
     name_desc = dict(zip(names, descriptions))
@@ -106,7 +146,6 @@ def translate_descriptions():
     translation_new_len = len("".join(translations))
     translated_descs = [name_desc[i] for i in name_desc.keys() if i in set(dict(zip(to_translate, translations)).keys())]
     print(f"You translated {len('.'.join(translated_descs))} (becoming {translation_new_len}) Chars from {len(translated_descs)} descriptions.")
-from collections import defaultdict
 
 @cli.command()
 def count_translations():
@@ -169,10 +208,47 @@ def create_mds(data_path, n_dims):
     return names, descriptions, mds
 
 
-def load_mds(data_path, assert_meta=()):
+def load_mds(data_path, assert_meta=(), translate_policy=ORIGLAN):
     loaded = json_load(data_path, assert_meta=assert_meta)
+    languages_file = join(dirname(data_path), "languages.json")
+    if not isfile(languages_file):
+        lans = []
+        for desc in tqdm(loaded['descriptions']):
+            try:
+                lans.append(detect(desc))
+            except LangDetectException as e:
+                lans.append("unk")
+        with open(languages_file, "w") as ofile:
+            json.dump(dict(zip(loaded["names"], lans)), ofile)
+    else:
+        with open(languages_file, "r") as rfile:
+            lans = json.load(rfile)
     names, descriptions, mds = loaded["names"], loaded["descriptions"], loaded["mds"]
-    return names, descriptions, mds
+    languages = [lans[i] for i in names]
+    if translate_policy == ORIGLAN:
+        pass
+    elif translate_policy == ONLYENG:
+        indices = [ind for ind, elem in enumerate(languages) if elem == "en"]
+        names, descriptions, languages = [names[i] for i in indices], [descriptions[i] for i in indices], [languages[i] for i in indices]
+        mds.embedding_ = np.array([mds.embedding_[i] for i in indices])
+        mds.dissimilarity_matrix_ = np.array([mds.dissimilarity_matrix_[i] for i in indices])
+    elif translate_policy == TRANSL:
+        with open(join(SID_DATA_BASE, "translated_descriptions.json"), "r") as rfile:
+            translations = json.load(rfile)
+        new_descriptions, new_indices = [], []
+        for ind, name in enumerate(names):
+            if lans[name] == "en":
+                new_descriptions.append(descriptions[ind])
+                new_indices.append(ind)
+            elif name in translations:
+                new_descriptions.append(translations[name])
+                new_indices.append(ind)
+        descriptions = new_descriptions
+        names, languages = [names[i] for i in new_indices], [languages[i] for i in new_indices]
+        mds.embedding_ = np.array([mds.embedding_[i] for i in new_indices])
+        mds.dissimilarity_matrix_ = np.array([mds.dissimilarity_matrix_[i] for i in new_indices])
+    descriptions = [html.unescape(i) for i in descriptions]
+    return names, descriptions, mds, languages
 
 def display_mds(mds, names, max_elems=30):
     """
