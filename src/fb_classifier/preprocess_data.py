@@ -26,6 +26,7 @@ def create_traintest(sourcefile):
         cont.to_csv(join(dirname(sourcefile), splitext(sourcefile)[0]+"_"+source + ".csv"))
         sources[source] = join(dirname(sourcefile), splitext(sourcefile)[0]+"_"+source + ".csv")
     return sources
+    #TODO why do I use train_test_split here and also in preprocess_data??
 
 
 def preprocess_data(sources, dest_path: str, force_overwrite: bool = False): #sources is dict or str
@@ -54,7 +55,7 @@ def preprocess_data(sources, dest_path: str, force_overwrite: bool = False): #so
     return {key: join(dest_path, key+'.csv') for key in sources.keys()}
 
 
-def make_classifier_class(dsetname, dset):
+def make_classifier_class(dsetname, dset, plot_dropped=True, save_plot=None):
     new_dset = {}
     for key, val in dset.items():
         if len(splits := val.split(".")) == 2 and splits[0].isnumeric() and splits[1].replace("_", "").isnumeric():
@@ -75,8 +76,12 @@ def make_classifier_class(dsetname, dset):
             new_dset[key] = "other"
     usables = {k:int(v)-1 for k,v in new_dset.items() if v != "other" and int(v) <=10}
     print(f"{dsetname}: dropped {len(new_dset)-len(usables)} courses as they had no unamiguous Fachbereich")
-    counter = dict(sorted(Counter([i+1 for i in usables.values()]).items(), key=lambda x:int(x[0])))
+    counter = {str(k): v for k, v in sorted(Counter([i+1 for i in usables.values()]).items(), key=lambda x:int(x[0]))}
+    if plot_dropped:
+        counter["Other"] = len(new_dset)-len(usables)
     plt.bar(*list(zip(*counter.items())))
-    plt.title(f"Number of Courses per Fachbereich ({dsetname}-dataset)")
-    plt.show() #TODO show in a notebook
+    plt.title(f"Number of Courses per Faculty"+(f"({dsetname}-dataset)" if dsetname != "all" else ""))
+    if save_plot:
+        plt.savefig(save_plot)
+    plt.show()
     return pd.Series(usables)
