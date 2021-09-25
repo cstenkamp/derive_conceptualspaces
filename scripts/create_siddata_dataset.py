@@ -77,18 +77,6 @@ def extract_candidateterms_stanfordlp():
     nlp = download_activate_stanfordnlp(DATA_BASE, ["english", "german"])
     print(stanford_extract_nounphrases(nlp, descriptions[1]))
 
-@cli.command()
-def stuff():
-    names, descriptions, _, _ = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_20.json"), translate_policy=TRANSL)
-    with open(join(SID_DATA_BASE, "candidate_terms.json"), "r") as rfile:
-        candidate_terms = json.load(rfile)
-    names = names[:len(candidate_terms)]
-    descriptions = descriptions[:len(candidate_terms)] #TODO remove this this is baad
-    assert all(j in descriptions[i].lower() for i in range(len(descriptions)) for j in candidate_terms[i])
-    print("Top 25: ", sorted(dict(Counter(flatten(candidate_terms))).items(), key=lambda x:x[1], reverse=True)[:25])
-    all_terms = set(flatten(candidate_terms))
-    for term in all_terms:
-        print()
 
 @cli.command()
 def extract_candidateterms_keybert():
@@ -98,8 +86,6 @@ def extract_candidateterms_keybert():
     for desc in tqdm(descriptions):
         tmp = extractor(desc)
         keyberts = tmp[0]
-        if len(keyberts) < 5:
-            print("ARGH")
         if (ct := extract_coursetype(desc)) and ct not in keyberts:
             keyberts += [ct]
         candidateterms.append(keyberts)
@@ -107,13 +93,12 @@ def extract_candidateterms_keybert():
         json.dump([list(i) for i in candidateterms], wfile)
 
 
-
-
-
 @cli.command()
 def create_all_datasets():
-    for n_dims in [20,50,100,200]:
-        create_dataset(n_dims, "courses")
+    # for n_dims in [20,50,100,200]:
+    #     create_dataset(n_dims, "courses")
+    create_dataset(2, "courses")
+
 
 @cli.command()
 def translate_descriptions():
@@ -176,9 +161,9 @@ def count_translations():
 ########################################################################################################################
 
 def create_dataset(n_dims, dsetname):
-    # assert not DEBUG #TODO #PRECOMMIT
+    assert not DEBUG
     names, descriptions, mds = create_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_{n_dims}.json"), n_dims=n_dims)
-        # names, descriptions, mds = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_{n_dims}.json")) #TODO #PRECOMMIT comment out other line
+    # names, descriptions, mds = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_{n_dims}.json")) #TODO #PRECOMMIT comment out other line
     display_mds(mds, names)
     fname = join(SPACES_DATA_BASE, dsetname, f"d{n_dims}", f"{dsetname}{n_dims}.mds")
     os.makedirs(dirname(fname), exist_ok=True)

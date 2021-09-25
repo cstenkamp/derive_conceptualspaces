@@ -29,10 +29,12 @@ def main():
         exist_indices = [ind for ind, cont in enumerate(descriptions) if term in cont.lower()]
         if len(exist_indices) > 5: #TODO what to do if smaller?
             svm = sklearn.svm.LinearSVC(dual=False, class_weight="balanced")
+            #TODO figure out if there's a reason to choose LinearSVC over SVC(kernel=linear) or vice versa!
             labels = [False] * len(names)
             for i in exist_indices:
                 labels[i] = True
             svm.fit(mds.embedding_, np.array(labels, dtype=np.int))
+            print()
 
 if __name__ == "__main__":
     main()
