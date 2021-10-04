@@ -1,12 +1,13 @@
 from keybert import KeyBERT
 from nltk.corpus import stopwords as nlstopwords
-from nltk.tokenize import word_tokenize
 
+from main.create_spaces.text_tools import tokenize_text
 
 class KeyBertExtractor():
     """https://github.com/MaartenGr/KeyBERT"""
     #TODO there really are many many configs and I think changing these changes a great deal! see https://github.com/MaartenGr/KeyBERT and try out stuff!!
     #TODO there is a minimum-frequency-argument!! https://github.com/MaartenGr/KeyBERT/blob/master/keybert/_model.py#L83-L101
+    #TODO does this use the phrase_in_text function? SHOULD IT?
 
     stopwordlanguages = {"en": "english", "de": "german"}
 
@@ -14,11 +15,13 @@ class KeyBertExtractor():
         """available models: https://github.com/MaartenGr/KeyBERT#25-embedding-models"""
         assert not (is_multilan and faster)
         if faster:
-            self.kw_model = KeyBERT("paraphrase-MiniLM-L6-v2")
+            self.model_name = "paraphrase-MiniLM-L6-v2"
         elif is_multilan:
-            self.kw_model = KeyBERT("paraphrase-multilingual-MiniLM-L12-v2")
+            self.model_name = "paraphrase-multilingual-MiniLM-L12-v2"
         else:
-            self.kw_model = KeyBERT("paraphrase-mpnet-base-v2")
+            self.model_name = "paraphrase-mpnet-base-v2"
+        print(f"Using model {self.model_name}")
+        self.kw_model = KeyBERT(self.model_name)
 
     def __call__(self, text, lang="en"):
         """see scripts/notebooks/proof_of_concept/proofofconcept_keyBERT.ipynb for why this is like this"""
@@ -31,9 +34,8 @@ class KeyBertExtractor():
             candidates |= set(i[0] for i in n_candidates)
         candidates = list(candidates)
 
-        indwords = [(ind,word) for ind,word in enumerate(word_tokenize(text)) if word not in stopwords]
-        inds, words = list(zip(*indwords))
-        assert not any(" " in i for i in words)
+        #TODO: what if there are special chars in the candidates? is everything ok then with the word-splitting?
+        inds, words = tokenize_text(text, stopwords)
         withoutstops = " ".join(words).lower()
         start_positions = [((start := withoutstops.find(i)), start+len(i)) for i in candidates]
         start_indices_withoutstops = [withoutstops[:i].count(" ") for i,j in start_positions]
@@ -42,12 +44,12 @@ class KeyBertExtractor():
             if start_ind >= 0 and startpos >= 0:
                 full_phrase = withoutstops[startpos:stoppos]
                 last_word = full_phrase.split(" ")[-1]
-                from_start = word_tokenize(text.lower())[inds[start_ind]:]
+                from_start = tokenize_text(text.lower(), stopwords)[inds[start_ind]:]
                 try:
                     actual_phrase = from_start[:from_start.index(last_word)+1]
                 except:
                     continue
-                if len(actual_phrase) < 10:
+                if len(actual_phrase) < 10: #TODO parametrizise this value!
                     if " ".join(actual_phrase) in text.lower():
                         actual_keyphrases.append(" ".join(actual_phrase))
         return actual_keyphrases, candidates

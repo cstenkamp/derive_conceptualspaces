@@ -31,7 +31,7 @@ from src.main.create_spaces.get_candidates_stanfordnlp import get_continuous_chu
     stanford_extract_nounphrases, download_activate_stanfordnlp
 from src.main.create_spaces.get_candidates_keybert import KeyBertExtractor
 from src.main.create_spaces.get_candidates_rules import extract_coursetype
-
+from src.main.load_data.siddata_data_prep.jsonloadstore import get_commithash, get_settings
 
 logger = logging.getLogger(basename(__file__))
 
@@ -90,7 +90,9 @@ def extract_candidateterms_keybert():
             keyberts += [ct]
         candidateterms.append(keyberts)
     with open(join(SID_DATA_BASE, "candidate_terms.json"), "w") as wfile:
-        json.dump([list(i) for i in candidateterms], wfile)
+        write_cont = {"git_hash": get_commithash(), "settings": get_settings(), "date": str(datetime.now()),
+                      "model": extractor.model_name, "candidate_terms": [list(i) for i in candidateterms]}
+        json.dump(write_cont, wfile)
 
 
 @cli.command()

@@ -28,6 +28,7 @@ MDS_DIMENSIONS = 20 #20,50,100,200
 DEBUG = False
 RANDOM_SEED = None
 MONGO_URI = f"mongodb://{os.environ['MONGO_INITDB_ROOT_USERNAME']}:{os.environ['MONGO_INITDB_ROOT_PASSWORD']}@127.0.0.1/?authMechanism=SCRAM-SHA-1"
+CANDIDATETERM_MIN_OCCURSIN_DOCS = 5
 
 STANFORDNLP_VERSION = "4.2.2" #whatever's newest at https://stanfordnlp.github.io/CoreNLP/history.html
 

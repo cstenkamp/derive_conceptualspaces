@@ -1,6 +1,7 @@
 """https://stackoverflow.com/a/47626762/5122790"""
 import json
 import subprocess
+from datetime import datetime
 
 import numpy as np
 
@@ -26,7 +27,8 @@ class NumpyEncoder(json.JSONEncoder):
 def prepare_dump(*args, write_meta=True, **kwargs):
     assert "cls" not in kwargs
     if write_meta:
-        content = {"git_hash": get_commithash(), "settings": get_settings(), "content": args[0]}
+        content = {"git_hash": get_commithash(), "settings": get_settings(), "date": str(datetime.now()),
+                   "content": args[0]}
         #TODO: also date, captured std-out, ...
     else:
         content = args[0]
@@ -60,7 +62,12 @@ def get_commithash():
     #TODO: return something reasonable when no repo!
 
 def get_settings():
-    return {k: v for k, v in settings.__dict__.items() if k.isupper()}
+    from types import ModuleType  # noqa: E402
+    return {
+        k: v
+        for k, v in settings.__dict__.items()
+        if (not k.startswith("_") and not callable(v) and not isinstance(v, ModuleType) and k.isupper())
+    }
 
 def json_load(*args, assert_meta=(), **kwargs):
     if isinstance(args[0], str):
