@@ -111,6 +111,15 @@ nbstripout --install --attributes .gitattributes
 nbdime config-git --enable --global
 ```
 
+### How to run notebooks
+
+To render plotly correctly in notebooks, install the jupyterlab extension, then run the notebook (like this exemplary for a conda-env):
+```
+conda run -n Derive_Conceptualspace python -m jupyter labextension install jupyterlab-plotly@5.3.1
+conda run -n Derive_Conceptualspace python -m jupyter lab --notebook-dir=/path/to/project-root
+```
+
+
 ### Set up Sacred
 
 See https://sacred.readthedocs.io/en/stable/examples.html#docker-setup for the easiest way to get the MongoDB and boards to run. The */docker*-directory here is a clone of the respective *examples*-directory from the sacred-repo. To have the same `.env`-file in your local files, I can recommend PyCharm's **EnvFile**-Plugin.

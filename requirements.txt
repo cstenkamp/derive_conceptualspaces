@@ -28,3 +28,6 @@ incense
 #model-downloader
 #how to install seafile-cli on your system: see https://download.seafile.com/published/seafile-user-manual/syncing_client/install_linux_client.md
 git+https://github.com/cstenkamp/python-seafile.git@v0.1.2#egg=python_seafile #on pypi there's only v0.1.0, which is broken, and even the original repo has an error with binary files
+
+plotly==4.14.3
+#to render in jupyterlab install jupyterlab extension: conda run -n Derive_Conceptualspace python -m jupyter labextension uninstall jupyterlab-plotly@5.3.1
