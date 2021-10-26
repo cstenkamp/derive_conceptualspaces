@@ -1,3 +1,4 @@
+.snakemake/
 data_dump
 sacred_data
 docker/mongodb

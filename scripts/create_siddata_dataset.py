@@ -94,17 +94,17 @@ def extract_candidateterms_keybert():
                       "model": extractor.model_name, "candidate_terms": [list(i) for i in candidateterms]}
         json.dump(write_cont, wfile)
 
-
-@cli.command()
-def create_all_datasets():
-    # for n_dims in [20,50,100,200]:
-    #     create_dataset(n_dims, "courses")
-    create_dataset(2, "courses")
-
+#
+# @cli.command()
+# def create_all_datasets():
+#     # for n_dims in [20,50,100,200]:
+#     #     create_dataset(n_dims, "courses")
+#     create_descstyle_dataset(20, "courses")
 
 @cli.command()
 def translate_descriptions():
-    names, descriptions, mds, languages = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_20.json"))
+    ndm_file = next(i for i in os.listdir(SID_DATA_BASE) if i.startswith("siddata_names_descriptions_mds_") and i.endswith(".json"))
+    names, descriptions, mds, languages = load_translate_mds(SID_DATA_BASE, ndm_file, translate_policy=ORIGLAN)
     #TODO use langauges
     assert len(set(names)) == len(names)
     descriptions = [html.unescape(i) for i in descriptions]
@@ -161,66 +161,68 @@ def count_translations():
 
 
 ########################################################################################################################
+# pipeline to create desc15-style-dataset
 
-def create_dataset(n_dims, dsetname):
-    assert not DEBUG
-    names, descriptions, mds = create_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_{n_dims}.json"), n_dims=n_dims)
-    # names, descriptions, mds = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_{n_dims}.json")) #TODO #PRECOMMIT comment out other line
-    display_mds(mds, names)
-    fname = join(SPACES_DATA_BASE, dsetname, f"d{n_dims}", f"{dsetname}{n_dims}.mds")
-    os.makedirs(dirname(fname), exist_ok=True)
-    embedding = list(mds.embedding_)
-    # indices = np.argsort(np.array(names))
-    # names = [names[i] for i in indices]
-    # descriptions = [descriptions[i] for i in indices]
-    # embedding = np.array([embedding[i] for i in indices])
-    if isfile(namesfile := join(dirname(fname), "..", "courseNames.txt")):
-        with open(namesfile, "r") as rfile:
-            assert [i.strip() for i in rfile.readlines()] == [i.strip() for i in names]
-    else:
-        with open(namesfile, "w") as wfile:
-            wfile.writelines("\n".join(names))
-
-    if isfile(fname):
-        raise FileExistsError(f"{fname} already exists!")
-    np.savetxt(fname, embedding, delimiter="\t")
+def get_data(data_dir, fname, min_desc_len=10):
+    """loads the given Siddata-Style CSV into a pandas-dataframe, already performing some processing like
+        dropping duplicates"""
+    #TODO in exploration I also played around with Levenhsthein-distance etc!
+    df = pd.read_csv(join(data_dir, fname))
+    #remove those for which the Name (exluding stuff in parantheses) is equal...
+    df['NameNoParanth'] = df['Name'].str.replace(re.compile(r'\([^)]*\)'), '')
+    df = df.drop_duplicates(subset='NameNoParanth')
+    #remove those with too short a description...
+    df = df[~df['Beschreibung'].isna()]
+    df.loc[:, 'desc_len'] = [len(i) for i in df['Beschreibung']]
+    df = df[df["desc_len"] > min_desc_len]
+    df = df.drop(columns=['desc_len','NameNoParanth'])
+    #remove those with equal Veranstaltungsnummer...
+    df = df.drop_duplicates(subset='VeranstaltungsNummer')
+    return df
 
 
-
-def create_mds(data_path, n_dims):
-    df = get_data()
+def create_mds(to_data_name, n_dims, from_csv_path=SID_DATA_BASE, from_csv_name="kurse-beschreibungen.csv", to_data_path=SID_DATA_BASE):
+    """Creates a JSON with the names, descriptions and MDS (in non-DESC15-format)"""
+    df = get_data(from_csv_path, from_csv_name)
     kwargs = {"max_elems": 100} if DEBUG else {}
-    names, descriptions, mds = preprocess_data(df, n_dims=n_dims, **kwargs)
-    json_dump({"names": names, "descriptions": descriptions, "mds": mds}, data_path)
+    names, descriptions, mds = preprocess_data(df, n_dims=int(n_dims), **kwargs)
+    json_dump({"names": names, "descriptions": descriptions, "mds": mds}, join(to_data_path, to_data_name))
     return names, descriptions, mds
 
 
-def load_mds(data_path, assert_meta=(), translate_policy=ORIGLAN):
-    loaded = json_load(data_path, assert_meta=assert_meta)
-    languages_file = join(dirname(data_path), "languages.json")
-    if not isfile(languages_file):
+def create_load_languages_file(names, descriptions, file_path=SID_DATA_BASE, filename="languages.json"):
+    if not isfile(join(file_path, filename)):
         lans = []
-        for desc in tqdm(loaded['descriptions']):
+        print("Finding languages of descriptions...")
+        for desc in tqdm(descriptions):
             try:
                 lans.append(detect(desc))
             except LangDetectException as e:
                 lans.append("unk")
-        with open(languages_file, "w") as ofile:
-            json.dump(dict(zip(loaded["names"], lans)), ofile)
+        with open(join(file_path, filename), "w") as ofile:
+            json.dump(dict(zip(names, lans)), ofile)
     else:
-        with open(languages_file, "r") as rfile:
+        with open(join(file_path, filename), "r") as rfile:
             lans = json.load(rfile)
+    return lans
+
+
+def load_translate_mds(file_path, file_name, translate_policy, assert_meta=(), translations_filename="translated_descriptions.json"):
+    print(f"Working with file {file_name}!")
+    loaded = json_load(join(file_path, file_name), assert_meta=assert_meta)
     names, descriptions, mds = loaded["names"], loaded["descriptions"], loaded["mds"]
+    lans = create_load_languages_file(names, descriptions, file_path=file_path)
     languages = [lans[i] for i in names]
     if translate_policy == ORIGLAN:
         pass
     elif translate_policy == ONLYENG:
         indices = [ind for ind, elem in enumerate(languages) if elem == "en"]
+        print(f"Dropped {len(names)-len(indices)} out of {len(names)} descriptions because I will take only the english ones")
         names, descriptions, languages = [names[i] for i in indices], [descriptions[i] for i in indices], [languages[i] for i in indices]
         mds.embedding_ = np.array([mds.embedding_[i] for i in indices])
         mds.dissimilarity_matrix_ = np.array([mds.dissimilarity_matrix_[i] for i in indices])
     elif translate_policy == TRANSL:
-        with open(join(SID_DATA_BASE, "translated_descriptions.json"), "r") as rfile:
+        with open(join(file_path, translations_filename), "r") as rfile:
             translations = json.load(rfile)
         new_descriptions, new_indices = [], []
         for ind, name in enumerate(names):
@@ -230,12 +232,14 @@ def load_mds(data_path, assert_meta=(), translate_policy=ORIGLAN):
             elif name in translations:
                 new_descriptions.append(translations[name])
                 new_indices.append(ind)
+        print(f"Dropped {len(names) - len(new_indices)} out of {len(names)} descriptions because I will take english ones and ones with a translation")
         descriptions = new_descriptions
         names, languages = [names[i] for i in new_indices], [languages[i] for i in new_indices]
         mds.embedding_ = np.array([mds.embedding_[i] for i in new_indices])
         mds.dissimilarity_matrix_ = np.array([mds.dissimilarity_matrix_[i] for i in new_indices])
     descriptions = [html.unescape(i) for i in descriptions]
     return names, descriptions, mds, languages
+
 
 def display_mds(mds, names, max_elems=30):
     """
@@ -253,22 +257,25 @@ def display_mds(mds, names, max_elems=30):
             break
 
 
-def get_data(min_desc_len=10):
-    #TODO in exploration I also played around with Levenhsthein-distance etc!
-    df = pd.read_csv(join(SID_DATA_BASE, "kurse-beschreibungen.csv"))
-    #remove those for which the Name (exluding stuff in parantheses) is equal...
-    df['NameNoParanth'] = df['Name'].str.replace(re.compile(r'\([^)]*\)'), '')
-    df = df.drop_duplicates(subset='NameNoParanth')
-    #remove those with too short a description...
-    df = df[~df['Beschreibung'].isna()]
-    df.loc[:, 'desc_len'] = [len(i) for i in df['Beschreibung']]
-    df = df[df["desc_len"] > min_desc_len]
-    df = df.drop(columns=['desc_len','NameNoParanth'])
-    #remove those with equal Veranstaltungsnummer...
-    df = df.drop_duplicates(subset='VeranstaltungsNummer')
-    return df
+def create_descstyle_dataset(n_dims, dsetname, from_path=SID_DATA_BASE, from_name_base="siddata_names_descriptions_mds_{n_dims}.json", to_path=SPACES_DATA_BASE, translate_policy=ORIGLAN):
+    names, descriptions, mds, languages = load_translate_mds(from_path, from_name_base.format(n_dims=n_dims), translate_policy)
+    display_mds(mds, names)
+    fname = join(to_path, dsetname, f"d{n_dims}", f"{dsetname}{n_dims}.mds")
+    os.makedirs(dirname(fname), exist_ok=True)
+    embedding = list(mds.embedding_)
+    indices = np.argsort(np.array(names))
+    names, descriptions, embedding = [names[i] for i in indices], [descriptions[i] for i in indices], np.array([embedding[i] for i in indices])
+    if isfile(namesfile := join(dirname(fname), "..", "courseNames.txt")):
+        with open(namesfile, "r") as rfile:
+            assert [i.strip() for i in rfile.readlines()] == [i.strip() for i in names]
+    else:
+        with open(namesfile, "w") as wfile:
+            wfile.writelines("\n".join(names))
+    if isfile(fname):
+        raise FileExistsError(f"{fname} already exists!")
+    np.savetxt(fname, embedding, delimiter="\t")
 
-
+########################################################################################################################
 
 if __name__ == '__main__':
     cli()

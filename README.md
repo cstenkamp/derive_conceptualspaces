@@ -56,7 +56,7 @@ docker run -it --name derive_conceptualspaces_cont -v $(realpath ../data):/opt/d
 ### All OS:
 
 ```
-python scripts/download_model.py
+python scripts/util/download_model.py
 python scripts/create_siddata_dataset.py translate_descriptions
 ```
 

@@ -1,7 +1,7 @@
 from keybert import KeyBERT
 from nltk.corpus import stopwords as nlstopwords
 
-from main.create_spaces.text_tools import tokenize_text
+from src.main.create_spaces.text_tools import tokenize_text
 
 class KeyBertExtractor():
     """https://github.com/MaartenGr/KeyBERT"""

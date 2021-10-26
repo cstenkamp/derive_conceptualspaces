@@ -37,10 +37,32 @@ STANFORDNLP_VERSION = "4.2.2" #whatever's newest at https://stanfordnlp.github.i
 ########################################################################################################################
 # KEEP THIS AT THE BOTTOM!
 
-#overwriting with env-vars
-all_vars = [key for key,val in locals().items() if not callable(val) and not key.startswith("_") and key.isupper()]
-for key, val in {i: os.getenv(i) for i in all_vars if os.getenv(i)}.items():
-    locals()[key] = val
+#overwriting env-vars
+ENV_PREFIX = "MA"
+from types import ModuleType  # noqa: E402
+_all_settings = {
+    k: v
+    for k, v in locals().items()
+    if (not k.startswith("_") and not callable(v) and not isinstance(v, ModuleType) and k.isupper())
+}
+_overwrites = {k: os.getenv(f"{ENV_PREFIX}_" + k) for k, v in _all_settings.items() if os.getenv(f"{ENV_PREFIX}_" + k)}
+for k, v in _overwrites.items():
+    if isinstance(_all_settings[k], (list, tuple)):
+        locals()[k] = [i.strip("\"' ") for i in v.strip("[]()").split(",")]
+    elif isinstance(_all_settings[k], dict):
+        assert v.strip().startswith("{") and v.strip().endswith("}")
+        locals()[k] = dict([[j.strip("\"' ") for j in i.strip().split(":")] for i in v.strip(" {}").split(",")])
+    elif isinstance(_all_settings[k], bool):
+        locals()[k] = bool(v)
+    elif isinstance(_all_settings[k], int):
+        locals()[k] = int(v)
+    elif isinstance(_all_settings[k], float):
+        locals()[k] = float(v)
+    elif not isinstance(_all_settings[k], str):
+        raise NotImplementedError(f"I don't understand the type of the setting {k} you want to overwrite with a envvar")
+    else:
+        locals()[k] = v
+
 
 # checkers etc
 import os

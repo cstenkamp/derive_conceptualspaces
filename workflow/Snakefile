@@ -1,0 +1,117 @@
+import os
+from os.path import join as pjoin
+from pathlib import Path
+
+from scripts.create_siddata_dataset import create_mds, create_load_languages_file, create_descstyle_dataset
+from scripts.create_siddata_dataset import ORIGLAN, TRANSL, ONLYENG
+
+def cnf(name, val):
+    globals()[name] = config.setdefault(name, val)
+
+########################################################################################
+#the file `kurse-beschreibungen.csv` is the absolute basis, that one I need to get.
+########################################################################################
+
+# cnf("DATA_BASE", ".")
+
+# from shutil import which
+# # Intermediate dirs
+# cnf("VIDEO_BASE", ".")
+# cnf("GCN_CONFIG", pjoin(WORK, "gcn_config.yaml"))
+# cnf("FFPROBE_BIN", which("ffprobe"))
+# include: "rules/skels.smk"
+
+# rule setup:
+#     "Perform setup actions"
+#     input:
+#         GCN_CONFIG
+# def all(ext):
+#     base, = glob_wildcards(pjoin(VIDEO_BASE, "{base}.mp4"))
+#     return [fn + ext for fn in base]
+
+rule all: #TODO not like this, what was snakemake standard for this kind of thing?
+    input:
+        "siddata_names_descriptions_mds_3.json",
+        "siddata_names_descriptions_mds_20.json",
+        "siddata_names_descriptions_mds_50.json",
+        "siddata_names_descriptions_mds_100.json",
+        "siddata_names_descriptions_mds_200.json"
+
+
+checkpoint create_mds:
+    "Produce the Siddata Dataset from the kurse-beschreibungen CSV"
+    input:
+        "kurse-beschreibungen.csv"
+    output:
+        "siddata_names_descriptions_mds_{n_dims}.json"
+    run:
+        print(f"running pipeline for {wildcards.n_dims} dims")
+        create_mds(f"siddata_names_descriptions_mds_{wildcards.n_dims}.json", wildcards.n_dims, from_csv_path=".", to_data_path=".")
+
+
+def input_for_translate_descriptions(wildcards):
+    try:
+        return next(Path(".").glob("siddata_names_descriptions_mds_*.json"))
+    except StopIteration as err:
+        raise Exception("No n_dims JSON files found") from err
+
+rule translate_descriptions:
+    input:
+        input_for_translate_descriptions
+    output:
+        "translated_descriptions.json",
+    shell:
+        "echo {input} &&"
+        "touch {output}"
+
+
+rule create_desc15style_mds:
+    input:
+        "translated_descriptions.json", #TODO ists ja nur bei translate_policy=TRANSL
+        "siddata_names_descriptions_mds_{n_dims}.json"
+    output:
+        # "languages.json",  #cannot have multiple outputs, only one of which with wildcards :/
+        "d{n_dims}/courses{n_dims}.mds",
+        # "courseNames.txt" #TODO "course" noch als variable?
+    run:
+        create_descstyle_dataset(wildcards.n_dims, "courses", from_path=".", to_path=".", translate_policy=ORIGLAN)
+
+
+
+
+# rule get_gcn_weights:
+#     output:
+#         directory(GCN_WEIGHTS)
+#     shell:
+#         "mkdir -p " + GCN_WEIGHTS + " && " +
+#         "cd " + GCN_WEIGHTS + " && " +
+#         "wget http://guanghan.info/download/Data/LightTrack/weights/GCN.zip && " +
+#         "unzip GCN.zip"
+#
+# rule tmpl_gcn_config:
+#     input:
+#         GCN_WEIGHTS
+#     output:
+#         GCN_CONFIG
+#     run:
+#         open(GCN_CONFIG, "w").write(
+#             GCN_INFERNENCE_YAML.format(
+#                 gcn_weights=pjoin(os.getcwd(), GCN_WEIGHTS, "GCN/epoch210_model.pt")
+#             )
+#         )
+#
+# rule drawsticks:
+#     "Produces stick videos"
+#     input:
+#         skels = pjoin(DUMP_BASE, "{base}.{var}.h5"),
+#         video = pjoin(VIDEO_BASE, "{base}.mp4")
+#     output:
+#         pjoin(DUMP_BASE, "{base}.{var}.sticks.mp4")
+#     shell:
+#         "python -m skelshop --ffprobe-bin {FFPROBE_BIN} drawsticks " +
+#         "{input.skels} {input.video} {output}"
+
+
+
+
+
