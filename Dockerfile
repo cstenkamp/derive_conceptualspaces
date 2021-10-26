@@ -40,3 +40,5 @@ RUN /bin/zsh /home/developer/.zshrc
 
 ENV HOME=/home/developer
 ENV SHELL=/bin/zsh
+
+ENTRYPOINT ${WORKDIR}/docker/entrypoint.sh
