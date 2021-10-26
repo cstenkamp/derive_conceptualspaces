@@ -17,6 +17,8 @@ COPY . ${WORKDIR}
 WORKDIR ${WORKDIR}
 ENV PYTHONPATH=${WORKDIR}
 ENV RUNNING_IN_DOCKER=1
+ENV CREATE_UID=${uid}
+ENV CREATE_GID=${gid}
 
 RUN ln -sf /usr/local/bin/python3 /usr/bin/python3
 RUN ln -sf /usr/bin/python3 /usr/bin/python
@@ -26,7 +28,8 @@ RUN pip install -r ./requirements-dev.txt
 RUN pip install -r ./requirements.txt
 
 RUN groupadd -g ${gid:-1000} developer \
-    && useradd -g developer -u ${uid:-1000} -m developer
+    && useradd -l -g developer -u ${uid:-1000} -m developer
+#see https://github.com/moby/moby/issues/5419#issuecomment-41478290
 USER developer
 
 #https://dev.to/arctic_hen7/setting-up-zsh-in-docker-263f
@@ -41,4 +44,4 @@ RUN /bin/zsh /home/developer/.zshrc
 ENV HOME=/home/developer
 ENV SHELL=/bin/zsh
 
-ENTRYPOINT ${WORKDIR}/docker/entrypoint.sh
+#ENTRYPOINT ${WORKDIR}/docker/entrypoint.sh

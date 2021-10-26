@@ -114,18 +114,10 @@ def translate_descriptions():
             translateds = json.load(rfile)
     else:
         translateds = {}
-    unknown = {}
-    print("Checking Language of descriptions...")
-    for name, desc in tqdm(name_desc.items()):
-        if name not in translateds:
-            try:
-                if (lan := detect(desc)) != "en":
-                    unknown[name] = [desc, lan]
-            except LangDetectException as e:
-                unknown[name] = [desc, "unk"]
-    print(f"There are {len(''.join([i[0] for i in unknown.values()]))} signs to be translated.")
-    to_translate = [i for i in unknown.keys() if i not in translateds]
-    translations = translate_text([unknown[i][0] for i in to_translate])
+    languages = create_load_languages_file(names, descriptions)
+    untranslated = {k:v for k,v in name_desc.items() if languages[k] != "en" and k not in translateds}
+    print(f"There are {len(''.join([i[0] for i in untranslated.values()]))} signs to be translated.")
+    translations = translate_text([name_desc[k] for k in untranslated], origlans=[languages[k] for k in untranslated])
     # hash_translates = dict(zip([hashlib.sha256(i.encode("UTF-8")).hexdigest() for i in to_translate], translations))
     translateds.update(dict(zip(to_translate, translations)))
     with open(join(SID_DATA_BASE, "translated_descriptions.json"), "w") as wfile:

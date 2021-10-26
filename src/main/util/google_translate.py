@@ -7,7 +7,7 @@ import html
 
 from src.static.settings import GOOGLE_CREDENTIALS_FILE
 
-def translate_text(text, target="en", charlim=49000): #TODO charlim=490000
+def translate_text(text, target="en", charlim=49000, origlans=None): #TODO charlim=490000
     # and I can still use the data from THIS call!!
     """Translates text into the target language. Target must be an ISO 639-1 language code.
     See https://g.co/cloud/translate/v2/translate-reference#supported_languages
@@ -42,8 +42,10 @@ def translate_text(text, target="en", charlim=49000): #TODO charlim=490000
             text = text[:-1]
         if any([len(i) > TEXT_LEN_LIM for i in text]):
             print("Fuck you google.")
-            flatten = lambda l: [item for sublist in l for item in sublist]
-            split_text = [i.split(". ") if len(i) > TEXT_LEN_LIM else [i] for i in text]
+            splitfn = lambda txt, maxlen: [txt[i:i+maxlen] for i in range(0, len(txt)+maxlen, maxlen) if txt[i:i+maxlen]]
+            # flatten = lambda l: [item for sublist in l for item in sublist]
+            # split_text = [i.split(". ") if len(i) > TEXT_LEN_LIM else [i] for i in text]
+            split_text = [splitfn(i, TEXT_LEN_LIM - 1) if len(i) > TEXT_LEN_LIM else [i] for i in text]
             assert all(len(i) <= TEXT_LEN_LIM for i in split_text)
             longer_index = {ind: len(elem) - 1 for ind, elem in enumerate(split_text) if len(elem) > 1}
             text = [i[0] if isinstance(i, list) else i for i in split_text]
