@@ -119,38 +119,36 @@ def translate_descriptions():
     print(f"There are {len(''.join([i[0] for i in untranslated.values()]))} signs to be translated.")
     translations = translate_text([name_desc[k] for k in untranslated], origlans=[languages[k] for k in untranslated])
     # hash_translates = dict(zip([hashlib.sha256(i.encode("UTF-8")).hexdigest() for i in to_translate], translations))
-    translateds.update(dict(zip(to_translate, translations)))
+    translateds.update(dict(zip([k for k in untranslated], translations)))
     with open(join(SID_DATA_BASE, "translated_descriptions.json"), "w") as wfile:
         json.dump(translateds, wfile)
     translation_new_len = len("".join(translations))
-    translated_descs = [name_desc[i] for i in name_desc.keys() if i in set(dict(zip(to_translate, translations)).keys())]
+    translated_descs = [name_desc[i] for i in name_desc.keys() if i in set(dict(zip([k for k in untranslated], translations)).keys())]
     print(f"You translated {len('.'.join(translated_descs))} (becoming {translation_new_len}) Chars from {len(translated_descs)} descriptions.")
 
 @cli.command()
 def count_translations():
-    names, descriptions, mds = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_20.json"))
+    ndm_file = next(i for i in os.listdir(SID_DATA_BASE) if i.startswith("siddata_names_descriptions_mds_") and i.endswith(".json"))
+    names, descriptions, mds, languages = load_translate_mds(SID_DATA_BASE, ndm_file, translate_policy=ORIGLAN)
     assert len(set(names)) == len(names)
-    descriptions = [html.unescape(i) for i in descriptions]
     name_desc = dict(zip(names, descriptions))
     if isfile((translationsfile := join(SID_DATA_BASE, "translated_descriptions.json"))):
         with open(translationsfile, "r") as rfile:
             translateds = json.load(rfile)
     else:
         translateds = {}
-    unknown = {}
-    translated_texts = [val for key, val in name_desc.items() if key in set(translateds.keys())]
-    n_translateds = len("".join(translated_texts))
-    for name, desc in tqdm(name_desc.items()):
-        if name not in translateds:
-            try:
-                if (lan := detect(desc)) != "en":
-                    unknown[name] = [desc, lan]
-            except LangDetectException as e:
-                unknown[name] = [desc, "unk"]
-    n_untranslateds = len("".join([i[0] for i in unknown.values()]))
-    percent = f"{round((n_translateds/(n_untranslateds+n_translateds))*100)}%"
-    print(f"You have translated {n_translateds}/{n_translateds+n_untranslateds} ({percent})")
+    languages = create_load_languages_file(names, descriptions)
+    all_untranslateds = {k: v for k, v in name_desc.items() if languages[k] != "en" and k not in translateds}
+    all_translateds = {k: v for k, v in name_desc.items() if languages[k] != "en" and k in translateds}
+    all_notranslateds = {k: v for k, v in name_desc.items() if languages[k] == "en"}
 
+    print("Regarding #Descriptions:")
+    print(f"{len(all_untranslateds)+len(all_translateds)}/{len(all_untranslateds)+len(all_translateds)+len(all_notranslateds)} ({round((len(all_untranslateds)+len(all_translateds))/(len(all_untranslateds)+len(all_translateds)+len(all_notranslateds)), 4)*100}%) need to be translated")
+    print(f"{len(all_translateds)}/{len(all_untranslateds)+len(all_translateds)} ({round((len(all_translateds))/(len(all_untranslateds)+len(all_translateds)), 4)*100}%) are translated")
+    print("Reagarding #Chars:")
+    all_untranslateds, all_translateds, all_notranslateds = "".join(list(all_untranslateds.values())), "".join(list(all_translateds.values())), "".join(list(all_notranslateds.values()))
+    print(f"{len(all_untranslateds)+len(all_translateds)}/{len(all_untranslateds)+len(all_translateds)+len(all_notranslateds)} ({round((len(all_untranslateds)+len(all_translateds))/(len(all_untranslateds)+len(all_translateds)+len(all_notranslateds)), 4)*100}%) need to be translated")
+    print(f"{len(all_translateds)}/{len(all_untranslateds)+len(all_translateds)} ({round((len(all_translateds))/(len(all_untranslateds)+len(all_translateds)), 4)*100}%) are translated")
 
 ########################################################################################################################
 # pipeline to create desc15-style-dataset

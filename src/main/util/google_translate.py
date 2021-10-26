@@ -4,10 +4,12 @@ from itertools import accumulate
 import six
 from google.cloud import translate_v2 as translate
 import html
+import nltk
+from itertools import accumulate
 
 from src.static.settings import GOOGLE_CREDENTIALS_FILE
 
-def translate_text(text, target="en", charlim=49000, origlans=None): #TODO charlim=490000
+def translate_text(text, target="en", charlim=490000, origlans=None): #TODO charlim=490000
     # and I can still use the data from THIS call!!
     """Translates text into the target language. Target must be an ISO 639-1 language code.
     See https://g.co/cloud/translate/v2/translate-reference#supported_languages
@@ -42,15 +44,29 @@ def translate_text(text, target="en", charlim=49000, origlans=None): #TODO charl
             text = text[:-1]
         if any([len(i) > TEXT_LEN_LIM for i in text]):
             print("Fuck you google.")
-            splitfn = lambda txt, maxlen: [txt[i:i+maxlen] for i in range(0, len(txt)+maxlen, maxlen) if txt[i:i+maxlen]]
-            # flatten = lambda l: [item for sublist in l for item in sublist]
+            flatten = lambda l: [item for sublist in l for item in sublist]
+            # splitfn = lambda txt, maxlen: [txt[i:i+maxlen] for i in range(0, len(txt)+maxlen, maxlen) if txt[i:i+maxlen]]
             # split_text = [i.split(". ") if len(i) > TEXT_LEN_LIM else [i] for i in text]
-            split_text = [splitfn(i, TEXT_LEN_LIM - 1) if len(i) > TEXT_LEN_LIM else [i] for i in text]
+            split_text = [nltk.sent_tokenize(i) if len(i) > TEXT_LEN_LIM else [i] for i in text] #sent_tokenize(x, language=origlans[n]) but whatever
             assert all(len(i) <= TEXT_LEN_LIM for i in split_text)
             longer_index = {ind: len(elem) - 1 for ind, elem in enumerate(split_text) if len(elem) > 1}
+            #now we merge the split sentences until they are all text-len-lim long
+            for ind in longer_index.keys():
+                lens = [len(i) for i in split_text[ind]]
+                index_mapper = {0: 0}  # startindex: nwords
+                indexmappernum = 0
+                for num, elem in enumerate(lens):
+                    assert elem <= TEXT_LEN_LIM, "one sentence is aleady too long."
+                    if index_mapper[indexmappernum] + elem >= TEXT_LEN_LIM:
+                        indexmappernum = num
+                        index_mapper[indexmappernum] = 0
+                    index_mapper[indexmappernum] += elem
+                indices = list(index_mapper.keys()) + [len(split_text[ind]) + 1]
+                indices = [(indices[i], indices[i + 1]) for i in range(len(indices) - 1)]
+                split_text[ind] = ["".join(split_text[ind][i1:i2]) for i1, i2 in indices]
+                longer_index[ind] = len(split_text[ind])-1
             text = [i[0] if isinstance(i, list) else i for i in split_text]
             latterparts = flatten([i[1:] for i in split_text if isinstance(i, list) and len(i) > 1])
-            #TODO die sätze einzelnd zu übersetzen macht die übersetzung definitiv schlechter.
             assert len(latterparts) <= SEGLIM, "fuck this."
             translations = translate_client.translate(text, target_language=target)
             translations2 = translate_client.translate(latterparts, target_language=target)
@@ -58,7 +74,7 @@ def translate_text(text, target="en", charlim=49000, origlans=None): #TODO charl
             latterparts_iter = iter(translations2)
             for index, ntranslations in longer_index.items():
                 for i in range(ntranslations):
-                    translations[index]["translatedText"] += ". " + next(latterparts_iter)["translatedText"]
+                    translations[index]["translatedText"] += next(latterparts_iter)["translatedText"]
             translated = translations
         else:
             translated = translate_client.translate(text, target_language=target)
