@@ -9,7 +9,7 @@ from src.static.classifier_config import ANN_EPOCHS, CLASSIFIER_CHECKPOINT_PATH,
 from src.fb_classifier.model import FB_Classifier
 from src.fb_classifier.util.debug_tools import debug_tf_function
 from src.fb_classifier.dataset import get_dset_len
-from src.fb_classifier.util.misc import check_config, get_git_revision_short_hash, get_ann_configs
+from src.fb_classifier.util.misc import check_config, get_ann_configs
 
 flatten_dict = lambda data: dict((key,d[key]) for d in data for key in d)
 

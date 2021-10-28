@@ -1,5 +1,6 @@
 """https://stackoverflow.com/a/47626762/5122790"""
 import json
+import os
 import subprocess
 from datetime import datetime
 
@@ -58,7 +59,13 @@ def npify_rek(di):
     return res
 
 def get_commithash():
-    return subprocess.check_output(["git", "rev-parse", "HEAD"]).strip().decode("UTF-8")
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"]).strip().decode("UTF-8").strip()
+    except subprocess.CalledProcessError:
+        if os.getenv("RUNNING_IN_DOCKER"):
+            import socket
+            return f"cont_commit: {os.getenv('CONTAINER_GIT_COMMIT', 'None')}, cont_hostname: {socket.gethostname()}"
+    return "no_commit"
     #TODO: return something reasonable when no repo!
 
 def get_settings():

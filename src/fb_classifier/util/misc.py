@@ -70,7 +70,3 @@ def get_ann_configs():
             elif 'ANN Settings' in line:
                 ann_sets = True
     return lines
-
-
-def get_git_revision_short_hash():
-    return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('utf-8').strip()

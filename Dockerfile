@@ -8,6 +8,7 @@ FROM python:${PYTHON_VERSION}-buster
 
 ARG uid
 ARG gid
+ARG git_commit
 
 RUN apt-get update \
     && apt-get install -y bash git vim curl zsh htop tmux unzip nano
@@ -15,10 +16,12 @@ RUN apt-get update \
 ARG WORKDIR=/opt/derive_conceptualspaces
 COPY . ${WORKDIR}
 WORKDIR ${WORKDIR}
+
 ENV PYTHONPATH=${WORKDIR}
 ENV RUNNING_IN_DOCKER=1
 ENV CREATE_UID=${uid}
 ENV CREATE_GID=${gid}
+ENV CONTAINER_GIT_COMMIT=${git_commit}
 
 RUN ln -sf /usr/local/bin/python3 /usr/bin/python3
 RUN ln -sf /usr/bin/python3 /usr/bin/python
@@ -43,5 +46,3 @@ RUN /bin/zsh /home/developer/.zshrc
 
 ENV HOME=/home/developer
 ENV SHELL=/bin/zsh
-
-#ENTRYPOINT ${WORKDIR}/docker/entrypoint.sh
