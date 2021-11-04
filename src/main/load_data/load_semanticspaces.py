@@ -51,7 +51,7 @@ def load_mds_representation(data_base, data_set, n_dims, return_array=True, fnam
     :return: MDS-Representations. Result is referred to as S_{place} or S_{movie} in [DESC15].
     """
     TRANSLATE_FNAME = {"movies": "films"}
-    assert str(n_dims) in ["20", "50", "100", "200"]
+    assert str(n_dims) in ["3", "20", "50", "100", "200"]
     fname = join(data_base, data_set, f"d{n_dims}", f"{TRANSLATE_FNAME.get(data_set, data_set)}{n_dims}.mds")
     fname_out.append(fname)
     res = []

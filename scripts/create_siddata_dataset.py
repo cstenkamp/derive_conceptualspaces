@@ -32,12 +32,11 @@ from src.main.create_spaces.get_candidates_stanfordnlp import get_continuous_chu
 from src.main.create_spaces.get_candidates_keybert import KeyBertExtractor
 from src.main.create_spaces.get_candidates_rules import extract_coursetype
 from src.main.load_data.siddata_data_prep.jsonloadstore import get_commithash, get_settings
+from src.main.util.mds_object import MDSObject
+
+from src.main.util.mds_object import TRANSL, ORIGLAN, ONLYENG
 
 logger = logging.getLogger(basename(__file__))
-
-ORIGLAN = 1
-ONLYENG = 2
-TRANSL = 3
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
@@ -168,6 +167,7 @@ def get_data(data_dir, fname, min_desc_len=10):
     df = df.drop(columns=['desc_len','NameNoParanth'])
     #remove those with equal Veranstaltungsnummer...
     df = df.drop_duplicates(subset='VeranstaltungsNummer')
+    df["Name"] = df["Name"].str.strip()
     return df
 
 
@@ -189,8 +189,9 @@ def create_load_languages_file(names, descriptions, file_path=SID_DATA_BASE, fil
                 lans.append(detect(desc))
             except LangDetectException as e:
                 lans.append("unk")
+        lans = dict(zip(names, lans))
         with open(join(file_path, filename), "w") as ofile:
-            json.dump(dict(zip(names, lans)), ofile)
+            json.dump(lans, ofile)
     else:
         with open(join(file_path, filename), "r") as rfile:
             lans = json.load(rfile)
@@ -201,8 +202,8 @@ def load_translate_mds(file_path, file_name, translate_policy, assert_meta=(), t
     print(f"Working with file {file_name}!")
     loaded = json_load(join(file_path, file_name), assert_meta=assert_meta)
     names, descriptions, mds = loaded["names"], loaded["descriptions"], loaded["mds"]
-    lans = create_load_languages_file(names, descriptions, file_path=file_path)
-    languages = [lans[i] for i in names]
+    languages = create_load_languages_file(names, descriptions, file_path=file_path)
+    orig_n_samples = len(names)
     if translate_policy == ORIGLAN:
         pass
     elif translate_policy == ONLYENG:
@@ -216,7 +217,7 @@ def load_translate_mds(file_path, file_name, translate_policy, assert_meta=(), t
             translations = json.load(rfile)
         new_descriptions, new_indices = [], []
         for ind, name in enumerate(names):
-            if lans[name] == "en":
+            if languages[name] == "en":
                 new_descriptions.append(descriptions[ind])
                 new_indices.append(ind)
             elif name in translations:
@@ -224,11 +225,11 @@ def load_translate_mds(file_path, file_name, translate_policy, assert_meta=(), t
                 new_indices.append(ind)
         print(f"Dropped {len(names) - len(new_indices)} out of {len(names)} descriptions because I will take english ones and ones with a translation")
         descriptions = new_descriptions
-        names, languages = [names[i] for i in new_indices], [languages[i] for i in new_indices]
+        names, languages = [names[i] for i in new_indices], [list(languages.values())[i] for i in new_indices]
         mds.embedding_ = np.array([mds.embedding_[i] for i in new_indices])
         mds.dissimilarity_matrix_ = np.array([mds.dissimilarity_matrix_[i] for i in new_indices])
     descriptions = [html.unescape(i) for i in descriptions]
-    return names, descriptions, mds, languages
+    return MDSObject(names, descriptions, mds, languages, translate_policy, orig_n_samples)
 
 
 def display_mds(mds, names, max_elems=30):
