@@ -9,15 +9,17 @@ from itertools import accumulate
 
 from src.static.settings import GOOGLE_CREDENTIALS_FILE
 
-def translate_text(text, target="en", charlim=490000, origlans=None): #TODO charlim=490000
+def translate_text(text, target="en", charlim=4900, origlans=None):
     # and I can still use the data from THIS call!!
     """Translates text into the target language. Target must be an ISO 639-1 language code.
     See https://g.co/cloud/translate/v2/translate-reference#supported_languages
     Text can also be a sequence of strings, in which case this method will return a sequence of results for each text.
     """
+    print(f"Translate-Charlim set to {charlim}")
     BYTELIM = int(204800*0.9) #if a request is bigger than google API will raise an Error!
     SEGLIM = 128 #https://github.com/googleapis/google-cloud-python/issues/5425#issuecomment-562745220
-    TEXT_LEN_LIM = 3000 #google, this is getting ridiculus.
+    TEXT_LEN_LIM = 2800 #google, this is getting ridiculus.
+    SUMMED_TEXT_LEN_LIM = 100000 #102423 was too long...
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = GOOGLE_CREDENTIALS_FILE
     if isinstance(text, six.binary_type):
         text = text.decode("utf-8")
@@ -68,8 +70,17 @@ def translate_text(text, target="en", charlim=490000, origlans=None): #TODO char
             text = [i[0] if isinstance(i, list) else i for i in split_text]
             latterparts = flatten([i[1:] for i in split_text if isinstance(i, list) and len(i) > 1])
             assert len(latterparts) <= SEGLIM, "fuck this."
-            translations = translate_client.translate(text, target_language=target)
-            translations2 = translate_client.translate(latterparts, target_language=target)
+            assert all(len(i) < TEXT_LEN_LIM for i in text)
+            assert all(len(i) < TEXT_LEN_LIM for i in latterparts)
+            assert sum([len(i) for i in text]) <= SUMMED_TEXT_LEN_LIM, "geez google what the actual fuck"
+            assert sum([len(i) for i in latterparts]) <= SUMMED_TEXT_LEN_LIM, "geez google what the actual fuck"
+            try:
+                translations = translate_client.translate(text, target_language=target)
+                translations2 = translate_client.translate(latterparts, target_language=target)
+            except:
+                failed = True
+            else:
+                failed = False
             assert sum(longer_index.values()) == len(translations2)
             latterparts_iter = iter(translations2)
             for index, ntranslations in longer_index.items():
@@ -77,17 +88,25 @@ def translate_text(text, target="en", charlim=490000, origlans=None): #TODO char
                     translations[index]["translatedText"] += next(latterparts_iter)["translatedText"]
             translated = translations
         else:
-            translated = translate_client.translate(text, target_language=target)
-        assert len(translated) == len(text)
-        res.extend(translated)
-        assert len(res)+len(rest) == len(prelimtext)
-        if rest:
-            text = rest
-            rest = []
+            assert all(len(i) < TEXT_LEN_LIM for i in text)
+            try:
+                translated = translate_client.translate(text, target_language=target)
+            except:
+                failed = True
+            else:
+                failed = False
+        if not failed:
+            assert len(translated) == len(text)
+            res.extend(translated)
+            assert len(res)+len(rest) == len(prelimtext)
+            if rest:
+                text = rest
+                rest = []
+            else:
+                assert len(prelimtext) == len(res)
+                break
         else:
             break
-    assert len(prelimtext) == len(res)
-
 
     # print(u"Text: {}".format(result["input"]))
     # print(u"Translation: {}".format(result["translatedText"]))

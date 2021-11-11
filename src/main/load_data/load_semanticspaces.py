@@ -68,6 +68,8 @@ def get_names(data_base, data_set):
     fname = join(data_base, data_set, TRANSLATE_FNAME.get(data_set, f"{data_set[:-1]}Names.txt"))
     with open(fname, "r") as rfile:
         names = [i.strip() for i in rfile.readlines()]
+    if not len(set(names)) == len(names):
+        print("!! The names-list is not unique after stripping! #TODO")
     return names, fname
 
 

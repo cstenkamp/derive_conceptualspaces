@@ -2,6 +2,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
+#all thanks to https://stackoverflow.com/a/69407977
+#see also https://stackoverflow.com/questions/9605556/how-to-project-a-point-onto-a-plane-in-3d
+
 @dataclass
 class Plane:
     a: float

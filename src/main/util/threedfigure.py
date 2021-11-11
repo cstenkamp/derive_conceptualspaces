@@ -1,7 +1,7 @@
 import math
+import textwrap
 
 import numpy as np
-
 import plotly.graph_objects as go
 
 from src.main.util.base_changer import make_base_changer
@@ -28,7 +28,11 @@ def ortho_projection_affine(a, b):
     return np.dot(np.dot(a, b) / np.dot(b, b), b)
 
 
+#TODO: When I de-select a portion of the markers the xlims and ylims shouldn't change (and the viewpoint not update)
+
 class ThreeDFigure():
+    hovertemplate = "<br>".join(["X: %{x}", "Y: %{y}", "Z: %{z}"])
+
     def __init__(self, trafo_fn=None, back_trafo_fn=None, swap_axes=None):
         self.trafo_fn = trafo_fn if trafo_fn is not None else lambda x: x
         self.back_trafo_fn = back_trafo_fn if back_trafo_fn is not None else lambda x: x
@@ -124,13 +128,31 @@ class ThreeDFigure():
                          )
         )
 
-    def add_markers(self, points, color="black", size=2, name=None, **kwargs):
+    def add_markers(self, points, color="black", size=2, name=None, custom_data=None, linelen_left=25, linelen_right=60, maxlen=500, **kwargs):
         points = np.array(points)
         if points.ndim == 1: points = np.array([points])
         points = self._transform(points)
         default_args = dict(mode="markers", x=points[:, 0], y=points[:, 1], z=points[:, 2],
                             marker={"color": color, "size": size, "line": {"width": 0}}, name=name)
-        self.fig.add_trace(go.Scatter3d(**{**default_args, **kwargs}))
+        all_args = {**default_args, **kwargs}
+        if all_args.get(name) and all_args.get("showlegend") is not None:
+            all_args["showlegend"] = True
+        #print({k:v for k,v in all_args.items() if k not in "xyz"})
+        if custom_data:
+            keys = [i for i in custom_data[0].keys() if i != "extra"]
+            all_args["customdata"] = [list([v for k,v in i.items() if k != "extra"]) for i in custom_data]
+            hovertemplate = "<br>".join([self.hovertemplate]+[f"{key}: %{{customdata[{i}]}}" for i, key in enumerate(keys)])
+            if "extra" in custom_data[0].keys():
+                extra_keys = [i for i in custom_data[0]["extra"].keys()]
+                all_args["customdata"] = [list([v for k,v in i.items() if k.lower() != "extra"])+list(i["extra"].values()) for i in custom_data]
+                hovertemplate = hovertemplate+"<extra>"+"<br>".join([f"{key}: %{{customdata[{i+len(keys)}]}}" for i, key in enumerate(extra_keys)])+"</extra>"
+                all_args["customdata"] = [["<br>".join(textwrap.wrap(textwrap.shorten(str(j), maxlen), linelen_left if n < len(keys) else linelen_right)) for n, j in enumerate(i)] for i in all_args["customdata"]]
+        else:
+            hovertemplate = self.hovertemplate
+        trace = go.Scatter3d(**all_args)
+        trace.update(hovertemplate=hovertemplate, textposition="top left")
+        self.fig.add_trace(trace)
+
 
     def add_sample_projections(self, X, onto, n_samples=10, **kwargs):
         show_vecs = X[np.random.choice(X.shape[0], n_samples, replace=False), :]

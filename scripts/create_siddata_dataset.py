@@ -103,7 +103,8 @@ def extract_candidateterms_keybert():
 @cli.command()
 def translate_descriptions():
     ndm_file = next(i for i in os.listdir(SID_DATA_BASE) if i.startswith("siddata_names_descriptions_mds_") and i.endswith(".json"))
-    names, descriptions, mds, languages = load_translate_mds(SID_DATA_BASE, ndm_file, translate_policy=ORIGLAN)
+    mds_obj = load_translate_mds(SID_DATA_BASE, ndm_file, translate_policy=ORIGLAN)
+    names, descriptions, mds, languages = mds_obj.names, mds_obj.descriptions, mds_obj.mds, mds_obj.languages
     #TODO use langauges
     assert len(set(names)) == len(names)
     descriptions = [html.unescape(i) for i in descriptions]
@@ -115,10 +116,13 @@ def translate_descriptions():
         translateds = {}
     languages = create_load_languages_file(names, descriptions)
     untranslated = {k:v for k,v in name_desc.items() if languages[k] != "en" and k not in translateds}
-    print(f"There are {len(''.join([i[0] for i in untranslated.values()]))} signs to be translated.")
+    if not untranslated:
+        print("Everything is translated!!")
+        return
+    print(f"There are {len(''.join([i[0] for i in untranslated.values()]))} descriptions to be translated.")
     translations = translate_text([name_desc[k] for k in untranslated], origlans=[languages[k] for k in untranslated])
     # hash_translates = dict(zip([hashlib.sha256(i.encode("UTF-8")).hexdigest() for i in to_translate], translations))
-    translateds.update(dict(zip([k for k in untranslated], translations)))
+    translateds.update(dict(zip(untranslated.keys(), translations)))
     with open(join(SID_DATA_BASE, "translated_descriptions.json"), "w") as wfile:
         json.dump(translateds, wfile)
     translation_new_len = len("".join(translations))
@@ -128,7 +132,8 @@ def translate_descriptions():
 @cli.command()
 def count_translations():
     ndm_file = next(i for i in os.listdir(SID_DATA_BASE) if i.startswith("siddata_names_descriptions_mds_") and i.endswith(".json"))
-    names, descriptions, mds, languages = load_translate_mds(SID_DATA_BASE, ndm_file, translate_policy=ORIGLAN)
+    mds_obj = load_translate_mds(SID_DATA_BASE, ndm_file, translate_policy=ORIGLAN)
+    names, descriptions, mds, languages = mds_obj.names, mds_obj.descriptions, mds_obj.mds, mds_obj.languages
     assert len(set(names)) == len(names)
     name_desc = dict(zip(names, descriptions))
     if isfile((translationsfile := join(SID_DATA_BASE, "translated_descriptions.json"))):
