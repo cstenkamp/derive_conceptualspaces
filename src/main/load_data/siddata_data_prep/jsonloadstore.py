@@ -42,7 +42,7 @@ def json_dump(*args, **kwargs):
 
 def json_dumps(*args, **kwargs):
     content = prepare_dump(*args, **kwargs)
-    return json.dumps(content, cls=NumpyEncoder, **kwargs)
+    return json.dumps(content, *args[2:], cls=NumpyEncoder, **kwargs)
 
 
 def npify_rek(di):

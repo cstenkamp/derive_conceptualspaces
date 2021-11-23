@@ -26,7 +26,7 @@ class KeyBertExtractor():
     def __call__(self, text, lang="en"):
         """see scripts/notebooks/proof_of_concept/proofofconcept_keyBERT.ipynb for why this is like this"""
         assert lang in self.stopwordlanguages
-        stopwords = nlstopwords.words(self.stopwordlanguages[lang])
+        stopwords = tuple(nlstopwords.words(self.stopwordlanguages[lang]))
 
         candidates = set()
         for nwords in range(1, 4):

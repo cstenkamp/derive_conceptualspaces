@@ -78,20 +78,20 @@ def extract_candidateterms_stanfordlp():
 
 
 @cli.command()
-def extract_candidateterms_keybert():
-    names, descriptions, _, _ = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_20.json"), translate_policy=TRANSL)
+@click.argument("base-dir", type=str)
+def extract_candidateterms_keybert(base_dir):
+    ndm_file = next(i for i in os.listdir(base_dir) if i.startswith("siddata_names_descriptions_mds_") and i.endswith(".json"))
+    mds_obj = load_translate_mds(base_dir, ndm_file, translate_policy=TRANSL)
     extractor = KeyBertExtractor(False, faster=True)
     candidateterms = []
-    for desc in tqdm(descriptions):
+    for desc in tqdm(mds_obj.descriptions):
         tmp = extractor(desc)
         keyberts = tmp[0]
         if (ct := extract_coursetype(desc)) and ct not in keyberts:
             keyberts += [ct]
         candidateterms.append(keyberts)
-    with open(join(SID_DATA_BASE, "candidate_terms.json"), "w") as wfile:
-        write_cont = {"git_hash": get_commithash(), "settings": get_settings(), "date": str(datetime.now()),
-                      "model": extractor.model_name, "candidate_terms": [list(i) for i in candidateterms]}
-        json.dump(write_cont, wfile)
+    json_dump({"model": extractor.model_name, "candidate_terms": [list(i) for i in candidateterms]}, join(base_dir, "candidate_terms.json"))
+
 
 #
 # @cli.command()
@@ -101,15 +101,15 @@ def extract_candidateterms_keybert():
 #     create_descstyle_dataset(20, "courses")
 
 @cli.command()
-def translate_descriptions():
-    ndm_file = next(i for i in os.listdir(SID_DATA_BASE) if i.startswith("siddata_names_descriptions_mds_") and i.endswith(".json"))
-    mds_obj = load_translate_mds(SID_DATA_BASE, ndm_file, translate_policy=ORIGLAN)
+def translate_descriptions(base_dir):
+    ndm_file = next(i for i in os.listdir(base_dir) if i.startswith("siddata_names_descriptions_mds_") and i.endswith(".json"))
+    mds_obj = load_translate_mds(base_dir, ndm_file, translate_policy=ORIGLAN)
     names, descriptions, mds, languages = mds_obj.names, mds_obj.descriptions, mds_obj.mds, mds_obj.languages
     #TODO use langauges
     assert len(set(names)) == len(names)
     descriptions = [html.unescape(i) for i in descriptions]
     name_desc = dict(zip(names, descriptions))
-    if isfile((translationsfile := join(SID_DATA_BASE, "translated_descriptions.json"))):
+    if isfile((translationsfile := join(base_dir, "translated_descriptions.json"))):
         with open(translationsfile, "r") as rfile:
             translateds = json.load(rfile)
     else:
@@ -130,13 +130,13 @@ def translate_descriptions():
     print(f"You translated {len('.'.join(translated_descs))} (becoming {translation_new_len}) Chars from {len(translated_descs)} descriptions.")
 
 @cli.command()
-def count_translations():
-    ndm_file = next(i for i in os.listdir(SID_DATA_BASE) if i.startswith("siddata_names_descriptions_mds_") and i.endswith(".json"))
-    mds_obj = load_translate_mds(SID_DATA_BASE, ndm_file, translate_policy=ORIGLAN)
+def count_translations(base_dir):
+    ndm_file = next(i for i in os.listdir(base_dir) if i.startswith("siddata_names_descriptions_mds_") and i.endswith(".json"))
+    mds_obj = load_translate_mds(base_dir, ndm_file, translate_policy=ORIGLAN)
     names, descriptions, mds, languages = mds_obj.names, mds_obj.descriptions, mds_obj.mds, mds_obj.languages
     assert len(set(names)) == len(names)
     name_desc = dict(zip(names, descriptions))
-    if isfile((translationsfile := join(SID_DATA_BASE, "translated_descriptions.json"))):
+    if isfile((translationsfile := join(base_dir, "translated_descriptions.json"))):
         with open(translationsfile, "r") as rfile:
             translateds = json.load(rfile)
     else:
@@ -203,10 +203,12 @@ def create_load_languages_file(names, descriptions, file_path=SID_DATA_BASE, fil
     return lans
 
 
-def load_translate_mds(file_path, file_name, translate_policy, assert_meta=(), translations_filename="translated_descriptions.json"):
+def load_translate_mds(file_path, file_name, translate_policy, assert_meta=(), translations_filename="translated_descriptions.json", assert_allexistent=True):
     print(f"Working with file {file_name}!")
     loaded = json_load(join(file_path, file_name), assert_meta=assert_meta)
     names, descriptions, mds = loaded["names"], loaded["descriptions"], loaded["mds"]
+    if assert_allexistent:
+        assert len(names) == len(descriptions) == mds.embedding_.shape[0]
     languages = create_load_languages_file(names, descriptions, file_path=file_path)
     orig_n_samples = len(names)
     if translate_policy == ORIGLAN:
@@ -228,12 +230,16 @@ def load_translate_mds(file_path, file_name, translate_policy, assert_meta=(), t
             elif name in translations:
                 new_descriptions.append(translations[name])
                 new_indices.append(ind)
-        print(f"Dropped {len(names) - len(new_indices)} out of {len(names)} descriptions because I will take english ones and ones with a translation")
+        dropped_indices = set(range(len(new_indices))) - set(new_indices)
+        if dropped_indices:
+            print(f"Dropped {len(names) - len(new_indices)} out of {len(names)} descriptions because I will take english ones and ones with a translation")
         descriptions = new_descriptions
         names, languages = [names[i] for i in new_indices], [list(languages.values())[i] for i in new_indices]
         mds.embedding_ = np.array([mds.embedding_[i] for i in new_indices])
         mds.dissimilarity_matrix_ = np.array([mds.dissimilarity_matrix_[i] for i in new_indices])
     descriptions = [html.unescape(i) for i in descriptions]
+    if assert_allexistent:
+        assert len(names) == len(descriptions) == mds.embedding_.shape[0] == orig_n_samples
     return MDSObject(names, descriptions, mds, languages, translate_policy, orig_n_samples)
 
 

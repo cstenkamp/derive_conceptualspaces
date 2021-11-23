@@ -2,15 +2,18 @@ import os
 from os.path import join as pjoin
 from pathlib import Path
 
-from scripts.create_siddata_dataset import create_mds, create_load_languages_file, create_descstyle_dataset
+from scripts.create_siddata_dataset import create_mds, create_load_languages_file, create_descstyle_dataset, extract_candidateterms_keybert
 from scripts.create_siddata_dataset import ORIGLAN, TRANSL, ONLYENG
 
 def cnf(name, val):
     globals()[name] = config.setdefault(name, val)
 
+
 ########################################################################################
-#the file `kurse-beschreibungen.csv` is the absolute basis, that one I need to get.
+#the file `kurse-beschreibungen.csv` is the absolute basis, that one I need to get and cannot create.
 ########################################################################################
+
+#run as eg.  PYTHONPATH=/home/chris/Documents/UNI_neu/Masterarbeit/Derive_Conceptualspace snakemake --cores 1 -p "siddata_names_descriptions_mds_3.json" --directory /home/chris/Documents/UNI_neu/Masterarbeit/DATA_CLONE/
 
 # cnf("DATA_BASE", ".")
 
@@ -76,6 +79,14 @@ rule create_desc15style_mds:
     run:
         create_descstyle_dataset(wildcards.n_dims, "courses", from_path=".", to_path=".", translate_policy=ORIGLAN)
 
+
+rule extract_candidateterms_keybert:
+    input:
+        input_for_translate_descriptions
+    output:
+        "candidate_terms.json"
+    run:
+        extract_candidateterms_keybert.callback(".")
 
 
 

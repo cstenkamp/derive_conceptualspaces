@@ -21,17 +21,17 @@ logger = logging.getLogger(basename(__file__))
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
-def main():
-    cache_file = join(SID_DATA_BASE, "candidate_terms_existinds.json")
-    mds_obj = load_translate_mds("/home/chris/Documents/UNI_neu/Masterarbeit/DATA_CLONE/", f"siddata_names_descriptions_mds_3.json", translate_policy=TRANSL)
+
+def main(data_base_dir):
+    cache_file = join(data_base_dir, "candidate_terms_existinds.json")
+    mds_obj = load_translate_mds(data_base_dir, f"siddata_names_descriptions_mds_3.json", translate_policy=TRANSL)
 
     if isfile(cache_file):
         print(f"Loading the exist-indices-file from cache at {cache_file}!")
         mds_obj.term_existinds = json_load(cache_file, assert_meta=("MDS_DIMENSIONS", "CANDIDATETERM_MIN_OCCURSIN_DOCS", "STANFORDNLP_VERSION"))
     else:
-        assert False, "TODO"
         names, descriptions, mds = mds_obj.names, mds_obj.descriptions, mds_obj.mds
-        with open(join(SID_DATA_BASE, "candidate_terms.json"), "r") as rfile:
+        with open(join(data_base_dir, "candidate_terms.json"), "r") as rfile:
             candidate_terms = json.load(rfile)
             if hasattr(candidate_terms, "candidate_terms"): candidate_terms = candidate_terms["candidate_terms"]
         if len(candidate_terms) < len(names):
@@ -94,4 +94,5 @@ def main():
         print(f"{k}: {'; '.join(v)}")
 
 if __name__ == "__main__":
-    main()
+    main(SID_DATA_BASE)
+    main("/home/chris/Documents/UNI_neu/Masterarbeit/DATA_CLONE/")
