@@ -3,6 +3,8 @@ from os.path import join, isfile, dirname, basename
 import logging
 import json
 from datetime import datetime
+import argparse
+
 
 import sklearn.svm
 import numpy as np
@@ -22,7 +24,16 @@ logger = logging.getLogger(basename(__file__))
 flatten = lambda l: [item for sublist in l for item in sublist]
 
 
-def main(data_base_dir):
+
+def parse_command_line_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('path')
+    return parser.parse_args()
+
+
+def main():
+    args = parse_command_line_args()
+    data_base_dir = args.path
     cache_file = join(data_base_dir, "candidate_terms_existinds.json")
     mds_obj = load_translate_mds(data_base_dir, f"siddata_names_descriptions_mds_3.json", translate_policy=TRANSL)
 
@@ -31,9 +42,8 @@ def main(data_base_dir):
         mds_obj.term_existinds = json_load(cache_file, assert_meta=("MDS_DIMENSIONS", "CANDIDATETERM_MIN_OCCURSIN_DOCS", "STANFORDNLP_VERSION"))
     else:
         names, descriptions, mds = mds_obj.names, mds_obj.descriptions, mds_obj.mds
-        with open(join(data_base_dir, "candidate_terms.json"), "r") as rfile:
-            candidate_terms = json.load(rfile)
-            if hasattr(candidate_terms, "candidate_terms"): candidate_terms = candidate_terms["candidate_terms"]
+        candidate_terms = json_load(join(data_base_dir, "candidate_terms.json"))
+        if "candidate_terms" in candidate_terms: candidate_terms = candidate_terms["candidate_terms"]
         if len(candidate_terms) < len(names):
             print(f"There are {len(names)} descriptions, but only candidate_terms for {len(candidate_terms)}!")
             names = names[:len(candidate_terms)]
@@ -93,6 +103,8 @@ def main(data_base_dir):
     for k, v in best_dict.items():
         print(f"{k}: {'; '.join(v)}")
 
-if __name__ == "__main__":
-    main(SID_DATA_BASE)
-    main("/home/chris/Documents/UNI_neu/Masterarbeit/DATA_CLONE/")
+
+
+
+if __name__ == '__main__':
+    main()

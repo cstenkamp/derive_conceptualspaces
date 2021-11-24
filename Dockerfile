@@ -35,6 +35,7 @@ RUN groupadd -g ${gid:-1000} developer \
 #see https://github.com/moby/moby/issues/5419#issuecomment-41478290
 USER developer
 
+RUN python3 -c "import nltk; nltk.download('stopwords'); nltk.download('punkt')"
 #https://dev.to/arctic_hen7/setting-up-zsh-in-docker-263f
 RUN mkdir -p /home/developer/.antigen
 RUN curl -L git.io/antigen > /home/developer/.antigen/antigen.zsh

@@ -14,6 +14,7 @@ def cnf(name, val):
 ########################################################################################
 
 #run as eg.  PYTHONPATH=/home/chris/Documents/UNI_neu/Masterarbeit/Derive_Conceptualspace snakemake --cores 1 -p "siddata_names_descriptions_mds_3.json" --directory /home/chris/Documents/UNI_neu/Masterarbeit/DATA_CLONE/
+#  crsync /home/chris/Documents/UNI_neu/Masterarbeit/DATA_CLONE/ etlpipelines:~/data --exclude .snakemake
 
 # cnf("DATA_BASE", ".")
 
