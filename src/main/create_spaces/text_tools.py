@@ -5,7 +5,9 @@ from nltk.tokenize import word_tokenize
 
 char_replacer = {
     '``': '"',
-    '\'\'': '"'
+    '\'\'': '"',
+    "“": '"',
+    "”": '"',
 }
 
 @lru_cache(maxsize=None)

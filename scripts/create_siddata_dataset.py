@@ -82,14 +82,20 @@ def extract_candidateterms_stanfordlp():
 def extract_candidateterms_keybert(base_dir):
     ndm_file = next(i for i in os.listdir(base_dir) if i.startswith("siddata_names_descriptions_mds_") and i.endswith(".json"))
     mds_obj = load_translate_mds(base_dir, ndm_file, translate_policy=TRANSL)
-    extractor = KeyBertExtractor(False, faster=True)
+    extractor = KeyBertExtractor(False, faster=False)
     candidateterms = []
+    n_immediateworking_ges, n_fixed_ges, n_errs_ges = 0, 0, 0
     for desc in tqdm(mds_obj.descriptions):
-        tmp = extractor(desc)
-        keyberts = tmp[0]
+        keyberts, origextracts, (n_immediateworking, n_fixed, n_errs) = extractor(desc)
         if (ct := extract_coursetype(desc)) and ct not in keyberts:
             keyberts += [ct]
         candidateterms.append(keyberts)
+        n_immediateworking_ges += n_immediateworking
+        n_fixed_ges += n_fixed
+        n_errs_ges += n_errs
+    print(f"Immediately working: {n_immediateworking_ges}")
+    print(f"Fixed: {n_fixed_ges}")
+    print(f"Errors: {n_errs_ges}")
     json_dump({"model": extractor.model_name, "candidate_terms": [list(i) for i in candidateterms]}, join(base_dir, "candidate_terms.json"))
 
 
