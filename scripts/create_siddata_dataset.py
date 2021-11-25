@@ -211,6 +211,7 @@ def load_translate_mds(file_path, file_name, translate_policy, assert_meta=(), t
         assert len(names) == len(descriptions) == mds.embedding_.shape[0]
     languages = create_load_languages_file(names, descriptions, file_path=file_path)
     orig_n_samples = len(names)
+    additional_kwargs = {}
     if translate_policy == ORIGLAN:
         pass
     elif translate_policy == ONLYENG:
@@ -220,6 +221,7 @@ def load_translate_mds(file_path, file_name, translate_policy, assert_meta=(), t
         mds.embedding_ = np.array([mds.embedding_[i] for i in indices])
         mds.dissimilarity_matrix_ = np.array([mds.dissimilarity_matrix_[i] for i in indices])
     elif translate_policy == TRANSL:
+        additional_kwargs["original_descriptions"] = descriptions
         with open(join(file_path, translations_filename), "r") as rfile:
             translations = json.load(rfile)
         new_descriptions, new_indices = [], []
@@ -240,7 +242,7 @@ def load_translate_mds(file_path, file_name, translate_policy, assert_meta=(), t
     descriptions = [html.unescape(i) for i in descriptions]
     if assert_allexistent:
         assert len(names) == len(descriptions) == mds.embedding_.shape[0] == orig_n_samples
-    return MDSObject(names, descriptions, mds, languages, translate_policy, orig_n_samples)
+    return MDSObject(names, descriptions, mds, languages, translate_policy, orig_n_samples, **additional_kwargs)
 
 
 def display_mds(mds, names, max_elems=30):

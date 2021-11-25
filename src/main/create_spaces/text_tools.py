@@ -21,8 +21,13 @@ def tokenize_text(text, stopwords=None):
     assert not any(" " in i for i in words)
     return inds, words
 
-def phrase_in_text(phrase, text):
+
+def phrase_in_text(phrase, text, return_count=False):
     #TODO ensure this is correct and all classes that should use this use this.
     text = tokenize_text(text)[1]
-    text = " ".join(text)
-    return " "+phrase+" " in text
+    text = " ".join(text).lower() #UPDATED 25.11.21 - I should re-do everything that uses this..
+    text = " "+text+" "
+    phrase = " "+phrase.lower()+" "
+    if return_count:
+        return text.count(phrase)
+    return phrase in text

@@ -13,7 +13,7 @@ from tqdm import tqdm
 from src.static.settings import SID_DATA_BASE, CANDIDATETERM_MIN_OCCURSIN_DOCS
 from src.main.util.pretty_print import pretty_print as print
 from scripts.create_siddata_dataset import ORIGLAN, ONLYENG, TRANSL, load_translate_mds #TODO why is this in scripts
-from src.main.create_spaces.text_tools import phrase_in_text
+from src.main.create_spaces.text_tools import phrase_in_text, tokenize_text
 from src.main.load_data.siddata_data_prep.jsonloadstore import json_dump, json_load
 
 from src.main.util.threedfigure import ThreeDFigure, make_meshgrid
@@ -41,15 +41,20 @@ def main():
         print(f"Loading the exist-indices-file from cache at {cache_file}!")
         mds_obj.term_existinds = json_load(cache_file, assert_meta=("MDS_DIMENSIONS", "CANDIDATETERM_MIN_OCCURSIN_DOCS", "STANFORDNLP_VERSION"))
     else:
-        names, descriptions, mds = mds_obj.names, mds_obj.descriptions, mds_obj.mds
         candidate_terms = json_load(join(data_base_dir, "candidate_terms.json"))
         if "candidate_terms" in candidate_terms: candidate_terms = candidate_terms["candidate_terms"]
-        if len(candidate_terms) < len(names):
-            print(f"There are {len(names)} descriptions, but only candidate_terms for {len(candidate_terms)}!")
-            names = names[:len(candidate_terms)]
-            descriptions = descriptions[:len(candidate_terms)]  # TODO remove this this is baad
-            mds.embedding_ = mds.embedding_[:len(descriptions):]
-        assert all(j in descriptions[i].lower() for i in range(len(descriptions)) for j in candidate_terms[i])
+        # if len(candidate_terms) < len(names):
+        #     print(f"There are {len(names)} descriptions, but only candidate_terms for {len(candidate_terms)}!")
+        #     names = names[:len(candidate_terms)]
+        #     descriptions = descriptions[:len(candidate_terms)]  # TODO remove this this is baad
+        #     mds.embedding_ = mds.embedding_[:len(descriptions):]
+        assert len(candidate_terms) == len(mds_obj.descriptions)
+        # assert all(j in descriptions[i].lower() for i in range(len(descriptions)) for j in candidate_terms[i])
+        for desc_ind, desc in enumerate(mds_obj.descriptions):
+            for cand in candidate_terms[desc_ind]:
+                assert cand in desc.lower()
+                assert phrase_in_text(cand, desc)
+
         all_terms = list(set(flatten(candidate_terms)))
         print("Checking for all phrases and all descriptions if the phrase occurs in the description, this takes ~20mins for ~25k phrases and ~5.3k descriptions")
         exist_indices = {term: [ind for ind, cont in enumerate(descriptions) if phrase_in_text(term, cont)] for term in tqdm(all_terms)}

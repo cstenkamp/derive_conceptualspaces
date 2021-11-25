@@ -24,6 +24,9 @@ class KeyBertExtractor():
         print(f"Using model {self.model_name}")
         self.kw_model = KeyBERT(self.model_name)
 
+    def add_candidate(self, text, cand):
+
+
     def __call__(self, text, lang="en"):
         """see scripts/notebooks/proof_of_concept/proofofconcept_keyBERT.ipynb for why this is like this"""
         assert lang in self.stopwordlanguages

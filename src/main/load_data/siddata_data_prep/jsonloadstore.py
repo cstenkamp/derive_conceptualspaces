@@ -46,17 +46,30 @@ def json_dumps(*args, **kwargs):
 
 
 def npify_rek(di):
-    res = {}
-    for k, v in di.items():
-        if isinstance(v, list) and len(v) == 2 and v[0] == "np.ndarray":
-            res[k] = np.asarray(v[1])
-        elif isinstance(v, list) and len(v) == 2 and v[0] == "Struct":
-            res[k] = Struct(**npify_rek(v[1]))
-        elif isinstance(v, dict):
-            res[k] = npify_rek(v)
-        else: #TODO also lists?
-            res[k] = v
-    return res
+    if isinstance(di, dict):
+        res = {}
+        for k, v in di.items():
+            if isinstance(v, list) and len(v) == 2 and v[0] == "np.ndarray":
+                res[k] = np.asarray(v[1])
+            elif isinstance(v, list) and len(v) == 2 and v[0] == "Struct":
+                res[k] = Struct(**npify_rek(v[1]))
+            elif isinstance(v, dict):
+                res[k] = npify_rek(v)
+            else: #TODO also lists?
+                res[k] = v
+        return res
+    elif isinstance(di, (list, set, tuple)):
+        res = []
+        for i in di:
+            if isinstance(i, list) and len(i) == 2 and i[0] == "np.ndarray":
+                res.append(np.asarray(i[1]))
+            elif isinstance(i, list) and len(i) == 2 and i[0] == "Struct":
+                res.append(Struct(**npify_rek(i[1])))
+            elif isinstance(i, dict):
+                res.append(npify_rek(i))
+            else:  # TODO also lists?
+                res.append(i)
+        return res
 
 def get_commithash():
     try:
