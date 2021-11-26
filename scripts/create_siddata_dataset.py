@@ -21,6 +21,7 @@ import html
 import click
 from sklearn.svm import SVC
 
+from main.util.telegram_notifier import telegram_notify
 from src.static.settings import SID_DATA_BASE, DEBUG, RANDOM_SEED, SPACES_DATA_BASE, DATA_BASE
 from src.main.util.logutils import setup_logging
 from src.main.util.pretty_print import pretty_print as print
@@ -79,6 +80,7 @@ def extract_candidateterms_stanfordlp():
 
 @cli.command()
 @click.argument("base-dir", type=str)
+@telegram_notify(only_terminal=False, only_on_fail=False)
 def extract_candidateterms_keybert(base_dir):
     ndm_file = next(i for i in os.listdir(base_dir) if i.startswith("siddata_names_descriptions_mds_") and i.endswith(".json"))
     mds_obj = load_translate_mds(base_dir, ndm_file, translate_policy=TRANSL)
