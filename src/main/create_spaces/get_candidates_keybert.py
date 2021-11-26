@@ -196,7 +196,8 @@ class KeyBertExtractor():
         #TODO: what if there are special chars in the candidates? is everything ok then with the word-splitting?
         #TODO does this work for numbers?!
         inds_without_stops, without_stops = tokenize_text(text, stopwords)
-        inds_only_words, only_words = list(zip(*[(ind, word) for ind, word in zip(inds_without_stops, without_stops) if WORD_NUM_REGEX.fullmatch(word)]))
+        ind_word_list = [(ind, word) for ind, word in zip(inds_without_stops, without_stops) if WORD_NUM_REGEX.fullmatch(word)]
+        inds_only_words, only_words = list(zip(*ind_word_list)) if ind_word_list else ([], [])
         without_stops = " ".join(without_stops)
         only_words = " ".join(only_words)
         actual_keyphrases = []

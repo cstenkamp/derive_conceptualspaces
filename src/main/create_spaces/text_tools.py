@@ -17,7 +17,7 @@ def tokenize_text(text, stopwords=None):
         indwords = [(ind, word) for ind, word in enumerate(word_tokenize(text)) if word not in stopwords]
     else:
         indwords = [(ind, word) for ind, word in enumerate(word_tokenize(text))]
-    inds, words = list(zip(*indwords))
+    inds, words = list(zip(*indwords)) if indwords else ([], [])
     assert not any(" " in i for i in words)
     words = [char_replacer.get(i, i) for i in words]
     assert not any(" " in i for i in words)
