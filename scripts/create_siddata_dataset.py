@@ -80,7 +80,7 @@ def extract_candidateterms_stanfordlp():
 
 @cli.command()
 @click.argument("base-dir", type=str)
-@telegram_notify(only_terminal=False, only_on_fail=False)
+@telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
 def extract_candidateterms_keybert(base_dir):
     ndm_file = next(i for i in os.listdir(base_dir) if i.startswith("siddata_names_descriptions_mds_") and i.endswith(".json"))
     mds_obj = load_translate_mds(base_dir, ndm_file, translate_policy=TRANSL)
