@@ -10,7 +10,7 @@ import sklearn.svm
 import numpy as np
 from tqdm import tqdm
 
-from main.util.telegram_notifier import telegram_notify
+from src.main.util.telegram_notifier import telegram_notify
 from src.static.settings import SID_DATA_BASE, CANDIDATETERM_MIN_OCCURSIN_DOCS
 from src.main.util.pretty_print import pretty_print as print
 from scripts.create_siddata_dataset import ORIGLAN, ONLYENG, TRANSL, load_translate_mds #TODO why is this in scripts

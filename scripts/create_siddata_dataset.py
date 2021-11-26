@@ -21,7 +21,7 @@ import html
 import click
 from sklearn.svm import SVC
 
-from main.util.telegram_notifier import telegram_notify
+from src.main.util.telegram_notifier import telegram_notify
 from src.static.settings import SID_DATA_BASE, DEBUG, RANDOM_SEED, SPACES_DATA_BASE, DATA_BASE
 from src.main.util.logutils import setup_logging
 from src.main.util.pretty_print import pretty_print as print
