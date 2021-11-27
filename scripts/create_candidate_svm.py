@@ -4,12 +4,14 @@ import logging
 import json
 from datetime import datetime
 import argparse
-
+import re
 
 import sklearn.svm
 import numpy as np
 from tqdm import tqdm
 
+from src.main.create_spaces.get_candidates_keybert import WORD_NUM_REGEX, WORD_NUM_APOSTR_REGEX
+from src.main.create_spaces.postprocess_candidates import postprocess_candidates
 from src.main.util.telegram_notifier import telegram_notify
 from src.static.settings import SID_DATA_BASE, CANDIDATETERM_MIN_OCCURSIN_DOCS
 from src.main.util.pretty_print import pretty_print as print
@@ -30,6 +32,8 @@ def parse_command_line_args():
     parser.add_argument('path')
     return parser.parse_args()
 
+
+
 def main():
     args = parse_command_line_args()
     data_base_dir = args.path
@@ -49,14 +53,10 @@ def main():
         #     mds.embedding_ = mds.embedding_[:len(descriptions):]
         assert len(candidate_terms) == len(mds_obj.descriptions)
         # assert all(j in descriptions[i].lower() for i in range(len(descriptions)) for j in candidate_terms[i])
-        for desc_ind, desc in enumerate(mds_obj.descriptions):
-            for cand in candidate_terms[desc_ind]:
-                assert cand in desc.lower()
-                assert phrase_in_text(cand, desc)
-
+        candidate_terms = postprocess_candidates(candidate_terms, mds_obj.descriptions)
         all_terms = list(set(flatten(candidate_terms)))
         print("Checking for all phrases and all descriptions if the phrase occurs in the description, this takes ~20mins for ~25k phrases and ~5.3k descriptions")
-        exist_indices = {term: [ind for ind, cont in enumerate(descriptions) if phrase_in_text(term, cont)] for term in tqdm(all_terms)}
+        exist_indices = {term: [ind for ind, cont in enumerate(mds_obj.descriptions) if phrase_in_text(term, cont)] for term in tqdm(all_terms)}
         term_existinds = {term:exist_indices for term, exist_indices in exist_indices.items() if len(exist_indices) >= CANDIDATETERM_MIN_OCCURSIN_DOCS}
         term_existinds = dict(sorted(term_existinds.items(), key=lambda x: len(x[1]), reverse=True))
         json_dump(term_existinds, cache_file)

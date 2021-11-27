@@ -6,6 +6,7 @@ from src.main.create_spaces.text_tools import tokenize_text, phrase_in_text
 
 WORD_REGEX = re.compile("[a-zA-ZäüöÜÄÖß-]+")        #TODO "[^\W\d_]" see https://stackoverflow.com/a/6314634/5122790 #TODO see https://stackoverflow.com/a/3617818/5122790
 WORD_NUM_REGEX = re.compile("[a-zA-ZäüöÜÄÖß0-9-]+")
+WORD_NUM_APOSTR_REGEX = re.compile("[a-zA-ZäüöÜÄÖß0-9'-]+")
 
 class KeyBertExtractor():
     """https://github.com/MaartenGr/KeyBERT"""

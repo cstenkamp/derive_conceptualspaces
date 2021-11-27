@@ -26,10 +26,15 @@ def tokenize_text(text, stopwords=None):
 
 def phrase_in_text(phrase, text, return_count=False):
     #TODO ensure this is correct and all classes that should use this use this.
-    text = tokenize_text(text)[1]
-    text = " ".join(text).lower() #UPDATED 25.11.21 - I should re-do everything that uses this..
-    text = " "+text+" "
-    phrase = " "+phrase.lower()+" "
+    def process(txt, add_ending=False):
+        if add_ending: txt = txt + " asdf" #why this? Because word_tokenize("dr.") != word_tokenize("dr. asdf")
+        txt = tokenize_text(txt)[1]
+        if add_ending: txt = txt[:-1]
+        txt = " ".join(txt).lower()
+        return " "+txt+" "
+    text = process(text)
+    phrase = process(phrase, add_ending=True)
     if return_count:
+        raise NotImplementedError()
         return text.count(phrase)
     return phrase in text

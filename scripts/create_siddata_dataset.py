@@ -100,7 +100,6 @@ def extract_candidateterms_keybert(base_dir):
     print(f"Errors: {n_errs_ges}")
     json_dump({"model": extractor.model_name, "candidate_terms": [list(i) for i in candidateterms]}, join(base_dir, "candidate_terms.json"))
 
-
 #
 # @cli.command()
 # def create_all_datasets():
