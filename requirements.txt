@@ -33,3 +33,4 @@ plotly==4.14.3
 #to render in jupyterlab install jupyterlab extension: conda run -n Derive_Conceptualspace python -m jupyter labextension uninstall jupyterlab-plotly@5.3.1
 
 snakemake
+gensim
