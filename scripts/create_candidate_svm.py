@@ -52,8 +52,8 @@ def main():
         #     descriptions = descriptions[:len(candidate_terms)]  # TODO remove this this is baad
         #     mds.embedding_ = mds.embedding_[:len(descriptions):]
         assert len(candidate_terms) == len(mds_obj.descriptions)
-        # assert all(j in descriptions[i].lower() for i in range(len(descriptions)) for j in candidate_terms[i])
         candidate_terms = postprocess_candidates(candidate_terms, mds_obj.descriptions)
+        assert all(j.lower() in mds_obj.descriptions[i].lower() for i in range(len(mds_obj.descriptions)) for j in candidate_terms[i])
         all_terms = list(set(flatten(candidate_terms)))
         print("Checking for all phrases and all descriptions if the phrase occurs in the description, this takes ~20mins for ~25k phrases and ~5.3k descriptions")
         exist_indices = {term: [ind for ind, cont in enumerate(mds_obj.descriptions) if phrase_in_text(term, cont)] for term in tqdm(all_terms)}

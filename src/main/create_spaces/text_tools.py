@@ -35,6 +35,5 @@ def phrase_in_text(phrase, text, return_count=False):
     text = process(text)
     phrase = process(phrase, add_ending=True)
     if return_count:
-        raise NotImplementedError()
         return text.count(phrase)
     return phrase in text

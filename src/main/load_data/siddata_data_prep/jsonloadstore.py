@@ -89,7 +89,7 @@ def get_settings():
         if (not k.startswith("_") and not callable(v) and not isinstance(v, ModuleType) and k.isupper())
     }
 
-def json_load(*args, assert_meta=(), **kwargs):
+def json_load(*args, assert_meta=(), return_meta=False, **kwargs):
     if isinstance(args[0], str):
         with open(args[0], "r") as rfile:
             tmp = json.load(rfile, **kwargs)
@@ -98,5 +98,8 @@ def json_load(*args, assert_meta=(), **kwargs):
     if isinstance(tmp, dict) and all(i in tmp for i in ["git_hash", "settings", "content"]):
         for i in assert_meta:
             assert getattr(settings, i) == tmp["settings"][i], f"The setting {i} does not correspond to what was saved!"
+        if return_meta:
+            meta = {k:v for k,v in tmp.items() if k != "content"}
+            return npify_rek(tmp["content"]), meta
         return npify_rek(tmp["content"])
     return npify_rek(tmp)

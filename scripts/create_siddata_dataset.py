@@ -20,7 +20,10 @@ from tqdm import tqdm
 import html
 import click
 from sklearn.svm import SVC
+from gensim import corpora
 
+from src.main.create_spaces.postprocess_candidates import postprocess_candidates
+from src.main.create_spaces.text_tools import tokenize_text, phrase_in_text
 from src.main.util.telegram_notifier import telegram_notify
 from src.static.settings import SID_DATA_BASE, DEBUG, RANDOM_SEED, SPACES_DATA_BASE, DATA_BASE
 from src.main.util.logutils import setup_logging
@@ -34,6 +37,7 @@ from src.main.create_spaces.get_candidates_keybert import KeyBertExtractor
 from src.main.create_spaces.get_candidates_rules import extract_coursetype
 from src.main.load_data.siddata_data_prep.jsonloadstore import get_commithash, get_settings
 from src.main.util.mds_object import MDSObject
+from src.main.create_spaces.text_tools import phrase_in_text, tokenize_text
 
 from src.main.util.mds_object import TRANSL, ORIGLAN, ONLYENG
 
@@ -76,6 +80,41 @@ def extract_candidateterms_stanfordlp():
     names, descriptions, _, _ = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_20.json"))
     nlp = download_activate_stanfordnlp(DATA_BASE, ["english", "german"])
     print(stanford_extract_nounphrases(nlp, descriptions[1]))
+
+
+
+@cli.command()
+@click.argument("base-dir", type=str)
+@telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
+def create_doc_term_matrix(base_dir, json_filename="candidate_terms_postprocessed.json"):
+    ndm_file = next(i for i in os.listdir(base_dir) if i.startswith("siddata_names_descriptions_mds_") and i.endswith(".json"))
+    mds_obj = load_translate_mds(base_dir, ndm_file, translate_policy=TRANSL)
+    candidate_terms = json_load(join(base_dir, json_filename))["candidate_terms"]
+    assert len(candidate_terms) == len(mds_obj.descriptions)
+    assert all(j.lower() in mds_obj.descriptions[i].lower() for i in range(len(mds_obj.descriptions)) for j in candidate_terms[i])
+    all_terms = list(set(flatten(candidate_terms)))
+    descriptions = [tokenize_text(i)[1] for i in mds_obj.descriptions]
+    # if I used gensim for this, it would be `dictionary,doc_term_matrix = corpora.Dictionary(descriptions), [dictionary.doc2bow(doc) for doc in descriptions]`
+    dictionary = corpora.Dictionary([all_terms])
+    doc_term_matrix = [sorted([(ind, phrase_in_text(elem, mds_obj.descriptions[j], return_count=True)) for ind,elem in enumerate(all_terms) if phrase_in_text(elem, mds_obj.descriptions[0])], key=lambda x:x[0]) for j in tqdm(range(len(mds_obj.descriptions)))]
+    json_dump({"all_terms": all_terms, "doc_term_matrix": doc_term_matrix}, join(base_dir, "doc_term_matrix.json"))
+
+
+
+@cli.command()
+@click.argument("base-dir", type=str)
+@click.argument("--postfix", type=str, default="")
+def postprocess_candidateterms(base_dir, postfix=""):
+    ndm_file = next(i for i in os.listdir(base_dir) if i.startswith("siddata_names_descriptions_mds_") and i.endswith(".json"))
+    mds_obj = load_translate_mds(base_dir, ndm_file, translate_policy=TRANSL)
+    candidate_terms, meta_inf = json_load(join(base_dir, "candidate_terms.json"), return_meta=True)
+    model = candidate_terms["model"]
+    candidate_terms = candidate_terms["candidate_terms"]
+    assert len(candidate_terms) == len(mds_obj.descriptions)
+    candidate_terms = postprocess_candidates(candidate_terms, mds_obj.descriptions)
+    assert all(j.lower() in mds_obj.descriptions[i].lower() for i in range(len(mds_obj.descriptions)) for j in candidate_terms[i])
+    json_dump({"model": model, "candidate_terms": [list(i) for i in candidate_terms], "postprocessed": True}, join(base_dir, f"candidate_terms{postfix}.json"))
+    print(f"Saved the post-processed model under candidate_terms{postfix}.json!")
 
 
 @cli.command()
@@ -246,7 +285,7 @@ def load_translate_mds(file_path, file_name, translate_policy, assert_meta=(), t
         names, languages = [names[i] for i in new_indices], [list(languages.values())[i] for i in new_indices]
         mds.embedding_ = np.array([mds.embedding_[i] for i in new_indices])
         mds.dissimilarity_matrix_ = np.array([mds.dissimilarity_matrix_[i] for i in new_indices])
-    descriptions = [html.unescape(i) for i in descriptions]
+    descriptions = [html.unescape(i).replace("  ", " ") for i in descriptions]
     if assert_allexistent:
         assert len(names) == len(descriptions) == mds.embedding_.shape[0] == orig_n_samples
     return MDSObject(names, descriptions, mds, languages, translate_policy, orig_n_samples, **additional_kwargs)

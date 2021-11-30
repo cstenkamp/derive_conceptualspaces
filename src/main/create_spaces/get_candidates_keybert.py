@@ -127,61 +127,6 @@ class KeyBertExtractor():
 
         print(f"This does not work: {cand}")
 
-        # startpos = withoutstops.find(cand)
-        # if startpos >= 0:
-        #     stoppos = startpos+len(cand)
-        #     start_ind = withoutstops[:startpos].count(" ")
-        #     if start_ind < 0:
-        #         print("TODO")
-        #     else:
-        #
-        # else:
-        #     print("TODO")
-
-
-        # if start_ind >= 0 and startpos >= 0:
-        #     full_phrase = withoutstops[startpos:stoppos] #TODO assert full_phrase == cand, und wenn das nie anspringt is this entierly bullshit.
-        #     if len(full_phrase.split(" ")) != len(set(full_phrase.split(" "))):
-        #         print(f"Candidate is weird and doesnt work: {cand}")
-        #     if len(cand.split(" ")) == 1:
-        #         return cand
-        #     last_word = full_phrase.split(" ")[-1]
-        #     try:
-        #         words[start_ind:].index(last_word) + 1
-        #     except ValueError:
-        #         print(f"Complete Error at `{cand}`")
-        #         return None
-        #     else:
-        #         actual_phrase = words[start_ind:start_ind+words[start_ind:].index(last_word)+1]
-        #     if " ".join(actual_phrase) != cand: #TODO eigentlich müsste ich gucken ob eins der originalwörter mehfach im substring vorkommt
-        #         if len(actual_phrase) > len(cand.split(" "))+2 or (len(cand.split(" ")) > 3 and len(actual_phrase) > len(cand.split(" "))*1.7):
-        #             if phrase_in_text(cand, " ".join(actual_phrase)):
-        #                 actual_phrase = cand.split(" ")
-        #                 print(f"Original Candidate: `{cand}`, actual candidate: `{' '.join(actual_phrase)}`")
-        #                 return None
-        #             elif cand in " ".join(actual_phrase):
-        #                 #TODO remove this branch!!!
-        #                 actual_phrase = cand.split(" ")
-        #                 print(f"BADBAD! Original Candidate: `{cand}`, actual candidate: `{' '.join(actual_phrase)}`")
-        #                 return None
-        #         print(f"Original Candidate: `{cand}`, actual candidate: `{' '.join(actual_phrase)}`")
-        #         if len(actual_phrase) < 10: #TODO parametrizise this value!
-        #             if phrase_in_text(" ".join(actual_phrase), text):
-        #                 return " ".join(actual_phrase)
-        #             elif " ".join(actual_phrase) in text.lower():
-        #                 #TODO remove this branch!!!
-        #                 return " ".join(actual_phrase)
-        #             else:
-        #                 print("wtf")
-        #                 return None
-        # elif startpos <= 0 and withoutstopsandcharacters.find(cand) > 0:
-        #     print()  #there is a character in between (teacher ? general didacticts)
-        #     return None
-        # else:
-        #     print(f"Candidate didn't work at all: `{cand}`")
-        #     return None
-        # print("wtf?!")
-        # return None
 
     def __call__(self, text, lang="en"):
         """see scripts/notebooks/proof_of_concept/proofofconcept_keyBERT.ipynb for why this is like this"""

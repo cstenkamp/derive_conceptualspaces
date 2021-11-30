@@ -2,7 +2,11 @@ import os
 from os.path import join as pjoin
 from pathlib import Path
 
-from scripts.create_siddata_dataset import create_mds, create_load_languages_file, create_descstyle_dataset, extract_candidateterms_keybert
+from scripts.create_siddata_dataset import (
+    create_mds, create_load_languages_file,
+    create_descstyle_dataset, extract_candidateterms_keybert,
+    postprocess_candidateterms, create_doc_term_matrix
+)
 from scripts.create_siddata_dataset import ORIGLAN, TRANSL, ONLYENG
 
 def cnf(name, val):
@@ -88,6 +92,29 @@ rule extract_candidateterms_keybert:
         "candidate_terms.json"
     run:
         extract_candidateterms_keybert.callback(".")
+
+
+rule postprocess_candidateterms:
+    input:
+        input_for_translate_descriptions,
+        "candidate_terms.json"
+    output:
+        "candidate_terms_postprocessed.json"
+    run:
+        postprocess_candidateterms.callback(".", postfix="_postprocessed")
+
+
+rule create_doc_term_matrix:
+    input:
+        input_for_translate_descriptions,
+        "candidate_terms_postprocessed.json"
+    output:
+        "doc_term_matrix.json"
+    run:
+        create_doc_term_matrix.callback(".")
+
+
+
 
 
 
