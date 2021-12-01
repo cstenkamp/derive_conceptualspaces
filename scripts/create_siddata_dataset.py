@@ -96,7 +96,7 @@ def create_doc_term_matrix(base_dir, json_filename="candidate_terms_postprocesse
     descriptions = [tokenize_text(i)[1] for i in mds_obj.descriptions]
     # if I used gensim for this, it would be `dictionary,doc_term_matrix = corpora.Dictionary(descriptions), [dictionary.doc2bow(doc) for doc in descriptions]`
     dictionary = corpora.Dictionary([all_terms])
-    doc_term_matrix = [sorted([(ind, phrase_in_text(elem, mds_obj.descriptions[j], return_count=True)) for ind,elem in enumerate(all_terms) if phrase_in_text(elem, mds_obj.descriptions[0])], key=lambda x:x[0]) for j in tqdm(range(len(mds_obj.descriptions)))]
+    doc_term_matrix = [sorted([(ind, phrase_in_text(elem, mds_obj.descriptions[j], return_count=True)) for ind,elem in enumerate(all_terms) if phrase_in_text(elem, mds_obj.descriptions[j])], key=lambda x:x[0]) for j in tqdm(range(len(mds_obj.descriptions)))]
     json_dump({"all_terms": all_terms, "doc_term_matrix": doc_term_matrix}, join(base_dir, "doc_term_matrix.json"))
 
 
