@@ -2,7 +2,7 @@ import re
 from tqdm import tqdm
 
 from src.main.create_spaces.get_candidates_keybert import WORD_NUM_APOSTR_REGEX
-from src.main.create_spaces.text_tools import phrase_in_text
+from src.main.util.text_tools import phrase_in_text
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
@@ -19,6 +19,7 @@ def fix_cand(cand, text):
         cand = cand.replace(" *", "*")
         cand = cand.replace(" '", "'")
     return cand
+
 
 def postprocess_candidates(candidate_terms, descriptions):
     postprocessed_candidates = [[] for _ in candidate_terms]

@@ -2,7 +2,10 @@ from os.path import join, isdir, isfile, abspath, dirname, splitext
 import os
 from dotenv import load_dotenv
 
+from src.main.util.mds_object import ORIGLAN, ONLYENG, TRANSL
+
 ## Paths
+
 ENV_FILE_PATH = os.getenv("ENV_FILE_PATH") or abspath(join(dirname(__file__), "..", "..", "docker", ".env"))
 #you can specify a custom path to an env-file using ENV_FILE_PATH = xyz python ...
 load_dotenv(ENV_FILE_PATH)
@@ -22,17 +25,20 @@ SIDDATA_SEAFILE_REPOREAD_PASSWORD = os.getenv("SIDDATA_SEAFILE_REPOREADr_PASSWOR
 SIDDATA_SEAFILE_REPO_BASEPATH = "backend_synced_models"
 SIDDATA_SEAFILE_MODEL_VERSIONS = {"siddata_semspaces": 1} #"semanticspaces": 1,
 
+## specifically for courses-dataset
+COURSE_TYPES = ["colloquium", "seminar", "internship", "practice", "lecture"]
+DEFAULT_TRANSLATE_POLICY = TRANSL
+
 ## other
 DATA_SET = "movies" # "movies", "places", "wines", "courses"
 MDS_DIMENSIONS = 20 #20,50,100,200
 DEBUG = False
 RANDOM_SEED = None
 MONGO_URI = f"mongodb://{os.environ['MONGO_INITDB_ROOT_USERNAME']}:{os.environ['MONGO_INITDB_ROOT_PASSWORD']}@127.0.0.1/?authMechanism=SCRAM-SHA-1"
-CANDIDATETERM_MIN_OCCURSIN_DOCS = 5
+CANDIDATETERM_MIN_OCCURSIN_DOCS = 10
 
 STANFORDNLP_VERSION = "4.2.2" #whatever's newest at https://stanfordnlp.github.io/CoreNLP/history.html
-
-
+MDS_DEFAULT_BASENAME = "siddata_names_descriptions_mds_"
 
 ########################################################################################################################
 # KEEP THIS AT THE BOTTOM!

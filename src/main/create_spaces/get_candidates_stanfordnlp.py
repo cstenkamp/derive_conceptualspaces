@@ -2,7 +2,6 @@ from nltk import word_tokenize, pos_tag, ne_chunk
 from nltk import RegexpParser
 from nltk.tree import Tree
 
-from src.static.settings import DATA_BASE
 from src.main.util.nltk_util import download_activate_stanfordnlp, download_nltk_dependencies
 
 ########################################################################################################################

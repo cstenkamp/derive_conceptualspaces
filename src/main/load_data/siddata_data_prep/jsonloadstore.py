@@ -86,7 +86,7 @@ def get_settings():
     return {
         k: v
         for k, v in settings.__dict__.items()
-        if (not k.startswith("_") and not callable(v) and not isinstance(v, ModuleType) and k.isupper())
+        if (not k.startswith("_") and not callable(v) and not isinstance(v, ModuleType) and k.isupper() and not "PASSWORD" in k)
     }
 
 def json_load(*args, assert_meta=(), return_meta=False, **kwargs):

@@ -35,3 +35,6 @@ class MDSObject:
 
     def index_of(self, name):
         return self.names.index(name)
+
+    def __repr__(self):
+        return f"MDSObject({len(self.names)} entries)"

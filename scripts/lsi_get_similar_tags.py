@@ -8,7 +8,7 @@ import numpy as np
 from src.main.util.pretty_print import pretty_print as print
 from scripts.create_siddata_dataset import ORIGLAN, ONLYENG, TRANSL, load_translate_mds  # TODO why is this in scripts
 from src.main.load_data.siddata_data_prep.jsonloadstore import json_load
-from src.main.create_spaces.text_tools import phrase_in_text, tokenize_text
+from src.main.util.text_tools import phrase_in_text, tokenize_text
 
 logger = logging.getLogger(basename(__file__))
 

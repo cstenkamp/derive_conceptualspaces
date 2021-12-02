@@ -1,22 +1,17 @@
 from collections import Counter
-from os.path import join, isfile, dirname, basename
+from os.path import join, isfile, basename
 import logging
-import json
-from datetime import datetime
 import argparse
-import re
 
 import sklearn.svm
 import numpy as np
 from tqdm import tqdm
 
-from src.main.create_spaces.get_candidates_keybert import WORD_NUM_REGEX, WORD_NUM_APOSTR_REGEX
 from src.main.create_spaces.postprocess_candidates import postprocess_candidates
-from src.main.util.telegram_notifier import telegram_notify
-from src.static.settings import SID_DATA_BASE, CANDIDATETERM_MIN_OCCURSIN_DOCS
+from src.static.settings import CANDIDATETERM_MIN_OCCURSIN_DOCS
 from src.main.util.pretty_print import pretty_print as print
 from scripts.create_siddata_dataset import ORIGLAN, ONLYENG, TRANSL, load_translate_mds #TODO why is this in scripts
-from src.main.create_spaces.text_tools import phrase_in_text, tokenize_text
+from src.main.util.text_tools import phrase_in_text, tokenize_text
 from src.main.load_data.siddata_data_prep.jsonloadstore import json_dump, json_load
 
 from src.main.util.threedfigure import ThreeDFigure, make_meshgrid

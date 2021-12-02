@@ -1,8 +1,7 @@
 import re
-from keybert import KeyBERT
 from nltk.corpus import stopwords as nlstopwords
 
-from src.main.create_spaces.text_tools import tokenize_text, phrase_in_text
+from src.main.util.text_tools import tokenize_text, phrase_in_text
 
 WORD_REGEX = re.compile("[a-zA-ZäüöÜÄÖß-]+")        #TODO "[^\W\d_]" see https://stackoverflow.com/a/6314634/5122790 #TODO see https://stackoverflow.com/a/3617818/5122790
 WORD_NUM_REGEX = re.compile("[a-zA-ZäüöÜÄÖß0-9-]+")
@@ -18,6 +17,7 @@ class KeyBertExtractor():
 
     def __init__(self, is_multilan, faster=False):
         """available models: https://github.com/MaartenGr/KeyBERT#25-embedding-models"""
+        from keybert import KeyBERT #lazily loaded as it needs tensorflow which takes some time to init
         assert not (is_multilan and faster)
         if faster:
             self.model_name = "paraphrase-MiniLM-L6-v2"
@@ -170,7 +170,5 @@ class KeyBertExtractor():
                     else:
                         print("The extracted candidate is STILL not in the text!")
                 n_errs += 1
-
-
 
         return actual_keyphrases, used_candidates, (n_immediateworking, n_fixed, n_errs)

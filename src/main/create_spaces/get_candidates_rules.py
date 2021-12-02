@@ -1,6 +1,7 @@
-coursetypes = ["colloquium", "seminar", "internship", "practice", "lecture"]
+from src.static.settings import COURSE_TYPES
 
-def extract_coursetype(desc):
+def extract_coursetype(desc, coursetypes=None):
+    coursetypes = coursetypes or COURSE_TYPES
     for type in coursetypes:
         if any(i in desc.lower() for i in [f"this {type}"]):
             return type
@@ -10,4 +11,5 @@ def extract_coursetype(desc):
     return None
 
 def extract_tfidf():
+    #TODO: implement this, using src.main.util.text_tools.tf_idf
     raise NotImplementedError()

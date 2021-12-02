@@ -47,3 +47,5 @@ RUN /bin/zsh /home/developer/.zshrc
 
 ENV HOME=/home/developer
 ENV SHELL=/bin/zsh
+
+#build with: `docker build -f Dockerfile --build-arg uid=$(id -u) --build-arg gid=$(id -g) --build-arg git_commit=$(git rev-parse --short HEAD) --rm --tag derive_conceptualspaces .`
