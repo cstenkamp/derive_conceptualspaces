@@ -12,6 +12,7 @@ from time import sleep
 import click
 
 import sys
+
 if abspath(join(dirname(__file__), "..")) not in sys.path:
     sys.path.append(abspath(join(dirname(__file__), "..")))
 
@@ -223,16 +224,14 @@ def create_candidate_svm(ctx, ndm_filename, dtm_filename, translate_policy=DEFAU
     from tqdm import tqdm
     import sklearn.svm
     import numpy as np
+    from src.main.util.dtm_object import DocTermMatrix
 
     mds_obj = load_translate_mds(ctx.obj["base_dir"], ndm_filename, translate_policy=translate_policy)
     tmp = json_load(join(ctx.obj["base_dir"], dtm_filename), assert_meta=("CANDIDATETERM_MIN_OCCURSIN_DOCS", "STANFORDNLP_VERSION"))
-    mds_obj.doc_term_matrix = tmp["doc_term_matrix"]
-    mds_obj.all_terms = tmp["all_terms"]
-    print()
-    #TODO make a class for the doc_term_matrix, where different views (like the term-existinds I need here) can easily be cached
+    dtm = DocTermMatrix(tmp)
 
     correct_percentages = {}
-    for term, exist_indices in tqdm(mds_obj.term_existinds.items()):
+    for term, exist_indices in tqdm(dtm.term_existinds(use_index=False).items()):
         labels = [False] * len(mds_obj.names)
         for i in exist_indices:
             labels[i] = True
@@ -267,9 +266,9 @@ def create_candidate_svm(ctx, ndm_filename, dtm_filename, translate_policy=DEFAU
     print(f"Average Correct Percentages: {round(sum(list(correct_percentages.values()))/len(list(correct_percentages.values())), 2)}%")
     sorted_percentages = sorted([[k,round(v,2)] for k,v in correct_percentages.items()], key=lambda x:x[1], reverse=True)
     best_ones = list(dict(sorted_percentages).keys())[:50]
-    best_dict = {i: [f"{round(correct_percentages[i], 2)}%", f"{len(mds_obj.term_existinds[i])} samples"] for i in best_ones}
+    best_dict = {i: [f"{round(correct_percentages[i], 2)}%", f"{len(dtm.term_existinds(use_index=False)[i])} samples"] for i in best_ones}
     for k, v in best_dict.items():
-        print(f"{k}: {'; '.join(v)}")
+        print(f"  {k}: {'; '.join(v)}")
 
 ########################################################################################################################
 ########################################################################################################################

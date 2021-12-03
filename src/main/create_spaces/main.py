@@ -117,6 +117,7 @@ def create_doc_term_matrix(base_dir, mds_obj, json_filename="candidate_terms_pos
     dictionary = corpora.Dictionary([all_terms])
     doc_term_matrix = [sorted([(ind, phrase_in_text(elem, mds_obj.descriptions[j], return_count=True)) for ind,elem in enumerate(all_terms) if phrase_in_text(elem, mds_obj.descriptions[j])], key=lambda x:x[0]) for j in tqdm(range(len(mds_obj.descriptions)))]
     if verbose:
+        #TODO what's done here is now part of the dtm-object class, so take it from there?
         occurs_in = [set(j[0] for j in i) if i else [] for i in doc_term_matrix]
         num_occurences = [sum([term_ind in i for i in occurs_in]) for term_ind in tqdm(range(len(all_terms)))]
         show_hist(num_occurences, xlabel="# Documents the Keyword appears in", ylabel="Count (log scale)", cutoff_percentile=97, log=True)
