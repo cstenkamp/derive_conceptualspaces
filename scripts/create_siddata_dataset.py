@@ -17,8 +17,12 @@ if abspath(join(dirname(__file__), "..")) not in sys.path:
     sys.path.append(abspath(join(dirname(__file__), "..")))
 
 from src.main.util.telegram_notifier import telegram_notify
-from src.static.settings import RANDOM_SEED, MDS_DEFAULT_BASENAME, DEFAULT_TRANSLATE_POLICY, \
-    CANDIDATETERM_MIN_OCCURSIN_DOCS
+from src.static.settings import (
+    RANDOM_SEED,
+    MDS_DEFAULT_BASENAME,
+    DEFAULT_TRANSLATE_POLICY,
+    CANDIDATETERM_MIN_OCCURSIN_DOCS,
+)
 from src.main.util.logutils import setup_logging
 from src.main.util.pretty_print import pretty_print as print
 from src.main.load_data.siddata_data_prep.jsonloadstore import json_dump
@@ -42,8 +46,8 @@ logger = logging.getLogger(basename(__file__))
 #cli main
 
 @click.group()
-@click.argument("base-dir", type=str) #TODO this also as env-var that I can easily set in snakemake!
-@click.option("--verbose/--no-verbose", default=False, help="default: False")
+@click.argument("base-dir", type=str)
+@click.option("--verbose/--no-verbose", default=True, help="default: True")
 @click.option(
     "--log",
     type=str,
@@ -56,14 +60,28 @@ logger = logging.getLogger(basename(__file__))
     default="",
     help="logfile to log to. If not set, it will be logged to standard stdout/stderr",
 )
+@click.option("--notify-telegram/--no-notify-telegram", default=False, help="If you want to get telegram-notified of start & end of the command")
 @click.pass_context
-def cli(ctx, base_dir, verbose=False, log="INFO", logfile=None):
-    ctx.ensure_object(dict)
-    ctx.obj["base_dir"] = base_dir
-    ctx.obj["verbose"] = verbose
+def cli(ctx, base_dir, verbose=False, log="INFO", logfile=None, notify_telegram=False):
+    for param, val in ctx.params.items():
+        ctx.obj[param] = val
+        envvarname = ctx.auto_envvar_prefix+"_"+param.upper().replace("-","_")
+        if (envvar := os.environ.get(envvarname)): #https://github.com/pallets/click/issues/714#issuecomment-651389598
+            ctx.params[param] = envvar
+            ctx.obj[param] = envvar
+        else:
+            if isinstance(ctx.obj[param], bool):
+                if ctx.obj[param]:
+                    os.environ[envvarname] = "1"
+            else:
+                os.environ[envvarname] = ctx.obj[param]
     print("Starting up at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
-    setup_logging(log, logfile)
+    setup_logging(ctx.obj["log"], ctx.obj["logfile"])
     random.seed(RANDOM_SEED)
+    if ctx.obj["notify_telegram"] == True:
+        if not isinstance(cli.get_command(ctx, ctx.invoked_subcommand), click.Group):
+            ctx.command.get_command(ctx, ctx.invoked_subcommand).callback = telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(ctx.command.get_command(ctx, ctx.invoked_subcommand).callback)
+
 
 
 @cli.resultcallback()
@@ -110,6 +128,10 @@ def prepare_candidateterms(ctx, mds_basename=MDS_DEFAULT_BASENAME, ndm_file=None
     ctx.obj["ndm_file"] = ndm_file
     ctx.obj["mds_obj"] = load_translate_mds(load_basedir, ndm_file, translate_policy=translate_policy)
     ctx.obj["translate_policy"] = translate_policy
+    if ctx.obj["notify_telegram"] == True:
+        if not isinstance(cli.get_command(ctx, ctx.invoked_subcommand), click.Group):
+            ctx.command.get_command(ctx, ctx.invoked_subcommand).callback = telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(ctx.command.get_command(ctx, ctx.invoked_subcommand).callback)
+
 
 
 @prepare_candidateterms.command()
@@ -173,29 +195,44 @@ def filter_keyphrases(ctx, min_term_count=10, matrix_val="count"):
     json_dump({"all_terms": all_terms, "doc_term_matrix": doc_term_matrix}, join(ctx.obj["base_dir"], f"doc_term_matrix_{matrix_val}.json"))
     # TODO filename depends on params
 
-#TODO asserte dass die len(doc-term-matrix) == len(mds_obj.names)
 
 @prepare_candidateterms.command()
 @click.pass_context
+@click.argument("dtm-filename", type=str)
 @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
-def run_lsi(ctx):
-    raise NotImplementedError()
+def run_lsi(ctx, dtm_filename):
+    """as in [VISR12: 4.2.1]"""
     # TODO options here:
     # * if it should filter AFTER the LSI
-    # see [VISR12: 4.2.1] they create a pseudo-document d_t for each tag
-    # max_val = max(i[1] for doc in doc_term_matrix for i in doc)
-    # keyword_term_matrix = [[[i, max_val]] for i in all_terms.keys()]
-    # doc_term_matrix = doc_term_matrix+keyword_term_matrix
-    #
-    # #ok so as much for the preprocessing, now let's actually go for the LSI
-    # dictionary = corpora.Dictionary([list(all_terms.values())])
-    # # print("Start creating the LSA-Model with MORE topics than terms...")
-    # # lsamodel_manytopics = LsiModel(doc_term_matrix, num_topics=len(all_terms) * 2, id2word=dictionary)
-    # print("Start creating the LSA-Model with FEWER topics than terms...")
-    # lsamodel_lesstopics = LsiModel(doc_term_matrix, num_topics=len(all_terms)//10, id2word=dictionary)
-    # print()
-    # # import matplotlib.cm; import matplotlib.pyplot as plt
-    # # plt.imshow(lsamodel_lesstopics.get_topics()[:100,:200], vmin=lsamodel_lesstopics.get_topics().min(), vmax=lsamodel_lesstopics.get_topics().max(), cmap=matplotlib.cm.get_cmap("coolwarm")); plt.show()
+    from src.main.load_data.siddata_data_prep.jsonloadstore import json_load
+    import numpy as np
+    from src.main.util.dtm_object import DocTermMatrix
+    from os.path import splitext
+    from gensim import corpora
+    from gensim.models import LsiModel
+
+    metric = splitext(dtm_filename)[0].split('_')[-1]
+    print(f"Using the DocTermMatrix with *b*{metric}*b* as metric!")
+    dtm = DocTermMatrix(json_load(join(ctx.obj["base_dir"], dtm_filename), assert_meta=("CANDIDATETERM_MIN_OCCURSIN_DOCS", "STANFORDNLP_VERSION")))
+    if ctx.obj["verbose"]:
+        print("The 25 candidate_terms that occur in the most descriptions (incl the #descriptions they occur in):", {i[0]: len(i[1]) for i in sorted(dtm.term_existinds(use_index=False).items(), key=lambda x: len(x[1]), reverse=True)[:25]})
+        if metric.lower() not in ["binary"]:
+            max_ind = np.unravel_index(dtm.as_csr().argmax(), dtm.as_csr().shape)
+            print(f"Max-{metric}: Term `*b*{dtm.all_terms[max_ind[0]]}*b*` has value *b*{dict(dtm.dtm[max_ind[1]])[max_ind[0]]}*b* for doc `*b*{ctx.obj['mds_obj'].names[max_ind[1]]}*b*`")
+
+    dtm.add_pseudo_keyworddocs()
+
+    #ok so as much for the preprocessing, now let's actually go for the LSI
+    dictionary = corpora.Dictionary([list(dtm.all_terms.values())])
+    # print("Start creating the LSA-Model with MORE topics than terms...")
+    # lsamodel_manytopics = LsiModel(doc_term_matrix, num_topics=len(all_terms) * 2, id2word=dictionary)
+    print("Start creating the LSA-Model with FEWER topics than terms...")
+    lsamodel_lesstopics = LsiModel(dtm.dtm, num_topics=len(dtm.all_terms)//10, id2word=dictionary)
+    print()
+    import matplotlib.cm; import matplotlib.pyplot as plt
+    #TODO use the mpl_tools here as well to also save plot!
+    plt.imshow(lsamodel_lesstopics.get_topics()[:100,:200], vmin=lsamodel_lesstopics.get_topics().min(), vmax=lsamodel_lesstopics.get_topics().max(), cmap=matplotlib.cm.get_cmap("coolwarm")); plt.show()
+    print()
 
 
 # TODO ensure this can be done in snakemake instead
@@ -204,9 +241,6 @@ def run_lsi(ctx):
 #     # for n_dims in [20,50,100,200]:
 #     #     create_dataset(n_dims, "courses")
 #     create_descstyle_dataset(20, "courses")
-
-
-
 
 ########################################################################################################################
 ########################################################################################################################
@@ -227,8 +261,8 @@ def create_candidate_svm(ctx, ndm_filename, dtm_filename, translate_policy=DEFAU
     from src.main.util.dtm_object import DocTermMatrix
 
     mds_obj = load_translate_mds(ctx.obj["base_dir"], ndm_filename, translate_policy=translate_policy)
-    tmp = json_load(join(ctx.obj["base_dir"], dtm_filename), assert_meta=("CANDIDATETERM_MIN_OCCURSIN_DOCS", "STANFORDNLP_VERSION"))
-    dtm = DocTermMatrix(tmp)
+    dtm = DocTermMatrix(json_load(join(ctx.obj["base_dir"], dtm_filename), assert_meta=("CANDIDATETERM_MIN_OCCURSIN_DOCS", "STANFORDNLP_VERSION")))
+    dtm.as_csr()
 
     correct_percentages = {}
     for term, exist_indices in tqdm(dtm.term_existinds(use_index=False).items()):
@@ -276,7 +310,7 @@ def create_candidate_svm(ctx, ndm_filename, dtm_filename, translate_policy=DEFAU
 
 
 if __name__ == '__main__':
-    cli(obj={})
+    cli(auto_envvar_prefix="MA", obj={})
 
 
 

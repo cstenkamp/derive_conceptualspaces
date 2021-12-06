@@ -2,6 +2,7 @@ from functools import lru_cache
 from math import log
 
 from nltk.tokenize import word_tokenize
+from tqdm import tqdm
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 

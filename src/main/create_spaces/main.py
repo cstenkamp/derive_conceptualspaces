@@ -10,7 +10,7 @@ from gensim import corpora
 
 from src.main.create_spaces.postprocess_candidates import postprocess_candidates
 from src.main.util.text_tools import tf_idf
-from src.main.util.np_tools import show_hist
+from src.main.util.mpl_tools import show_hist
 from src.main.util.pretty_print import pretty_print as print
 from src.main.load_data.siddata_data_prep.jsonloadstore import json_load
 from src.main.create_spaces.get_candidates_keybert import KeyBertExtractor
@@ -31,7 +31,7 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 ########################################################################################################################
 
 def load_translate_mds(file_path, file_name, translate_policy, assert_meta=(), translations_filename="translated_descriptions.json", assert_allexistent=True):
-    print(f"Working with file {file_name} in {file_path}!")
+    print(f"Working with file *b*{file_name}*b* in *b*{file_path}*b*!")
     loaded = json_load(join(file_path, file_name), assert_meta=assert_meta)
     names, descriptions, mds = loaded["names"], loaded["descriptions"], loaded["mds"]
     if assert_allexistent:
@@ -120,7 +120,7 @@ def create_doc_term_matrix(base_dir, mds_obj, json_filename="candidate_terms_pos
         #TODO what's done here is now part of the dtm-object class, so take it from there?
         occurs_in = [set(j[0] for j in i) if i else [] for i in doc_term_matrix]
         num_occurences = [sum([term_ind in i for i in occurs_in]) for term_ind in tqdm(range(len(all_terms)))]
-        show_hist(num_occurences, xlabel="# Documents the Keyword appears in", ylabel="Count (log scale)", cutoff_percentile=97, log=True)
+        show_hist(num_occurences, "Docs per Keyword", xlabel="# Documents the Keyword appears in", ylabel="Count (log scale)", cutoff_percentile=97, log=True)
         above_threshold = len([i for i in num_occurences if i>= CANDIDATETERM_MIN_OCCURSIN_DOCS])
         sorted_canditerms = sorted([[ind, elem] for ind, elem in enumerate(num_occurences)], key=lambda x:x[1], reverse=True)
         print(f"Found {len(all_terms)} candidate Terms, {above_threshold} ({round(above_threshold/len(all_terms)*100)}%) of which occur in at least {CANDIDATETERM_MIN_OCCURSIN_DOCS} descriptions.")
@@ -146,7 +146,7 @@ def filter_keyphrases(base_dir, mds_obj, min_term_count=10, matrix_val="count", 
         print(f"Using only terms that occur at least {min_term_count} times, which are {len(used_terms)} of {len(term_counts)} terms.")
         most_used = sorted(list(used_terms.items()), key=lambda x: x[1], reverse=True)[:10]
         print("The most used terms are: " + ", ".join([f"{all_terms[ind]} ({count})" for ind, count in most_used]))
-        show_hist(list(used_terms.values()), xlabel="Occurences per Keyword", cutoff_percentile=93)
+        show_hist(list(used_terms.values()), "Occurences per Keyword", xlabel="Occurences per Keyword", cutoff_percentile=93)
     doc_term_matrix = [[[all_terms[ind], num] for ind, num in doc] for doc in doc_term_matrix]
     all_terms = {all_terms[elem]: i for i, elem in enumerate(used_terms.keys())}; del used_terms
     doc_term_matrix = [[[all_terms[ind], num] for ind, num in doc if ind in all_terms] for doc in doc_term_matrix]

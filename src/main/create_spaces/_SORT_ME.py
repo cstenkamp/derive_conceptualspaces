@@ -9,7 +9,7 @@ from src.static.settings import SID_DATA_BASE, DEBUG, RANDOM_SEED, SPACES_DATA_B
 from src.main.util.pretty_print import pretty_print as print
 from src.main.load_data.siddata_data_prep.create_mds import preprocess_data
 from src.main.load_data.siddata_data_prep.jsonloadstore import json_dump, json_load
-
+from src.main.create_spaces.main import load_translate_mds
 
 from src.main.util.mds_object import TRANSL, ORIGLAN, ONLYENG
 
