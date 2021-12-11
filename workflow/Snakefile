@@ -2,10 +2,16 @@ from pathlib import Path
 import os
 from os.path import join as pjoin
 
-from derive_conceptualspace.create_spaces.spaces_main import preprocess_descriptions_full
+from derive_conceptualspace.create_spaces.spaces_main import preprocess_descriptions_full as preprocess_descriptions_full_base
 from derive_conceptualspace.util.jsonloadstore import Struct, json_dump
 from derive_conceptualspace.util.mds_object import ORIGLAN, ONLYENG, TRANSL
-from derive_conceptualspace.create_spaces.spaces_main import create_dissim_mat
+from derive_conceptualspace.create_spaces.spaces_main import create_dissim_mat as create_dissim_mat_base
+from misc_util.telegram_notifier import telegram_notify
+
+if os.getenv("MA_SMK_TGRAM"):
+    for k, v in dict(globals()).items():
+        if k.endswith("_base") and callable(v):
+            globals()[k] =  telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(globals()[k])
 
 def cnf(name, val):
     globals()[name] = config.setdefault(name, val)
@@ -48,6 +54,7 @@ rule all:
     input:
         expand("dissim_matrix_{quant_meas}.json", quant_meas=QUANTIFICATION_MEASURES)
 
+
 rule preprocess_descriptions:
     input:
         "kurse-beschreibungen.csv"
@@ -64,7 +71,7 @@ rule preprocess_descriptions:
             remove_punctuation=True,
         )
     run:
-        vocab, descriptions = preprocess_descriptions_full(os.getcwd(), params.translate_policy, params.pp_components)
+        vocab, descriptions = preprocess_descriptions_full_base(os.getcwd(), params.translate_policy, params.pp_components)
         descriptions = [Struct(**desc.__dict__) for desc in descriptions]
         json_dump({"vocab": vocab, "descriptions": descriptions, "pp_components": params.pp_components}, output)
 
@@ -75,7 +82,7 @@ rule create_dissim_mat:
     output:
         "dissim_matrix_{quantification_measure}.json"
     run:
-        quantification, dissim_mat, pp_components = create_dissim_mat(os.getcwd(), input.descs, wildcards.quantification_measure)
+        quantification, dissim_mat, pp_components = create_dissim_mat_base(os.getcwd(), input.descs, wildcards.quantification_measure)
         quantification = Struct(**{k:v for k,v in quantification.__dict__.items() if not k.startswith("_") and k not in ["csr_matrix", "doc_freqs", "reverse_term_dict"]})
         json_dump({"quantification": quantification, "dissim_mat": dissim_mat, "pp_components": pp_components, "quant_measure": wildcards.quantification_measure}, output)
 
