@@ -2,7 +2,9 @@ from os.path import join, isdir, isfile, abspath, dirname, splitext
 import os
 from dotenv import load_dotenv
 
-from derive_conceptualspace.util.mds_object import ORIGLAN, ONLYENG, TRANSL
+ORIGLAN = 1
+ONLYENG = 2
+TRANSL = 3
 
 ## Paths
 ENV_FILE_PATH = os.getenv("ENV_FILE_PATH") or abspath(join(dirname(__file__), "", "..", "docker", ".env"))

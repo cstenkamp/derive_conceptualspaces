@@ -128,27 +128,36 @@ def remove_diacritics_all(descriptions):
             desc.process(unidecode.unidecode(desc.processed_text), "remove_diacritics")
     return descriptions
 
+
+def remove_punctuation(sentences):
+    # desc.process([[word for word in sent if word.isalnum()] for sent in desc.processed_text], "remove_diacritics")
+    condition = lambda letter: letter.isalnum() or letter in "-`"
+    sents = []
+    for sent in sentences:
+        words = []
+        for word in sent:
+            if word.isalnum():
+                words.append(word)
+            else:
+                if len(word) > 1:
+                    if all(condition(letter) for letter in word):
+                        words.append(word)
+                    for letter in word:
+                        if not condition(letter):
+                            parts = [i for i in word.split(letter) if i]
+                            if all(i.isalnum() for i in parts):
+                                words.extend(parts)
+                            # else:
+                            #     print(f"Error at {word}") #TODO irgendwann muss ich mich darum kümmern
+        sents.append(words)
+    return sents
+
+
 def remove_punctuation_all(descriptions):
     for desc in descriptions:
         if isinstance(desc.processed_text, list):
             if isinstance(desc.processed_text[0], list):
-                # desc.process([[word for word in sent if word.isalnum()] for sent in desc.processed_text], "remove_diacritics")
-                sents = []
-                for sent in desc.processed_text:
-                    words = []
-                    for word in sent:
-                        if word.isalnum():
-                            words.append(word)
-                        else:
-                            if len(word) > 1:
-                                for letter in word:
-                                    if not (letter.isalnum() or letter in "-`"):
-                                        parts = [i for i in word.split(letter) if i]
-                                        if all(i.isalnum() for i in parts):
-                                            words.extend(parts)
-                                        # else:
-                                        #     print(f"Error at {word}") #TODO irgendwann muss ich mich darum kümmern
-                    sents.append(words)
+                sents = remove_punctuation(desc.processed_text)
                 desc.process(sents, "remove_punctuation")
             else:
                 raise NotImplementedError()

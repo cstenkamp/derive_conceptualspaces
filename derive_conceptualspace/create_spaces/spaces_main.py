@@ -14,7 +14,7 @@ from .create_mds import ppmi, create_dissimilarity_matrix
 from .translate_descriptions import create_load_languages_file
 from derive_conceptualspace.util.mds_object import MDSObject, Description
 from derive_conceptualspace.util.jsonloadstore import json_dump, json_load
-from derive_conceptualspace.util.mds_object import TRANSL, ORIGLAN, ONLYENG
+from derive_conceptualspace.settings import TRANSL, ORIGLAN, ONLYENG
 from derive_conceptualspace.settings import SID_DATA_BASE, SPACES_DATA_BASE, get_setting
 from derive_conceptualspace.util.text_tools import run_preprocessing_funcs, make_bow, tf_idf
 from derive_conceptualspace.util.dtm_object import DocTermMatrix

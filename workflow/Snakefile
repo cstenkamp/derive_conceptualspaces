@@ -4,7 +4,7 @@ from os.path import join as pjoin
 
 from derive_conceptualspace.create_spaces.spaces_main import preprocess_descriptions_full as preprocess_descriptions_full_base
 from derive_conceptualspace.util.jsonloadstore import Struct, json_dump
-from derive_conceptualspace.util.mds_object import ORIGLAN, ONLYENG, TRANSL
+from derive_conceptualspace.settings import ORIGLAN, ONLYENG, TRANSL
 from derive_conceptualspace.create_spaces.spaces_main import create_dissim_mat as create_dissim_mat_base
 from misc_util.telegram_notifier import telegram_notify
 

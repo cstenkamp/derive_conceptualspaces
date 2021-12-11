@@ -5,10 +5,6 @@ import textwrap
 
 from .jsonloadstore import Struct
 
-ORIGLAN = 1
-ONLYENG = 2
-TRANSL = 3
-
 
 class Description():
     #TODO add working json-serialize-way
