@@ -33,6 +33,7 @@ ENV_PREFIX = "MA"
 DATA_SET = "movies" # "movies", "places", "wines", "courses"
 # DEFAULT_MDS_DIMENSIONS = 20 #20,50,100,200
 DEFAULT_DEBUG = False
+DEFAULT_VERBOSE = True
 RANDOM_SEED = 1
 MONGO_URI = f"mongodb://{os.environ['MONGO_INITDB_ROOT_USERNAME']}:{os.environ['MONGO_INITDB_ROOT_PASSWORD']}@127.0.0.1/?authMechanism=SCRAM-SHA-1"
 CANDIDATETERM_MIN_OCCURSIN_DOCS = 10
@@ -45,13 +46,18 @@ MDS_DEFAULT_BASENAME = "siddata_names_descriptions_mds_"
 
 def get_setting(name):
     if os.getenv(ENV_PREFIX+"_"+name):
-        return os.environ[ENV_PREFIX+"_"+name]
+        tmp = os.environ[ENV_PREFIX+"_"+name]
+        if tmp.isnumeric():
+            return int(tmp)
+        elif all([i.isdecimal() or i in ".," for i in tmp]):
+            return float(tmp)
+        return tmp
     elif os.getenv(ENV_PREFIX+"_"+name+"_FALSE"):
         return False
     if "DEFAULT_"+name in globals():
         print(f"returning setting for {name} from default value!")
         return globals()["DEFAULT_"+name]
-    assert False
+    assert False, f"Couldn't get setting {name}"
 
 #TODO now I can overwrite the env-vars both in click and with this, this is stupid argh
 

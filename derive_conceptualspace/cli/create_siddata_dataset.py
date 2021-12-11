@@ -150,7 +150,7 @@ def create_spaces(ctx, mds_dimensions, translate_policy=DEFAULT_TRANSLATE_POLICY
 def preprocess_descriptions(ctx, **pp_components):
     vocab, descriptions = preprocess_descriptions_full(ctx.obj["base_dir"], ctx.obj["translate_policy"], pp_components)
     descriptions = [Struct(**desc.__dict__) for desc in descriptions]
-    json_dump({"vocab": vocab, "descriptions": descriptions, "pp_components": pp_components}, join(ctx.obj["base_dir"], f"preprocessed_descriptions.json"))
+    json_dump({"vocab": vocab, "descriptions": descriptions, "pp_components": pp_components}, join(ctx.obj["base_dir"], "preprocessed_descriptions.json"))
 
 
 @create_spaces.command()
@@ -159,7 +159,9 @@ def preprocess_descriptions(ctx, **pp_components):
 @click.pass_context
 def create_dissim_mat(ctx, quantification_measure, pp_descriptions_filename):
     quantification, dissim_mat, pp_components = create_dissim_mat_base(ctx.obj["base_dir"], pp_descriptions_filename, quantification_measure)
-    json_dump({"quantification": quantification, "dissim_mat": dissim_mat, "pp_components": pp_components}, join(to_data_path, to_data_name))
+    quantification = Struct(**{k:v for k,v in quantification.__dict__.items() if not k.startswith("_") and k not in ["csr_matrix", "doc_freqs", "reverse_term_dict"]})
+    json_dump({"quantification": quantification, "dissim_mat": dissim_mat, "pp_components": pp_components, "quant_measure": quantification_measure},
+              join(ctx.obj["base_dir"], f"dissim_matrix_{quantification_measure}.json"))
 
 
 # @create_spaces.command()

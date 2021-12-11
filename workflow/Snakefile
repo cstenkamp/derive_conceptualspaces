@@ -1,14 +1,16 @@
 from pathlib import Path
+import os
+from os.path import join as pjoin
 
-from derive_conceptualspace.cli.create_siddata_dataset import (
-    create_descstyle_dataset
-)
-from derive_conceptualspace.cli.create_siddata_dataset import ORIGLAN
-
+from derive_conceptualspace.create_spaces.spaces_main import preprocess_descriptions_full
+from derive_conceptualspace.util.jsonloadstore import Struct, json_dump
+from derive_conceptualspace.util.mds_object import ORIGLAN, ONLYENG, TRANSL
+from derive_conceptualspace.create_spaces.spaces_main import create_dissim_mat
 
 def cnf(name, val):
     globals()[name] = config.setdefault(name, val)
 
+QUANTIFICATION_MEASURES = ["ppmi", "tf-idf"]
 
 ########################################################################################
 #the file `kurse-beschreibungen.csv` is the absolute basis, that one I need to get and cannot create.
@@ -34,85 +36,121 @@ def cnf(name, val):
 #     base, = glob_wildcards(pjoin(VIDEO_BASE, "{base}.mp4"))
 #     return [fn + ext for fn in base]
 
-rule all: #TODO not like this, what was snakemake standard for this kind of thing?
+# rule all: #TODO not like this, what was snakemake standard for this kind of thing?
+#     input:
+#         "siddata_names_descriptions_mds_3.json",
+#         "siddata_names_descriptions_mds_20.json",
+#         "siddata_names_descriptions_mds_50.json",
+#         "siddata_names_descriptions_mds_100.json",
+#         "siddata_names_descriptions_mds_200.json"
+
+rule all:
     input:
-        "siddata_names_descriptions_mds_3.json",
-        "siddata_names_descriptions_mds_20.json",
-        "siddata_names_descriptions_mds_50.json",
-        "siddata_names_descriptions_mds_100.json",
-        "siddata_names_descriptions_mds_200.json"
+        expand("dissim_matrix_{quant_meas}.json", quant_meas=QUANTIFICATION_MEASURES)
 
-
-checkpoint create_mds:
-    "Produce the Siddata Dataset from the kurse-beschreibungen CSV"
+rule preprocess_descriptions:
     input:
         "kurse-beschreibungen.csv"
     output:
-        "siddata_names_descriptions_mds_{n_dims}.json"
+        "preprocessed_descriptions.json"
+    params:
+        translate_policy=TRANSL,
+        pp_components=dict(
+            sent_tokenize=True,
+            convert_lower=True,
+            remove_stopwords=True,
+            lemmatize=True,
+            remove_diacritics=True,
+            remove_punctuation=True,
+        )
     run:
-        print(f"running pipeline for {wildcards.n_dims} dims")
-        create_mds(f"siddata_names_descriptions_mds_{wildcards.n_dims}.json", wildcards.n_dims, from_csv_path=".", to_data_path=".")
+        vocab, descriptions = preprocess_descriptions_full(os.getcwd(), params.translate_policy, params.pp_components)
+        descriptions = [Struct(**desc.__dict__) for desc in descriptions]
+        json_dump({"vocab": vocab, "descriptions": descriptions, "pp_components": params.pp_components}, output)
 
 
-def input_for_translate_descriptions(wildcards):
-    try:
-        return next(Path(".").glob("siddata_names_descriptions_mds_*.json"))
-    except StopIteration as err:
-        raise Exception("No n_dims JSON files found") from err
-
-rule translate_descriptions:
+rule create_dissim_mat:
     input:
-        input_for_translate_descriptions
+        descs="preprocessed_descriptions.json"
     output:
-        "translated_descriptions.json",
-    shell:
-        "echo {input} &&"
-        "touch {output}"
-
-
-rule create_desc15style_mds:
-    input:
-        "translated_descriptions.json", #TODO ists ja nur bei translate_policy=TRANSL
-        "siddata_names_descriptions_mds_{n_dims}.json"
-    output:
-        # "languages.json",  #cannot have multiple outputs, only one of which with wildcards :/
-        "d{n_dims}/courses{n_dims}.mds",
-        # "courseNames.txt" #TODO "course" noch als variable?
+        "dissim_matrix_{quantification_measure}.json"
     run:
-        create_descstyle_dataset(wildcards.n_dims, "courses", from_path=".", to_path=".", translate_policy=ORIGLAN)
+        quantification, dissim_mat, pp_components = create_dissim_mat(os.getcwd(), input.descs, wildcards.quantification_measure)
+        quantification = Struct(**{k:v for k,v in quantification.__dict__.items() if not k.startswith("_") and k not in ["csr_matrix", "doc_freqs", "reverse_term_dict"]})
+        json_dump({"quantification": quantification, "dissim_mat": dissim_mat, "pp_components": pp_components, "quant_measure": wildcards.quantification_measure}, output)
 
 
-rule extract_candidateterms_keybert:
-    input:
-        input_for_translate_descriptions
-    output:
-        "candidate_terms.json"
-    run:
-        extract_candidateterms_keybert.callback(".")
-
-
-rule postprocess_candidateterms:
-    input:
-        input_for_translate_descriptions,
-        "candidate_terms.json"
-    output:
-        "candidate_terms_postprocessed.json"
-    run:
-        postprocess_candidateterms.callback(".", postfix="_postprocessed")
-
-
-rule create_doc_term_matrix:
-    input:
-        input_for_translate_descriptions,
-        "candidate_terms_postprocessed.json"
-    output:
-        "doc_term_matrix.json"
-    run:
-        create_doc_term_matrix.callback(".")
-
-
-
-
+#
+# checkpoint create_mds:
+#     "Produce the Siddata Dataset from the kurse-beschreibungen CSV"
+#     input:
+#         "kurse-beschreibungen.csv"
+#     output:
+#         "siddata_names_descriptions_mds_{n_dims}.json"
+#     run:
+#         print(f"running pipeline for {wildcards.n_dims} dims")
+#         create_mds(f"siddata_names_descriptions_mds_{wildcards.n_dims}.json", wildcards.n_dims, from_csv_path=".", to_data_path=".")
+#
+#
+# def input_for_translate_descriptions(wildcards):
+#     try:
+#         return next(Path(".").glob("siddata_names_descriptions_mds_*.json"))
+#     except StopIteration as err:
+#         raise Exception("No n_dims JSON files found") from err
+#
+# rule translate_descriptions:
+#     input:
+#         input_for_translate_descriptions
+#     output:
+#         "translated_descriptions.json",
+#     shell:
+#         "echo {input} &&"
+#         "touch {output}"
+#
+#
+# rule create_desc15style_mds:
+#     input:
+#         "translated_descriptions.json", #TODO ists ja nur bei translate_policy=TRANSL
+#         "siddata_names_descriptions_mds_{n_dims}.json"
+#     output:
+#         # "languages.json",  #cannot have multiple outputs, only one of which with wildcards :/
+#         "d{n_dims}/courses{n_dims}.mds",
+#         # "courseNames.txt" #TODO "course" noch als variable?
+#     run:
+#         create_descstyle_dataset(wildcards.n_dims, "courses", from_path=".", to_path=".", translate_policy=ORIGLAN)
+#
+#
+# rule extract_candidateterms_keybert:
+#     input:
+#         input_for_translate_descriptions
+#     output:
+#         "candidate_terms.json"
+#     run:
+#         extract_candidateterms_keybert.callback(".")
+#
+#
+# rule postprocess_candidateterms:
+#     input:
+#         input_for_translate_descriptions,
+#         "candidate_terms.json"
+#     output:
+#         "candidate_terms_postprocessed.json"
+#     run:
+#         postprocess_candidateterms.callback(".", postfix="_postprocessed")
+#
+#
+# rule create_doc_term_matrix:
+#     input:
+#         input_for_translate_descriptions,
+#         "candidate_terms_postprocessed.json"
+#     output:
+#         "doc_term_matrix.json"
+#     run:
+#         create_doc_term_matrix.callback(".")
+#
+#
+#
+#
 
 
 # rule get_gcn_weights:

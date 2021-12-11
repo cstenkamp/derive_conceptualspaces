@@ -5,6 +5,9 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 
 
 class DocTermMatrix():
+    #TODO add working json-serialize-way
+    #TODO add fromstruct like in Description
+
     def __init__(self, *args, **kwargs):
         self.includes_pseudodocs = False
         if len(args) == 1 and isinstance(args[0], dict):

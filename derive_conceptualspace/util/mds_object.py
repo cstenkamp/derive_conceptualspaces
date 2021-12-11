@@ -11,6 +11,8 @@ TRANSL = 3
 
 
 class Description():
+    #TODO add working json-serialize-way
+
     def __init__(self, text: str, lang: str, for_name: str = None, orig_lang: str = None, orig_text: str = None):
         self.text = text
         self.lang = lang

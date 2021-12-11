@@ -48,12 +48,15 @@ def create_dissim_mat(base_dir, pp_descriptions_filename, quantification_measure
     vocab, descriptions, pp_components = load_preprocessed_descriptions(join(base_dir, pp_descriptions_filename))
     assert quantification_measure in ["tf-idf", "ppmi"]
     # TODO: # vocab, counts = tokenize_sentences_nltk(descriptions) if use_nltk_tokenizer else tokenize_sentences_countvectorizer(descriptions) allow countvectorizer!
+    if get_setting("DEBUG"):
+        descriptions = [descriptions[key] for key in random.sample(range(len(descriptions)), k=20)]
+        vocab = sorted(set(flatten([set(i.bow.keys()) for i in descriptions])))
     dtm = DocTermMatrix(all_terms=vocab, descriptions=descriptions)
     #TODO einschränken welche terms wir considern? ("let us use v_e to denote the resulting rep of e, i.e. if the considered terms are t1,...,tk) -> how do I know which ones?? -> TODO: parameter k
     if quantification_measure == "tf-idf":
-        quantification = tf_idf(dtm, verbose=True, descriptions=descriptions)
+        quantification = tf_idf(dtm, verbose=bool(get_setting("VERBOSE")), descriptions=descriptions)
     elif quantification_measure == "ppmi":
-        quantification = ppmi(dtm, verbose=True, descriptions=descriptions)  # das ist jetzt \textbf{v}_e with all e's as rows
+        quantification = ppmi(dtm, verbose=bool(get_setting("VERBOSE")), descriptions=descriptions)  # das ist jetzt \textbf{v}_e with all e's as rows
     quantification = DocTermMatrix({"doc_term_matrix": quantification, "all_terms": dtm.all_terms})
     #cannot use ppmis directly, because a) too sparse, and b) we need a geometric representation with euclidiean props (betweeness, parallism,..)
     dissim_mat = create_dissimilarity_matrix(quantification.as_csr())

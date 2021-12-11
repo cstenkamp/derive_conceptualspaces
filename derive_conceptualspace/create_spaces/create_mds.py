@@ -46,7 +46,7 @@ def pmi(doc_term_matrix, positive=False, verbose=False, mds_obj=None, descriptio
 ppmi = partial(pmi, positive=True)
 
 
-def create_dissimilarity_matrix(arr):
+def create_dissimilarity_matrix(arr, full=False):
     """returns the dissimilarity matrix, needed as input for the MDS. Input is the dataframe
     that contains all ppmi's of all entities (entities are rows, columns are terms, cells are then the
     ppmi(e,t) for all entity-term-combinations. Output is the normalized angular difference between
@@ -54,15 +54,20 @@ def create_dissimilarity_matrix(arr):
     See [DESC15] section 3.4."""
     if isinstance(arr, scipy.sparse.csr.csr_matrix):
         arr = arr.toarray().T
+    assert arr.shape[0] < arr.shape[1], "I cannot believe your Doc-Term-Matrix has more distinct words then documents."
     logger.info("Creating the dissimilarity matrix...")
     res = np.zeros((arr.shape[0],arr.shape[0]))
     for n1, e1 in enumerate(tqdm(arr)):
         for n2, e2 in enumerate(arr):
+            if not full and n2 < n1:
+                continue
             if n1 != n2:
                 assert e1.max() and e2.max()
                 p1 = np.dot(e1, e2) / (np.linalg.norm(e1) * np.linalg.norm(e2))
                 if 0 < p1-1 < 1e-12:
                     p1 = 1 #aufgrund von rundungsfehlern kann es >1 sein
                 res[n1,n2] = 2 / math.pi * math.acos(p1)
-    assert np.allclose(res, res.T, atol=1e-10) #TODO if this takes too long I can also not create the upperleft half
+    if not full:
+        res[res.T > 0] = res.T[res.T > 0]
+    assert np.allclose(res, res.T, atol=1e-10)
     return res

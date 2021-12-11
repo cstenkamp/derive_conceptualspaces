@@ -42,7 +42,7 @@ def prepare_dump(*args, write_meta=True, **kwargs):
 
 def json_dump(*args, forbid_overwrite=True, **kwargs):
     content = prepare_dump(*args, **kwargs)
-    fpath = args[1]
+    fpath = str(args[1])
     if forbid_overwrite and isfile(fpath):
         for i in range(2, 999):
             fpath = splitext(fpath)[0]+f"_{i}"+splitext(fpath)[1]
