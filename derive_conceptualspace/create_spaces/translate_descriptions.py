@@ -8,11 +8,11 @@ from langdetect import detect
 from langdetect.lang_detect_exception import LangDetectException
 from tqdm import tqdm
 
-from derive_conceptualspace.settings import SID_DATA_BASE
+from derive_conceptualspace.settings import SID_DATA_BASE, ORIGLAN
 from derive_conceptualspace.util.jsonloadstore import json_load
 from misc_util.pretty_print import pretty_print as print
 from derive_conceptualspace.util.google_translate import translate_text
-from derive_conceptualspace.util.mds_object import ORIGLAN, Description
+from derive_conceptualspace.util.mds_object import Description
 
 logger = logging.getLogger(basename(__file__))
 
