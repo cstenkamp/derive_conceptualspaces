@@ -21,18 +21,24 @@ def show_hist(x, title="", xlabel="Data", ylabel="Count", cutoff_percentile=95, 
     #see https://stackoverflow.com/a/33203848/5122790
     #Freedman–Diaconis number of bins
     x = np.array(x)
-    max_val = round(np.percentile(x, cutoff_percentile)) + 1
+    max_val = x.max() if not cutoff_percentile else round(np.percentile(x, cutoff_percentile)) + 1
     old_max = x.max()
     x[x >= max_val] = max_val
     q25, q75 = np.percentile(x, [25, 75])
-    bin_width = 2 * (q75 - q25) * len(x) ** (-1 / 3)
-    bins = round((x.max() - x.min()) / bin_width)
-    bins = min(bins, (x.max() - x.min()))
+    if q75 > q25:
+        bin_width = 2 * (q75 - q25) * len(x) ** (-1 / 3)
+        bins = round((x.max() - x.min()) / bin_width)
+        bins = min(bins, (x.max() - x.min()))
+    elif x.max() - x.min() < 30:
+        bins = x.max() - x.min()
+    else:
+        raise NotImplementedError()
     fig, ax = plt.subplots()
     ax.hist(x, bins=bins, **kwargs)
     ax.set_xlim(0, max_val)
-    ax.set_xticks(list(plt.xticks()[0][:-1]) + [max_val])
-    ax.set_xticklabels([str(round(i)) for i in plt.xticks()[0]][:-1] + [f"{max_val}-{old_max}"], ha="right", rotation=45)
+    if cutoff_percentile is not None:
+        ax.set_xticks(list(plt.xticks()[0][:-1]) + [max_val])
+        ax.set_xticklabels([str(round(i)) for i in plt.xticks()[0]][:-1] + [f"{max_val}-{old_max}"], ha="right", rotation=45)
     ax.set_ylabel(ylabel)
     ax.set_xlabel(xlabel)
     if title: plt.title(title)

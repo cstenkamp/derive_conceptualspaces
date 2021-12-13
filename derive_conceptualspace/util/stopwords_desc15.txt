@@ -171,7 +171,7 @@ mustn't
 
              | miscellaneous forms
 
-let's
+| let's | REMOVED BY CHRIS - WHY WOULD "let's" be in here, but not "let"!!
 that's
 who's
 what's

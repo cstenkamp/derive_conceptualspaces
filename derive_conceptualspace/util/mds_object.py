@@ -5,7 +5,6 @@ import textwrap
 
 from .jsonloadstore import Struct
 
-
 class Description():
     #TODO add working json-serialize-way
 
@@ -55,6 +54,32 @@ class Description():
         """returns maximally processed text."""
         return self.processing_steps[-1][0] if len(self.processing_steps) > 0 else self.text
 
+    def processed_as_string(self, no_dots=False):
+        sent_join = " " if no_dots else ". "
+        if isinstance(self.processed_text, list):
+            if isinstance(self.processed_text[0], list):
+                return sent_join.join([" ".join(i) for i in self.processed_text])
+        raise NotImplementedError()
+
+    def __contains__(self, item):
+        return bool(self.count_phrase(item))
+
+    def count_phrase(self, item):
+        if not isinstance(item, str):
+            assert False #in the future just return False
+        assert not any(" " in i for i in self.bow.keys())
+        if " " in item:
+            items = item.split(" ")
+            for it in items:
+                if it not in self.bow:
+                    return 0
+            if item in self.processed_as_string():
+                return self.processed_as_string().count(item)
+            elif item in self.processed_as_string(no_dots=True):
+                return 0 # this is legit not a candidate, but I want to be able to set breakpoints in cases where this is not the reason
+        else:
+            return self.bow.get(item, 0)
+        return 0 #TODO set breakpoint here for candidate postprocessing! THEN it should NEVER get here!!!
 
 
 @dataclass

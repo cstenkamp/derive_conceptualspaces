@@ -8,13 +8,16 @@ import random
 import numpy as np
 import pandas as pd
 import html
+
+from sklearn.manifold._mds import MDS
+
 from misc_util.pretty_print import pretty_print as print
 from .create_mds import ppmi, create_dissimilarity_matrix
 
 from .translate_descriptions import create_load_languages_file
 from derive_conceptualspace.util.mds_object import MDSObject, Description
 from derive_conceptualspace.util.jsonloadstore import json_dump, json_load
-from derive_conceptualspace.settings import TRANSL, ORIGLAN, ONLYENG
+from derive_conceptualspace.settings import TRANSL, ORIGLAN, ONLYENG, DEBUG_N_ITEMS
 from derive_conceptualspace.settings import SID_DATA_BASE, SPACES_DATA_BASE, get_setting
 from derive_conceptualspace.util.text_tools import run_preprocessing_funcs, make_bow, tf_idf
 from derive_conceptualspace.util.dtm_object import DocTermMatrix
@@ -33,7 +36,7 @@ def preprocess_descriptions_full(from_path, translate_policy, pp_components, fro
     #TODO options to consider language, fachbereich, and to add [translated] title to description
     df = load_preprocess_raw_course_file(join(from_path, from_name))
     if get_setting("DEBUG"):
-        df = pd.DataFrame([df.iloc[key] for key in random.sample(range(len(df)), k=20)])
+        df = pd.DataFrame([df.iloc[key] for key in random.sample(range(len(df)), k=DEBUG_N_ITEMS)])
     descriptions = handle_translations(from_path, list(df["Name"]), list(df["Beschreibung"]), translate_policy)
     vocab, descriptions = preprocess_descriptions(descriptions, pp_components)
     return vocab, descriptions
@@ -41,34 +44,38 @@ def preprocess_descriptions_full(from_path, translate_policy, pp_components, fro
 
 def load_preprocessed_descriptions(filepath):
     vocab, descriptions, pp_components = (tmp := json_load(filepath))["vocab"], tmp["descriptions"], tmp["pp_components"]
-    return vocab, [Description.fromstruct(i[1]) for i in descriptions], pp_components
+    descriptions = [Description.fromstruct(i[1]) for i in descriptions]
+    if get_setting("DEBUG"):
+        descriptions = [descriptions[key] for key in random.sample(range(len(descriptions)), k=DEBUG_N_ITEMS)]
+        vocab = sorted(set(flatten([set(i.bow.keys()) for i in descriptions])))
+    return vocab, descriptions, pp_components
 
 
 def create_dissim_mat(base_dir, pp_descriptions_filename, quantification_measure):
     vocab, descriptions, pp_components = load_preprocessed_descriptions(join(base_dir, pp_descriptions_filename))
     assert quantification_measure in ["tf-idf", "ppmi"]
     # TODO: # vocab, counts = tokenize_sentences_nltk(descriptions) if use_nltk_tokenizer else tokenize_sentences_countvectorizer(descriptions) allow countvectorizer!
-    if get_setting("DEBUG"):
-        descriptions = [descriptions[key] for key in random.sample(range(len(descriptions)), k=20)]
-        vocab = sorted(set(flatten([set(i.bow.keys()) for i in descriptions])))
     dtm = DocTermMatrix(all_terms=vocab, descriptions=descriptions)
-    #TODO einschränken welche terms wir considern? ("let us use v_e to denote the resulting rep of e, i.e. if the considered terms are t1,...,tk) -> how do I know which ones?? -> TODO: parameter k
     if quantification_measure == "tf-idf":
         quantification = tf_idf(dtm, verbose=bool(get_setting("VERBOSE")), descriptions=descriptions)
     elif quantification_measure == "ppmi":
         quantification = ppmi(dtm, verbose=bool(get_setting("VERBOSE")), descriptions=descriptions)  # das ist jetzt \textbf{v}_e with all e's as rows
     quantification = DocTermMatrix({"doc_term_matrix": quantification, "all_terms": dtm.all_terms})
     #cannot use ppmis directly, because a) too sparse, and b) we need a geometric representation with euclidiean props (betweeness, parallism,..)
+    assert all(len(set((lst := [i[0] for i in dtm]))) == len(lst) for dtm in quantification.dtm)
     dissim_mat = create_dissimilarity_matrix(quantification.as_csr())
     return quantification, dissim_mat, pp_components
 
 
-    # #TODO - isn't isomap better suited than MDS? https://scikit-learn.org/stable/modules/manifold.html#multidimensional-scaling
-    # embedding = MDS(n_components=n_dims, random_state=RANDOM_SEED if RANDOM_SEED else None)
-    # X_transformed = embedding.fit(dissim_mat)
-    # mds = Struct(**X_transformed.__dict__) #let's return the dict of the MDS such that we can load it from json and its equal
-    # return names, descriptions,  mds
-    #
+def create_mds_json(base_dir, dissim_mat_filename, n_dims):
+    #TODO - isn't isomap better suited than MDS? https://scikit-learn.org/stable/modules/manifold.html#multidimensional-scaling
+    # !! [DESC15] say they compared it and it's worse ([15] of [DESC15])!!!
+    loaded = json_load(join(base_dir, dissim_mat_filename))
+    embedding = MDS(n_components=n_dims, random_state=get_setting("RANDOM_SEED", default_none=True))
+    mds = embedding.fit(loaded["dissim_mat"])
+    return {"mds": mds, "pp_components": loaded["pp_components"], "quant_measure": loaded["quant_measure"]}
+    #TODO translate_policy wird nicht mitgespeichert und die referenz auf die Descriptions wäre noch nice
+
 
     # # names, descriptions, mds = preprocess_descriptions(df, n_dims=n_dims, **kwargs)
     # # return names, descriptions, mds

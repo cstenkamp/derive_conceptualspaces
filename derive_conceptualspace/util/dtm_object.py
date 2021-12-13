@@ -1,5 +1,10 @@
+from collections import Counter
+
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
+
+from derive_conceptualspace.settings import CANDIDATETERM_MIN_OCCURSIN_DOCS
+from derive_conceptualspace.util.mpl_tools import show_hist
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
@@ -8,7 +13,7 @@ class DocTermMatrix():
     #TODO add working json-serialize-way
     #TODO add fromstruct like in Description
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, verbose=False, **kwargs):
         self.includes_pseudodocs = False
         if len(args) == 1 and isinstance(args[0], dict):
             assert "doc_term_matrix" in args[0] and "all_terms" in args[0]
@@ -28,10 +33,26 @@ class DocTermMatrix():
             self.dtm = []
             for desc in kwargs["descriptions"]:
                 self.dtm.append([[self.reverse_term_dict[k], v] for k,v in desc.bow.items()])
+        elif "all_phrases" in kwargs and "descriptions" in kwargs and "dtm" in kwargs:
+            self.all_terms = {n: elem for n, elem in enumerate(kwargs["all_phrases"])}
+            self.dtm = kwargs["dtm"]
+            self.descriptions = kwargs["descriptions"]
         else:
             assert False
         assert set(self.all_terms) == set(flatten([[elem[0] for elem in row] for row in self.dtm]))
         print(f"Loaded Doc-Term-Matrix with {len(self.dtm)} documents and {len(self.all_terms)} items.")
+        if verbose:
+            self.show_info()
+
+    def show_info(self):
+        occurs_in = [set(j[0] for j in i) if i else [] for i in self.dtm]
+        num_occurences = [sum([term_ind in i for i in occurs_in]) for term_ind in tqdm(range(len(self.all_terms)))]
+        show_hist(num_occurences, "Docs per Keyword", xlabel="# Documents the Keyword appears in", ylabel="Count (log scale)", cutoff_percentile=None, log=True)
+        above_threshold = len([i for i in num_occurences if i>= CANDIDATETERM_MIN_OCCURSIN_DOCS])
+        sorted_canditerms = sorted([[ind, elem] for ind, elem in enumerate(num_occurences)], key=lambda x:x[1], reverse=True)
+        print(f"Found {len(self.all_terms)} candidate Terms, {above_threshold} ({round(above_threshold/len(self.all_terms)*100)}%) of which occur in at least {CANDIDATETERM_MIN_OCCURSIN_DOCS} descriptions.")
+        print("The 25 terms that occur in the most descriptions (incl the #descriptions they occur in):",
+              ", ".join([f"{self.all_terms[ind]} ({occs})" for ind, occs in sorted_canditerms[:25]]))
 
     #num_occurences = [sum([term_ind in i for i in occurs_in]) for term_ind in tqdm(range(len(dtm.all_terms)))]
 

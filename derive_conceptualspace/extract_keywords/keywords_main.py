@@ -9,13 +9,14 @@ from .postprocess_candidates import postprocess_candidates
 from .get_candidates_keybert import KeyBertExtractor
 from .get_candidates_rules import extract_coursetype
 
-from derive_conceptualspace.util.text_tools import tf_idf
+from derive_conceptualspace.util.text_tools import tf_idf, get_stopwords
 from derive_conceptualspace.util.mpl_tools import show_hist
 from derive_conceptualspace.util.jsonloadstore import json_load
 from derive_conceptualspace.util.tokenizers import phrase_in_text, tokenize_text
 from derive_conceptualspace.settings import CANDIDATETERM_MIN_OCCURSIN_DOCS
 
 from misc_util.pretty_print import pretty_print as print
+from ..util.dtm_object import DocTermMatrix
 
 logger = logging.getLogger(basename(__file__))
 
@@ -25,12 +26,14 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 ########################################################################################################################
 ########################################################################################################################
 
-def extract_candidateterms_keybert(mds_obj):
-    extractor = KeyBertExtractor(False, faster=False)
+def extract_candidateterms_keybert(vocab, descriptions, faster_keybert=False):
+    extractor = KeyBertExtractor(False, faster=faster_keybert)
     candidateterms = []
     n_immediateworking_ges, n_fixed_ges, n_errs_ges = 0, 0, 0
-    for desc in tqdm(mds_obj.descriptions):
-        keyberts, origextracts, (n_immediateworking, n_fixed, n_errs) = extractor(desc)
+    for desc in tqdm(descriptions):
+        keyberts, origextracts, (n_immediateworking, n_fixed, n_errs) = extractor(desc.text, desc.lang)
+        #TODO maybe the best post-processing for all candidates is to run the exact processing I ran for the descriptions for all the results...?!
+        # Because theoretically afterwards 100% of them should be in the processed_text
         if (ct := extract_coursetype(desc)) and ct not in keyberts:
             keyberts += [ct]
         candidateterms.append(keyberts)
@@ -40,13 +43,32 @@ def extract_candidateterms_keybert(mds_obj):
     return candidateterms, extractor, (n_immediateworking_ges, n_fixed_ges, n_errs_ges)
 
 
-def postprocess_candidateterms(base_dir, mds_obj):
+def extract_candidateterms_keybert_preprocessed(vocab, descriptions, faster_keybert=False):
+    from keybert import KeyBERT  # lazily loaded as it needs tensorflow which takes some time to init
+    model_name = "paraphrase-MiniLM-L6-v2" if faster_keybert else "paraphrase-mpnet-base-v2"
+    print(f"Using model {model_name}")
+    candidateterms = []
+    kw_model = KeyBERT(model_name)
+    for desc in tqdm(descriptions):
+        stopwords = get_stopwords(desc.lang)
+        candidates = set()
+        for nwords in range(1, 4):
+            txt = ". ".join([" ".join(sent) for sent in desc.processed_text])
+            n_candidates = kw_model.extract_keywords(txt, keyphrase_ngram_range=(1, nwords), stop_words=stopwords)
+            candidates |= set(i[0] for i in n_candidates)
+        candidates = list(candidates)
+        if (ct := extract_coursetype(desc)) and ct not in candidates:
+            candidates += [ct]
+        candidateterms.append(candidates)
+    return candidateterms, model_name
+
+
+def postprocess_candidateterms(base_dir, descriptions):
     candidate_terms, meta_inf = json_load(join(base_dir, "candidate_terms.json"), return_meta=True)
     model = candidate_terms["model"]
-    candidate_terms = candidate_terms["candidate_terms"]
-    assert len(candidate_terms) == len(mds_obj.descriptions)
-    candidate_terms = postprocess_candidates(candidate_terms, mds_obj.descriptions)
-    assert all(j.lower() in mds_obj.descriptions[i].lower() for i in range(len(mds_obj.descriptions)) for j in candidate_terms[i])
+    assert len(candidate_terms["candidate_terms"]) == len(descriptions)
+    candidate_terms["candidate_terms"] = postprocess_candidates(candidate_terms, descriptions)
+    # assert all(j.lower() in mds_obj.descriptions[i].lower() for i in range(len(mds_obj.descriptions)) for j in candidate_terms[i])
     return model, candidate_terms
 
 
@@ -54,31 +76,22 @@ def postprocess_candidateterms(base_dir, mds_obj):
 ########################################################################################################################
 ########################################################################################################################
 
-def create_doc_term_matrix(base_dir, mds_obj, json_filename="candidate_terms_postprocessed.json", assert_postprocessed=True, verbose=False):
-    candidate_terms = json_load(join(base_dir, json_filename))
-    assert not assert_postprocessed or candidate_terms["postprocessed"]
-    candidate_terms = candidate_terms["candidate_terms"]
-    assert len(candidate_terms) == len(mds_obj.descriptions)
-    assert all(j.lower() in mds_obj.descriptions[i].lower() for i in range(len(mds_obj.descriptions)) for j in candidate_terms[i])
-    all_terms = list(set(flatten(candidate_terms)))
-    descriptions = [tokenize_text(i)[1] for i in mds_obj.descriptions]
+def create_doc_cand_matrix(base_dir, descriptions, json_filename="candidate_terms_postprocessed.json", assert_postprocessed=True, verbose=False):
+    candtermobj = json_load(join(base_dir, json_filename))
+    assert not assert_postprocessed or candtermobj["postprocessed"]
+    candidate_terms = candtermobj["candidate_terms"]
+    assert len(candidate_terms) == len(descriptions)
+    assert all(cand in desc for ndesc, desc in enumerate(descriptions) for cand in candidate_terms[ndesc])
+    all_phrases = list(set(flatten(candidate_terms)))
+    # descriptions = [tokenize_text(i)[1] for i in mds_obj.descriptions]
     # if I used gensim for this, it would be `dictionary,doc_term_matrix = corpora.Dictionary(descriptions), [dictionary.doc2bow(doc) for doc in descriptions]`
-    dictionary = corpora.Dictionary([all_terms])
-    doc_term_matrix = [sorted([(ind, phrase_in_text(elem, mds_obj.descriptions[j], return_count=True)) for ind,elem in enumerate(all_terms) if phrase_in_text(elem, mds_obj.descriptions[j])], key=lambda x:x[0]) for j in tqdm(range(len(mds_obj.descriptions)))]
+    dictionary = corpora.Dictionary([all_phrases])
+    dtm = [sorted([(nphrase, desc.count_phrase(phrase)) for nphrase, phrase in enumerate(all_phrases) if phrase in desc], key=lambda x:x[0]) for ndesc, desc in enumerate(tqdm(descriptions))]
+    doc_term_matrix = DocTermMatrix(all_phrases=all_phrases, dtm=dtm, descriptions=descriptions, verbose=verbose)
     if verbose:
-        #TODO what's done here is now part of the dtm-object class, so take it from there?
-        occurs_in = [set(j[0] for j in i) if i else [] for i in doc_term_matrix]
-        num_occurences = [sum([term_ind in i for i in occurs_in]) for term_ind in tqdm(range(len(all_terms)))]
-        show_hist(num_occurences, "Docs per Keyword", xlabel="# Documents the Keyword appears in", ylabel="Count (log scale)", cutoff_percentile=97, log=True)
-        above_threshold = len([i for i in num_occurences if i>= CANDIDATETERM_MIN_OCCURSIN_DOCS])
-        sorted_canditerms = sorted([[ind, elem] for ind, elem in enumerate(num_occurences)], key=lambda x:x[1], reverse=True)
-        print(f"Found {len(all_terms)} candidate Terms, {above_threshold} ({round(above_threshold/len(all_terms)*100)}%) of which occur in at least {CANDIDATETERM_MIN_OCCURSIN_DOCS} descriptions.")
         print("The 25 terms that are most often detected as candidate terms (incl. their #detections):",
               ", ".join(f"{k} ({v})" for k, v in sorted(dict(Counter(flatten(candidate_terms))).items(), key=lambda x: x[1], reverse=True)[:25]))
-        print("The 25 terms that occur in the most descriptions (incl the #descriptions they occur in):",
-              ", ".join([f"{all_terms[ind]} ({occs})" for ind, occs in sorted_canditerms[:25]]))
-
-    return all_terms, doc_term_matrix
+    return doc_term_matrix
 
 
 def filter_keyphrases(base_dir, mds_obj, min_term_count=10, matrix_val="count", json_filename="candidate_terms_postprocessed.json", verbose=False):

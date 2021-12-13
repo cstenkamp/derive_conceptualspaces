@@ -1,5 +1,6 @@
 import re
 from tqdm import tqdm
+from itertools import product
 
 from .get_candidates_keybert import WORD_NUM_APOSTR_REGEX
 from derive_conceptualspace.util.tokenizers import phrase_in_text
@@ -21,27 +22,44 @@ def fix_cand(cand, text):
     return cand
 
 
-def postprocess_candidates(candidate_terms, descriptions):
+def postprocess_candidates(candtermobj, descriptions):
+    candidate_terms = candtermobj["candidate_terms"]
     postprocessed_candidates = [[] for _ in candidate_terms]
     fails = set()
+    in_text = (lambda phrase, desc: phrase in desc) if candtermobj["pp_txt_for_cands"] else (lambda phrase, desc: phrase_in_text(phrase, desc.text))
+
     for desc_ind, desc in enumerate(tqdm(descriptions)):
         for cand in candidate_terms[desc_ind]:
-            if not phrase_in_text(cand, desc):
-                cand = desc.split(" ")[desc[:desc.find(cand)].count(" "):][0]
-                cand = "".join([i for i in cand if re.match(WORD_NUM_APOSTR_REGEX, i)])
-                if not phrase_in_text(cand, desc):
-                    fails.add(cand)
-                    continue
-            if cand.lower() not in desc.lower():
-                if fix_cand(cand, desc).lower() in desc.lower() and phrase_in_text(fix_cand(cand, desc), desc):
-                    cand = fix_cand(cand, desc)
-                else:
-                    fails.add(cand)
-                    continue
-            postprocessed_candidates[desc_ind].append(cand)
+            cond, ncand = check_cand(cand, desc, in_text)
+            if cond:
+                postprocessed_candidates[desc_ind].append(ncand)
+            else:
+                fails.add(cand)
+
     for desc_ind, desc in enumerate(descriptions):
         for cand in postprocessed_candidates[desc_ind]:
-            assert phrase_in_text(cand, desc)
-            assert cand.lower() in desc.lower()
+            assert in_text(cand, desc)
+            assert cand.lower() in desc.processed_as_string()
     print(f"Had to drop {len(fails)} out of {len(list(set(flatten(candidate_terms))))} candidates.")
     return postprocessed_candidates
+
+
+
+def check_cand(cand, desc, in_text, try_fixing=True):
+    if in_text(cand, desc):
+        return True, cand
+
+    # cand = desc.split(" ")[desc[:desc.find(cand)].count(" "):][0]
+    # cand = "".join([i for i in cand if re.match(WORD_NUM_APOSTR_REGEX, i)])
+    part_cands = [[i for i in desc.bow.keys() if part in i] for part in cand.split(" ")]
+    for ccand in product(*part_cands):
+        if in_text(" ".join(ccand), desc):
+           return True, " ".join(ccand)
+
+    if try_fixing: #this variable is recursive anchor
+        fixed_cond, fixed = check_cand(fix_cand(cand, desc.processed_as_string()), desc, in_text, try_fixing=False)
+        if fixed_cond:
+            #TODO check if this is ever reached
+            return True, fixed
+
+    return False, cand

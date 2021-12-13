@@ -31,6 +31,7 @@ COURSE_TYPES = ["colloquium", "seminar", "internship", "practice", "lecture"]
 DEFAULT_TRANSLATE_POLICY = TRANSL
 
 ## other
+DEBUG_N_ITEMS = 300
 ENV_PREFIX = "MA"
 DATA_SET = "movies" # "movies", "places", "wines", "courses"
 # DEFAULT_MDS_DIMENSIONS = 20 #20,50,100,200
@@ -46,7 +47,7 @@ MDS_DEFAULT_BASENAME = "siddata_names_descriptions_mds_"
 ########################################################################################################################
 # KEEP THIS AT THE BOTTOM!
 
-def get_setting(name):
+def get_setting(name, default_none=False):
     if os.getenv(ENV_PREFIX+"_"+name):
         tmp = os.environ[ENV_PREFIX+"_"+name]
         if tmp.isnumeric():
@@ -59,6 +60,8 @@ def get_setting(name):
     if "DEFAULT_"+name in globals():
         print(f"returning setting for {name} from default value!")
         return globals()["DEFAULT_"+name]
+    if default_none:
+        return None
     assert False, f"Couldn't get setting {name}"
 
 #TODO now I can overwrite the env-vars both in click and with this, this is stupid argh

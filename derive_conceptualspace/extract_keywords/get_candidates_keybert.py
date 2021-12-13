@@ -1,6 +1,7 @@
 import re
 
 from derive_conceptualspace.util.tokenizers import tokenize_text, phrase_in_text
+from derive_conceptualspace.util.text_tools import get_stopwords
 
 WORD_REGEX = re.compile("[a-zA-ZäüöÜÄÖß-]+")        #TODO "[^\W\d_]" see https://stackoverflow.com/a/6314634/5122790 #TODO see https://stackoverflow.com/a/3617818/5122790
 WORD_NUM_REGEX = re.compile("[a-zA-ZäüöÜÄÖß0-9-]+")
@@ -128,8 +129,13 @@ class KeyBertExtractor():
 
     def __call__(self, text, lang="en"):
         """see scripts/notebooks/proof_of_concept/proofofconcept_keyBERT.ipynb for why this is like this"""
+        #TODO so extract_keywords can be passed a `vectorizer`, and that is by default Sklearn's CountVectorizer.
+        # You can ALSO pass `candidates`, "to use instead of extracting them from the document(s)"!!!
+        # Put a breakpoint in /home/chris/.local/lib/python3.8/site-packages/sklearn/feature_extraction/text.py:395 for details
+        # TODO also why do I get this ^ warning ("Your stop_words may be inconsistent with your preprocessing") ??
+        #    Does KeyBERT need already preprocessed descriptions?! if so, how much preprocessed, and how do I know this??!
 
-
+        stopwords = get_stopwords(lang)
         candidates = set()
         for nwords in range(1, 4):
             n_candidates = self.kw_model.extract_keywords(text, keyphrase_ngram_range=(1, nwords), stop_words=stopwords)

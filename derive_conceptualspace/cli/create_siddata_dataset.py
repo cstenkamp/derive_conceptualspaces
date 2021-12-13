@@ -35,13 +35,16 @@ from derive_conceptualspace.create_spaces.translate_descriptions import (
 from derive_conceptualspace.extract_keywords.keywords_main import (
     extract_candidateterms_keybert as extract_candidateterms_keybert_base,
     postprocess_candidateterms as postprocess_candidateterms_base,
-    create_doc_term_matrix as create_doc_term_matrix_base,
+    create_doc_cand_matrix as create_doc_cand_matrix_base,
     filter_keyphrases as filter_keyphrases_base,
+    extract_candidateterms_keybert_preprocessed
 )
 from derive_conceptualspace.create_spaces.spaces_main import (
     load_translate_mds,
     preprocess_descriptions_full,
     create_dissim_mat as create_dissim_mat_base,
+    create_mds_json as create_mds_json_base,
+    load_preprocessed_descriptions
 )
 
 logger = logging.getLogger(basename(__file__))
@@ -163,36 +166,49 @@ def create_dissim_mat(ctx, quantification_measure, pp_descriptions_filename):
     json_dump({"quantification": quantification, "dissim_mat": dissim_mat, "pp_components": pp_components, "quant_measure": quantification_measure},
               join(ctx.obj["base_dir"], f"dissim_matrix_{quantification_measure}.json"))
 
+#TODO die info über translate-policy, pp_components etc muss durchgehend durchgeschleift werden, dass muss auch im MDS-JSON noch da sein... außerdem
+# wäre es smart wenn im MDS nen Hash der das Descriptions-File eindeutig referenziert dabei ist damit ich weiß dass das zusammengeört
 
-# @create_spaces.command()
-# @click.pass_context
-# def create_mds_json(ctx):
-#     names, descriptions, mds = create_mds_json_base(ctx.obj["base_dir"], ctx.obj["mds_dimensions"], ctx.obj["translate_policy"])
-#     json_dump({"names": names, "descriptions": descriptions, "mds": mds}, join(to_data_path, to_data_name))
-#     print(ctx.obj)
-#     sleep(2)
+@create_spaces.command()
+@click.argument("dissim-mat-filename")
+@click.pass_context
+def create_mds_json(ctx, dissim_mat_filename):
+    mds = create_mds_json_base(ctx.obj["base_dir"], dissim_mat_filename, ctx.obj["mds_dimensions"])
+    mds["mds"] = Struct(**mds["mds"].__dict__) #let's return the dict of the MDS such that we can load it from json and its equal
+    json_dump(mds, join(ctx.obj["base_dir"], dissim_mat_filename.replace("dissim_matrix", f"mds_{ctx.obj['mds_dimensions']}d")))
 
 ########################################################################################################################
 ########################################################################################################################
 ########################################################################################################################
 #prepare-candidateterms group
 
+# @cli.group()
+# @click.option("--mds-basename", type=str, default=MDS_DEFAULT_BASENAME)
+# @click.option("--ndm-file", type=click.Path(exists=True), default=None)
+# @click.option("--translate-policy", type=str, default=DEFAULT_TRANSLATE_POLICY)
+# @click.pass_context
+# def prepare_candidateterms(ctx, mds_basename=MDS_DEFAULT_BASENAME, ndm_file=None, translate_policy=DEFAULT_TRANSLATE_POLICY):
+#     """[group] CLI base to create candidate-terms (everything in here needs the mds_obj)"""
+#     if not ndm_file:
+#         ndm_file = next(i for i in os.listdir(ctx.obj["base_dir"]) if i.startswith(mds_basename) and i.endswith(".json"))
+#         load_basedir = ctx.obj["base_dir"]
+#     else:
+#         load_basedir = dirname(ndm_file)
+#         ndm_file = basename(ndm_file)
+#     ctx.obj["ndm_file"] = ndm_file
+#     ctx.obj["mds_obj"] = load_translate_mds(load_basedir, ndm_file, translate_policy=translate_policy)
+#     ctx.obj["translate_policy"] = translate_policy
+#     if ctx.obj["notify_telegram"] == True:
+#         if not isinstance(cli.get_command(ctx, ctx.invoked_subcommand), click.Group):
+#             ctx.command.get_command(ctx, ctx.invoked_subcommand).callback = telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(ctx.command.get_command(ctx, ctx.invoked_subcommand).callback)
+
 @cli.group()
-@click.option("--mds-basename", type=str, default=MDS_DEFAULT_BASENAME)
-@click.option("--ndm-file", type=click.Path(exists=True), default=None)
-@click.option("--translate-policy", type=str, default=DEFAULT_TRANSLATE_POLICY)
+@click.argument("pp-descriptions-filename")
 @click.pass_context
-def prepare_candidateterms(ctx, mds_basename=MDS_DEFAULT_BASENAME, ndm_file=None, translate_policy=DEFAULT_TRANSLATE_POLICY):
-    """[group] CLI base to create candidate-terms (everything in here needs the mds_obj)"""
-    if not ndm_file:
-        ndm_file = next(i for i in os.listdir(ctx.obj["base_dir"]) if i.startswith(mds_basename) and i.endswith(".json"))
-        load_basedir = ctx.obj["base_dir"]
-    else:
-        load_basedir = dirname(ndm_file)
-        ndm_file = basename(ndm_file)
-    ctx.obj["ndm_file"] = ndm_file
-    ctx.obj["mds_obj"] = load_translate_mds(load_basedir, ndm_file, translate_policy=translate_policy)
-    ctx.obj["translate_policy"] = translate_policy
+def prepare_candidateterms(ctx, pp_descriptions_filename):
+    """[group] CLI base to create candidate-terms"""
+    ctx.obj["pp_descriptions_filename"] = pp_descriptions_filename
+    ctx.obj["vocab"], ctx.obj["descriptions"], ctx.obj["pp_components"] = load_preprocessed_descriptions(join(ctx.obj["base_dir"], pp_descriptions_filename))
     if ctx.obj["notify_telegram"] == True:
         if not isinstance(cli.get_command(ctx, ctx.invoked_subcommand), click.Group):
             ctx.command.get_command(ctx, ctx.invoked_subcommand).callback = telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(ctx.command.get_command(ctx, ctx.invoked_subcommand).callback)
@@ -215,23 +231,34 @@ def extract_candidateterms_stanfordlp(ctx):
 
 
 @prepare_candidateterms.command()
+@click.option("--faster-keybert/--no-faster-keybert", default=False)
 @click.pass_context
 @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
-def extract_candidateterms_keybert(ctx):
-    candidateterms, extractor, (n_immediateworking_ges, n_fixed_ges, n_errs_ges) = extract_candidateterms_keybert_base(ctx.obj["mds_obj"])
+def extract_candidateterms_keybert(ctx, faster_keybert=False):
+    candidateterms, extractor, (n_immediateworking_ges, n_fixed_ges, n_errs_ges) = extract_candidateterms_keybert_base(ctx.obj["vocab"], ctx.obj["descriptions"], faster_keybert)
     print(f"Immediately working: {n_immediateworking_ges}")
     print(f"Fixed: {n_fixed_ges}")
     print(f"Errors: {n_errs_ges}")
-    json_dump({"model": extractor.model_name, "candidate_terms": [list(i) for i in candidateterms]}, join(ctx.obj["base_dir"], "candidate_terms.json"))
+    json_dump({"model": extractor.model_name, "candidate_terms": [list(i) for i in candidateterms], "pp_txt_for_cands": False}, join(ctx.obj["base_dir"], "candidate_terms.json"))
     #TODO filename depends on params
 
 
 @prepare_candidateterms.command()
-@click.argument("--postfix", type=str, default="")
+@click.option("--faster-keybert/--no-faster-keybert", default=False)
 @click.pass_context
-def postprocess_candidateterms(ctx, postfix=""):
-    model, candidate_terms = postprocess_candidateterms_base(ctx.obj["base_dir"], ctx.obj["mds_obj"])
-    json_dump({"model": model, "candidate_terms": [list(i) for i in candidate_terms], "postprocessed": True}, join(ctx.obj["base_dir"], f"candidate_terms{postfix}.json"))
+@telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
+def extract_candidateterms_keybert_2(ctx, faster_keybert=False):
+    candidates, model_name = extract_candidateterms_keybert_preprocessed(ctx.obj["vocab"], ctx.obj["descriptions"], faster_keybert)
+    json_dump({**{"model": model_name, "candidate_terms":candidates, "pp_txt_for_cands": True}, **{i: ctx.obj[i] for i in ["pp_components", "pp_descriptions_filename"]}}, join(ctx.obj["base_dir"], "candidate_terms.json"))
+
+
+@prepare_candidateterms.command()
+@click.option("--postfix", type=str, default="_postprocessed")
+@click.pass_context
+def postprocess_candidateterms(ctx, postfix="_postprocessed"):
+    model, candidate_terms = postprocess_candidateterms_base(ctx.obj["base_dir"], ctx.obj["descriptions"])
+    candidate_terms["postprocessed"] = True
+    json_dump(candidate_terms, join(ctx.obj["base_dir"], f"candidate_terms{postfix}.json"))
     print(f"Saved the post-processed model under candidate_terms{postfix}.json!")
     #TODO filename depends on params
 
@@ -240,9 +267,9 @@ def postprocess_candidateterms(ctx, postfix=""):
 @click.option("--json-filename", type=str, default="candidate_terms_postprocessed.json")
 @click.pass_context
 @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
-def create_doc_term_matrix(ctx, json_filename="candidate_terms_postprocessed.json"):
-    all_terms, doc_term_matrix = create_doc_term_matrix_base(ctx.obj["base_dir"], ctx.obj["mds_obj"], json_filename, verbose=True)
-    json_dump({"all_terms": all_terms, "doc_term_matrix": doc_term_matrix}, join(ctx.obj["base_dir"], "doc_term_matrix.json"))
+def create_doc_cand_matrix(ctx, json_filename="candidate_terms_postprocessed.json"):
+    doc_term_matrix = create_doc_cand_matrix_base(ctx.obj["base_dir"], ctx.obj["descriptions"], json_filename, verbose=ctx.obj["verbose"])
+    json_dump({"all_terms": doc_term_matrix.all_terms, "doc_term_matrix": doc_term_matrix.dtm}, join(ctx.obj["base_dir"], "doc_cand_matrix.json"))
     #TODO filename depends on params
 
 
