@@ -25,9 +25,10 @@ from derive_conceptualspace.settings import (
     DEFAULT_TRANSLATE_POLICY,
     CANDIDATETERM_MIN_OCCURSIN_DOCS,
     DEFAULT_DEBUG,
-    ENV_PREFIX
+    ENV_PREFIX,
+    get_setting,
 )
-from derive_conceptualspace.util.jsonloadstore import json_dump, Struct
+from derive_conceptualspace.util.jsonloadstore import json_dump, Struct, json_load
 from derive_conceptualspace.create_spaces.translate_descriptions import (
     translate_descriptions as translate_descriptions_base,
     count_translations as count_translations_base
@@ -46,6 +47,10 @@ from derive_conceptualspace.create_spaces.spaces_main import (
     create_mds_json as create_mds_json_base,
     load_preprocessed_descriptions
 )
+from derive_conceptualspace.semantic_directions.create_candidate_svm import (
+    create_candidate_svms as create_candidate_svms_base
+)
+from derive_conceptualspace.util.dtm_object import DocTermMatrix
 
 logger = logging.getLogger(basename(__file__))
 
@@ -280,10 +285,9 @@ def create_doc_cand_matrix(ctx, json_filename="candidate_terms_postprocessed.jso
 @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
 def filter_keyphrases(ctx, min_term_count=10, matrix_val="count"):
     # TODO missing options here: `tag-share` (chap. 4.2.1 of [VISR12]), PPMI,
-    doc_term_matrix, all_terms = filter_keyphrases_base(ctx.obj["base_dir"], ctx.obj["mds_obj"], min_term_count=min_term_count,
-                                                        matrix_val=matrix_val, json_filename="candidate_terms_postprocessed.json",
-                                                        verbose=ctx.obj["verbose"]) #TODO make sure json_filename always means either input or output, at best rename them
-    json_dump({"all_terms": all_terms, "doc_term_matrix": doc_term_matrix}, join(ctx.obj["base_dir"], f"doc_term_matrix_{matrix_val}.json"))
+    doc_term_matrix, all_terms = filter_keyphrases_base(ctx.obj["base_dir"], ctx.obj["descriptions"], min_term_count=min_term_count,
+                                                        matrix_val=matrix_val, verbose=ctx.obj["verbose"])
+    json_dump({"all_terms": all_terms, "doc_term_matrix": doc_term_matrix}, join(ctx.obj["base_dir"], f"doc_cand_matrix_{matrix_val}.json"))
     # TODO filename depends on params
 
 
@@ -339,61 +343,24 @@ def run_lsi(ctx, dtm_filename):
 #create-candidate-svm
 
 
+
 @cli.command()
-@click.argument("ndm-filename", type=str)
-@click.argument("dtm-filename", type=str)
-@click.option("--translate-policy", type=str, default=DEFAULT_TRANSLATE_POLICY)
+@click.argument("pp-descriptions-filename")
+@click.argument("mds-filename")
+@click.argument("dcm-filename")
 @click.pass_context
-def create_candidate_svm(ctx, ndm_filename, dtm_filename, translate_policy=DEFAULT_TRANSLATE_POLICY):
-    from src.main.util.jsonloadstore import json_load
-    from tqdm import tqdm
-    import sklearn.svm
-    import numpy as np
-    from src.main.util.dtm_object import DocTermMatrix
-
-    mds_obj = load_translate_mds(ctx.obj["base_dir"], ndm_filename, translate_policy=translate_policy)
-    dtm = DocTermMatrix(json_load(join(ctx.obj["base_dir"], dtm_filename), assert_meta=("CANDIDATETERM_MIN_OCCURSIN_DOCS", "STANFORDNLP_VERSION")))
-    dtm.as_csr()
-
-    correct_percentages = {}
-    for term, exist_indices in tqdm(dtm.term_existinds(use_index=False).items()):
-        labels = [False] * len(mds_obj.names)
-        for i in exist_indices:
-            labels[i] = True
-        # TODO figure out if there's a reason to choose LinearSVC over SVC(kernel=linear) or vice versa!
-        svm = sklearn.svm.LinearSVC(dual=False, class_weight="balanced")
-        svm.fit(mds_obj.mds.embedding_, np.array(labels, dtype=int))
-        svm_results = svm.decision_function(mds_obj.mds.embedding_)
-        correct_preds = [labels[i] == (svm_results[i] > 0) for i in range(len(labels))]
-        correct_percentage = round(sum(correct_preds)/len(correct_preds), 4)*100
-        correct_percentages[term] = correct_percentage
-        # print(f"Correct Percentage: {correct_percentage}%")
-
-        # decision_plane = Plane(*svm.coef_[0], svm.intercept_[0])
-        # with ThreeDFigure() as fig:
-        #     X = mds_obj.mds.embedding_
-        #     y = np.array(labels, dtype=int)
-        #     fig.add_markers(X, color=y, size=1)  # samples
-        #
-        #     trafo, back_trafo = make_base_changer(decision_plane)
-        #     onto_plane = np.array([back_trafo([0, trafo(point)[1], trafo(point)[2]]) for point, side in zip(X, y)])
-        #     minx, miny = onto_plane.min(axis=0)[:2]
-        #     maxx, maxy = onto_plane.max(axis=0)[:2]
-        #     xx, yy = make_meshgrid(minx=minx, miny=miny, maxx=maxx, maxy=maxy, margin=0.1)
-        #
-        #     fig.add_surface(xx, yy, decision_plane.z)  # decision hyperplane
-        #     fig.add_line(X.mean(axis=0) - decision_plane.normal*50, X.mean(axis=0) + decision_plane.normal*10, width=50)  # orthogonal of decision hyperplane through mean of points
-        #     fig.add_markers([0, 0, 0], size=10)  # coordinate center
-        #     # fig.add_line(-decision_plane.normal * 5, decision_plane.normal * 5)  # orthogonal of decision hyperplane through [0,0,0]
-        #     # fig.add_sample_projections(X, decision_plane.normal)  # orthogonal lines from the samples onto the decision hyperplane orthogonal
-        #     fig.show()
-        # print()
-    print(f"Average Correct Percentages: {round(sum(list(correct_percentages.values()))/len(list(correct_percentages.values())), 2)}%")
-    sorted_percentages = sorted([[k,round(v,2)] for k,v in correct_percentages.items()], key=lambda x:x[1], reverse=True)
-    best_ones = list(dict(sorted_percentages).keys())[:50]
-    best_dict = {i: [f"{round(correct_percentages[i], 2)}%", f"{len(dtm.term_existinds(use_index=False)[i])} samples"] for i in best_ones}
-    for k, v in best_dict.items():
-        print(f"  {k}: {'; '.join(v)}")
+def create_candidate_svm(ctx, pp_descriptions_filename, mds_filename, dcm_filename):
+    ctx.obj["pp_descriptions_filename"] = pp_descriptions_filename
+    ctx.obj["vocab"], ctx.obj["descriptions"], ctx.obj["pp_components"] = load_preprocessed_descriptions(join(ctx.obj["base_dir"], pp_descriptions_filename))
+    ctx.obj["mds_filename"] = mds_filename
+    tmp = json_load(join(ctx.obj["base_dir"], mds_filename))
+    assert tmp["pp_components"] == ctx.obj["pp_components"]
+    print(f"Using the MDS which had {tmp['quant_measure']} as quantification measure!")
+    mds = tmp["mds"]
+    dcm = DocTermMatrix(json_load(join(ctx.obj["base_dir"], dcm_filename), assert_meta=("CANDIDATETERM_MIN_OCCURSIN_DOCS", "STANFORDNLP_VERSION")))
+    descriptions = ctx.obj["descriptions"]
+    assert len(dcm.dtm) == len(descriptions)
+    create_candidate_svms_base(dcm, mds, ctx.obj["descriptions"], ctx.obj["verbose"])
 
 ########################################################################################################################
 ########################################################################################################################

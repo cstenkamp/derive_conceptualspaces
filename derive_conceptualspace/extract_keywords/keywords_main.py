@@ -94,18 +94,25 @@ def create_doc_cand_matrix(base_dir, descriptions, json_filename="candidate_term
     return doc_term_matrix
 
 
-def filter_keyphrases(base_dir, mds_obj, min_term_count=10, matrix_val="count", json_filename="candidate_terms_postprocessed.json", verbose=False):
+def filter_keyphrases(base_dir, descriptions, min_term_count=10, matrix_val="count", cand_filename="candidate_terms_postprocessed.json",
+                      dtm_filename="doc_cand_matrix.json", verbose=False, use_n_docs_count=True):
     assert matrix_val in ["count", "tf-idf", "binary"]
-    candidate_terms = json_load(join(base_dir, json_filename))["candidate_terms"]
-    assert len(candidate_terms) == len(mds_obj.descriptions)
-    assert all(j.lower() in mds_obj.descriptions[i].lower() for i in range(len(mds_obj.descriptions)) for j in candidate_terms[i])
-    doc_term_matrix, all_terms = (tmp := json_load(join(base_dir, "doc_term_matrix.json")))["doc_term_matrix"], tmp["all_terms"]
+    candidate_terms = json_load(join(base_dir, cand_filename))["candidate_terms"]
+    assert len(candidate_terms) == len(descriptions)
+    assert all(cand in desc for ndesc, desc in enumerate(descriptions) for cand in candidate_terms[ndesc])
+    doc_term_matrix, all_terms = (tmp := json_load(join(base_dir, dtm_filename)))["doc_term_matrix"], tmp["all_terms"]
+    if isinstance(list(all_terms.keys())[0], str):
+        all_terms = {int(k): v for k,v in all_terms.items()}
     assert all(i[1] > 0 for doc in doc_term_matrix for i in doc)
-    flat_terms = [flatten([[i[0]] * i[1] for i in doc]) for doc in doc_term_matrix]
-    term_counts = Counter(flatten(flat_terms))
+    if use_n_docs_count:
+        occurences = [set(i[0] for i in doc) for doc in doc_term_matrix]
+        term_counts = {term: sum([term in i for i in occurences]) for term in all_terms.keys()}
+    else:
+        flat_terms = [flatten([[i[0]] * i[1] for i in doc]) for doc in doc_term_matrix]
+        term_counts = Counter(flatten(flat_terms))
     used_terms = {k: v for k, v in term_counts.items() if v >= min_term_count}
     if verbose:
-        print(f"Using only terms that occur at least {min_term_count} times, which are {len(used_terms)} of {len(term_counts)} terms.")
+        print(f"Using only terms that occur "+(f"in at least {min_term_count} documents" if use_n_docs_count else f"at least {min_term_count} times")+f", which are {len(used_terms)} of {len(term_counts)} terms.")
         most_used = sorted(list(used_terms.items()), key=lambda x: x[1], reverse=True)[:10]
         print("The most used terms are: " + ", ".join([f"{all_terms[ind]} ({count})" for ind, count in most_used]))
         show_hist(list(used_terms.values()), "Occurences per Keyword", xlabel="Occurences per Keyword", cutoff_percentile=93)
@@ -114,13 +121,13 @@ def filter_keyphrases(base_dir, mds_obj, min_term_count=10, matrix_val="count", 
     doc_term_matrix = [[[all_terms[ind], num] for ind, num in doc if ind in all_terms] for doc in doc_term_matrix]
     assert set(i[0] for doc in doc_term_matrix for i in doc) == set(all_terms.values())
     all_terms = {v: k for k, v in all_terms.items()}
-    assert all(phrase_in_text(all_terms[ind], mds_obj.descriptions[ndoc]) for ndoc, doc in enumerate(tqdm(doc_term_matrix)) for ind, count in doc)
+    assert all(all_terms[ind] in descriptions[ndoc] for ndoc, doc in enumerate(tqdm(doc_term_matrix)) for ind, count in doc)
     if verbose:
-        print("Documents without any keyphrase:", [mds_obj.descriptions[i] for i, e in enumerate(doc_term_matrix) if len(e) < 1][:5])
-        print("Documents with just 1 keyphrase:", [[mds_obj.descriptions[i], all_terms[e[0][0]]] for i, e in enumerate(doc_term_matrix) if len(e) == 1][:5])
+        print("Documents without any keyphrase:", [descriptions[i] for i, e in enumerate(doc_term_matrix) if len(e) < 1][:5])
+        print("Documents with just 1 keyphrase:", [[descriptions[i], all_terms[e[0][0]]] for i, e in enumerate(doc_term_matrix) if len(e) == 1][:5])
     #TODO: drop those documents without any keyphrase?!
     if matrix_val == "binary":
         doc_term_matrix = [[[ind, 1 if count >= 1 else 0] for ind, count in doc] for doc in doc_term_matrix]
     elif matrix_val == "tf-idf":
-        doc_term_matrix = tf_idf(doc_term_matrix, all_terms, verbose=verbose, mds_obj=mds_obj)
+        doc_term_matrix = tf_idf(doc_term_matrix, all_terms, verbose=verbose, descriptions=descriptions)
     return doc_term_matrix, all_terms

@@ -25,16 +25,17 @@ def show_hist(x, title="", xlabel="Data", ylabel="Count", cutoff_percentile=95, 
     old_max = x.max()
     x[x >= max_val] = max_val
     q25, q75 = np.percentile(x, [25, 75])
+    fig, ax = plt.subplots()
     if q75 > q25:
         bin_width = 2 * (q75 - q25) * len(x) ** (-1 / 3)
         bins = round((x.max() - x.min()) / bin_width)
         bins = min(bins, (x.max() - x.min()))
+        ax.hist(x, bins=bins, **kwargs)
     elif x.max() - x.min() < 30:
         bins = x.max() - x.min()
+        ax.hist(x, bins=bins, **kwargs)
     else:
-        raise NotImplementedError()
-    fig, ax = plt.subplots()
-    ax.hist(x, bins=bins, **kwargs)
+        ax.hist(x, **kwargs)
     ax.set_xlim(0, max_val)
     if cutoff_percentile is not None:
         ax.set_xticks(list(plt.xticks()[0][:-1]) + [max_val])

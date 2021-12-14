@@ -2,13 +2,20 @@ from pathlib import Path
 import os
 from os.path import join as pjoin
 
-from derive_conceptualspace.create_spaces.spaces_main import preprocess_descriptions_full as preprocess_descriptions_full_base
+from derive_conceptualspace.extract_keywords.keywords_main import (
+    extract_candidateterms_keybert_preprocessed as extract_candidateterms_keybert_preprocessed_base,
+)
 from derive_conceptualspace.util.jsonloadstore import Struct, json_dump
 from derive_conceptualspace.settings import ORIGLAN, ONLYENG, TRANSL
-from derive_conceptualspace.create_spaces.spaces_main import create_dissim_mat as create_dissim_mat_base
+from derive_conceptualspace.create_spaces.spaces_main import (
+    create_dissim_mat as create_dissim_mat_base,
+    create_mds_json as create_mds_json_base,
+    preprocess_descriptions_full as preprocess_descriptions_full_base, load_preprocessed_descriptions,
+)
 from misc_util.telegram_notifier import telegram_notify
 
 if os.getenv("MA_SMK_TGRAM"):
+    print("Telegaram-Notifications ON.")
     for k, v in dict(globals()).items():
         if k.endswith("_base") and callable(v):
             globals()[k] =  telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(globals()[k])
@@ -17,10 +24,14 @@ def cnf(name, val):
     globals()[name] = config.setdefault(name, val)
 
 QUANTIFICATION_MEASURES = ["ppmi", "tf-idf"]
+MDS_DIMENSIONS = [3, 50, 100]
 
 ########################################################################################
 #the file `kurse-beschreibungen.csv` is the absolute basis, that one I need to get and cannot create.
 ########################################################################################
+
+#how-to plot graph (KEEP ME): `PYTHONPATH=. snakemake --cores 1 -np --directory /home/chris/Documents/UNI_neu/Masterarbeit/DATA_CLONE_3/  --dag | grep -A99999 "digraph" | dot -Tsvg > dag.svg`
+#run as eg. `MA_DEBUG=1 PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory /home/chris/Documents/UNI_neu/Masterarbeit/DATA_CLONE_3/`
 
 #run as eg.  PYTHONPATH=/home/chris/Documents/UNI_neu/Masterarbeit/Derive_Conceptualspace snakemake --cores 1 -p "siddata_names_descriptions_mds_3.json" --directory /home/chris/Documents/UNI_neu/Masterarbeit/DATA_CLONE/
 #  crsync /home/chris/Documents/UNI_neu/Masterarbeit/DATA_CLONE/ etlpipelines:~/data --exclude .snakemake
@@ -42,22 +53,16 @@ QUANTIFICATION_MEASURES = ["ppmi", "tf-idf"]
 #     base, = glob_wildcards(pjoin(VIDEO_BASE, "{base}.mp4"))
 #     return [fn + ext for fn in base]
 
-# rule all: #TODO not like this, what was snakemake standard for this kind of thing?
-#     input:
-#         "siddata_names_descriptions_mds_3.json",
-#         "siddata_names_descriptions_mds_20.json",
-#         "siddata_names_descriptions_mds_50.json",
-#         "siddata_names_descriptions_mds_100.json",
-#         "siddata_names_descriptions_mds_200.json"
 
 rule all:
     input:
-        expand("dissim_matrix_{quant_meas}.json", quant_meas=QUANTIFICATION_MEASURES)
+        expand("mds_{mds_dims}d_{quant_meas}.json", quant_meas=QUANTIFICATION_MEASURES, mds_dims=MDS_DIMENSIONS)
 
 
 rule preprocess_descriptions:
     input:
-        "kurse-beschreibungen.csv"
+        "kurse-beschreibungen.csv",
+        "translated_descriptions.json"
     output:
         "preprocessed_descriptions.json"
     params:
@@ -85,6 +90,29 @@ rule create_dissim_mat:
         quantification, dissim_mat, pp_components = create_dissim_mat_base(os.getcwd(), input.descs, wildcards.quantification_measure)
         quantification = Struct(**{k:v for k,v in quantification.__dict__.items() if not k.startswith("_") and k not in ["csr_matrix", "doc_freqs", "reverse_term_dict"]})
         json_dump({"quantification": quantification, "dissim_mat": dissim_mat, "pp_components": pp_components, "quant_measure": wildcards.quantification_measure}, output)
+
+
+rule create_mds:
+    input:
+        dissim_mat="dissim_matrix_{quantification_measure}.json"
+    output:
+        "mds_{mds_dims}d_{quantification_measure}.json"
+    run:
+        mds = create_mds_json_base(os.getcwd(), input.dissim_mat, int(wildcards.mds_dims))
+        mds["mds"] = Struct(**mds["mds"].__dict__)
+        json_dump(mds, input.dissim_mat.replace("dissim_matrix", "mds_"+wildcards.mds_dims+"d"))
+
+
+rule create_candidate_terms_pp:
+    input:
+        descs = "preprocessed_descriptions.json"
+    output:
+        "candidate_terms.json"
+    run:
+        vocab, descriptions, pp_components = load_preprocessed_descriptions(input.descs)
+        candidates, model_name = extract_candidateterms_keybert_preprocessed_base(vocab, descriptions, faster_keybert=False)
+        res = {"model": model_name, "candidate_terms":candidates, "pp_txt_for_cands": True, "pp_components": pp_components, "pp_descriptions_filename": input.descs}
+        json_dump(res, "candidate_terms.json")
 
 
 #

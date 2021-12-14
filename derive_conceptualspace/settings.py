@@ -31,7 +31,7 @@ COURSE_TYPES = ["colloquium", "seminar", "internship", "practice", "lecture"]
 DEFAULT_TRANSLATE_POLICY = TRANSL
 
 ## other
-DEBUG_N_ITEMS = 300
+DEBUG_N_ITEMS = 100
 ENV_PREFIX = "MA"
 DATA_SET = "movies" # "movies", "places", "wines", "courses"
 # DEFAULT_MDS_DIMENSIONS = 20 #20,50,100,200

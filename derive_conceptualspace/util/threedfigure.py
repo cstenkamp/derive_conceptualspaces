@@ -4,7 +4,7 @@ import textwrap
 import numpy as np
 import plotly.graph_objects as go
 
-from base_changer import make_base_changer
+from .base_changer import make_base_changer
 
 def make_meshgrid(X=None, minx=None, miny=None, maxx=None, maxy=None, size=None, amount=30, margin=0):
     assert X is not None or (minx is not None and miny is not None and maxx is not None and maxy is not None) or size is not None
@@ -81,7 +81,7 @@ class ThreeDFigure():
         res = {k: surface_form(points[:, ind]) for ind, k in enumerate("xyz")}
         return {**res, **{"surfacecolor": surface_form(cols)}}
 
-    def add_surface(self, plane, samples, labels, margin, swap_axes=None, opacity=0.9, color="blue", showlegend=False):
+    def add_surface(self, plane, samples, labels, margin=0, swap_axes=None, opacity=0.9, color="blue", showlegend=False):
         xx, yy, zz, cols = [v for v in self._get_surface_tight(plane, samples, labels, margin).values()]
         points = np.vstack([xx.flatten(), yy.flatten(), zz.flatten()]).T
         points = self._transform(points)

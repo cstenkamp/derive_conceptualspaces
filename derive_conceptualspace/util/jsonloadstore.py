@@ -4,7 +4,7 @@ import os
 import sys
 import subprocess
 from datetime import datetime
-from os.path import isfile, splitext
+from os.path import isfile, splitext, dirname
 
 import numpy as np
 
@@ -83,14 +83,17 @@ def npify_rek(di):
         return res
 
 def get_commithash():
+    res = {}
     try:
-        return subprocess.check_output(["git", "rev-parse", "HEAD"]).strip().decode("UTF-8").strip()
-    except subprocess.CalledProcessError:
-        if os.getenv("RUNNING_IN_DOCKER"):
-            import socket
-            return f"cont_commit: {os.getenv('CONTAINER_GIT_COMMIT', 'None')}, cont_hostname: {socket.gethostname()}"
-    return "no_commit"
-    #TODO: return something reasonable when no repo!
+        res["inner_commit"] = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=dirname(__file__)).strip().decode("UTF-8").strip()
+    except:
+        pass
+    if os.getenv("RUNNING_IN_DOCKER"):
+        import socket
+        res["cont_commit"] = os.getenv('CONTAINER_GIT_COMMIT', 'None')
+        res["cont_hostname"] = socket.gethostname()
+    return res
+
 
 def get_settings():
     from types import ModuleType  # noqa: E402

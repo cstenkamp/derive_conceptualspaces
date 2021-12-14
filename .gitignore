@@ -2,6 +2,7 @@
 data_dump
 sacred_data
 docker/mongodb
+**/.snakemake
 
 .idea/
 # Byte-compiled / optimized / DLL files

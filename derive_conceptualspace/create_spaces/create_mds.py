@@ -54,7 +54,7 @@ def create_dissimilarity_matrix(arr, full=False):
     See [DESC15] section 3.4."""
     if isinstance(arr, scipy.sparse.csr.csr_matrix):
         arr = arr.toarray().T
-    assert arr.shape[0] < arr.shape[1], "I cannot believe your Doc-Term-Matrix has more distinct words then documents."
+    assert arr.shape[0] < arr.shape[1], "I cannot believe your Doc-Term-Matrix has less distinct words then documents."
     assert arr.max(axis=1).min() > 0, "If one of the vectors is zero the calculation will fail!"
     logger.info("Creating the dissimilarity matrix...")
     res = np.zeros((arr.shape[0],arr.shape[0]))
@@ -64,7 +64,6 @@ def create_dissimilarity_matrix(arr, full=False):
                 if not full and n2 < n1:
                     continue
                 if n1 != n2:
-                    assert e1.max() and e2.max()
                     p1 = np.dot(e1, e2) / (np.linalg.norm(e1) * np.linalg.norm(e2))
                     if 0 < p1-1 < 1e-12:
                         p1 = 1 #aufgrund von rundungsfehlern kann es >1 sein
