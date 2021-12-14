@@ -31,8 +31,9 @@ COURSE_TYPES = ["colloquium", "seminar", "internship", "practice", "lecture"]
 DEFAULT_TRANSLATE_POLICY = TRANSL
 
 ## other
-DEBUG_N_ITEMS = 100
+DEBUG_N_ITEMS = 300
 ENV_PREFIX = "MA"
+OVEWRITE_SETTINGS_PREFIX="MA2"
 DATA_SET = "movies" # "movies", "places", "wines", "courses"
 # DEFAULT_MDS_DIMENSIONS = 20 #20,50,100,200
 DEFAULT_DEBUG = False
@@ -66,32 +67,33 @@ def get_setting(name, default_none=False):
 
 #TODO now I can overwrite the env-vars both in click and with this, this is stupid argh
 
-# #overwriting env-vars
-# from types import ModuleType  # noqa: E402
-# _all_settings = {
-#     k: v
-#     for k, v in locals().items()
-#     if (not k.startswith("_") and not callable(v) and not isinstance(v, ModuleType) and k.isupper())
-# }
-# _overwrites = {k: os.getenv(f"{ENV_PREFIX}_" + k) for k, v in _all_settings.items() if os.getenv(f"{ENV_PREFIX}_" + k)}
-# for k, v in _overwrites.items():
-#     if isinstance(_all_settings[k], (list, tuple)):
-#         locals()[k] = [i.strip("\"' ") for i in v.strip("[]()").split(",")]
-#     elif isinstance(_all_settings[k], dict):
-#         assert v.strip().startswith("{") and v.strip().endswith("}")
-#         locals()[k] = dict([[j.strip("\"' ") for j in i.strip().split(":")] for i in v.strip(" {}").split(",")])
-#     elif isinstance(_all_settings[k], bool):
-#         locals()[k] = bool(v)
-#     elif isinstance(_all_settings[k], int):
-#         locals()[k] = int(v)
-#     elif isinstance(_all_settings[k], float):
-#         locals()[k] = float(v)
-#     elif not isinstance(_all_settings[k], str):
-#         raise NotImplementedError(f"I don't understand the type of the setting {k} you want to overwrite with a envvar")
-#     else:
-#         locals()[k] = v
-#
-#
+#overwriting env-vars
+from types import ModuleType  # noqa: E402
+_all_settings = {
+    k: v
+    for k, v in locals().items()
+    if (not k.startswith("_") and not callable(v) and not isinstance(v, ModuleType) and k.isupper())
+}
+_overwrites = {k: os.getenv(f"{OVEWRITE_SETTINGS_PREFIX}_" + k) for k, v in _all_settings.items() if os.getenv(f"{OVEWRITE_SETTINGS_PREFIX}_" + k)}
+for k, v in _overwrites.items():
+    if isinstance(_all_settings[k], (list, tuple)):
+        locals()[k] = [i.strip("\"' ") for i in v.strip("[]()").split(",")]
+    elif isinstance(_all_settings[k], dict):
+        assert v.strip().startswith("{") and v.strip().endswith("}")
+        locals()[k] = dict([[j.strip("\"' ") for j in i.strip().split(":")] for i in v.strip(" {}").split(",")])
+    elif isinstance(_all_settings[k], bool):
+        locals()[k] = bool(v)
+    elif isinstance(_all_settings[k], int):
+        locals()[k] = int(v)
+    elif isinstance(_all_settings[k], float):
+        locals()[k] = float(v)
+    elif not isinstance(_all_settings[k], str):
+        raise NotImplementedError(f"I don't understand the type of the setting {k} you want to overwrite with a envvar")
+    else:
+        print(f"Overwriting setting {k} with {v}")
+        locals()[k] = v
+
+
 # checkers etc
 import os
 if not os.environ.get("SETTINGS_WARNINGS_GIVEN"):

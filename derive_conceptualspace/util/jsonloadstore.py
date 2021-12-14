@@ -33,7 +33,7 @@ def prepare_dump(*args, write_meta=True, **kwargs):
     assert "cls" not in kwargs
     if write_meta:
         content = {"git_hash": get_commithash(), "settings": get_settings(), "date": str(datetime.now()),
-                   "env_vars": {k:v for k,v in os.environ.items() if k.startswith("MA_")}, "cmdargs": sys.argv, "content": args[0]}
+                   "env_vars": {k:v for k,v in os.environ.items() if k.startswith(settings.ENV_PREFIX) or k.startswith(settings.OVEWRITE_SETTINGS_PREFIX)}, "cmdargs": sys.argv, "content": args[0]}
         #TODO: also captured std-out, ...
     else:
         content = args[0]

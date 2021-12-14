@@ -32,7 +32,7 @@ def ortho_projection_affine(a, b):
 class ThreeDFigure():
     hovertemplate = "<br>".join(["X: %{x}", "Y: %{y}", "Z: %{z}"])
 
-    def __init__(self, trafo_fn=None, back_trafo_fn=None, swap_axes=None):
+    def __init__(self, trafo_fn=None, back_trafo_fn=None, swap_axes=None, name=None):
         self.trafo_fn = trafo_fn if trafo_fn is not None else lambda x: x
         self.back_trafo_fn = back_trafo_fn if back_trafo_fn is not None else lambda x: x
         self.swap_axes = swap_axes
@@ -42,8 +42,9 @@ class ThreeDFigure():
             autosize=True,
             width=1000,
             height=800,
-            margin=dict(l=10, r=10, b=10, t=10, pad=4),
-            paper_bgcolor="White"))
+            margin=dict(l=10, r=10, b=10, t=30 if name else 10, pad=4),
+            paper_bgcolor="White",
+            title=name))
         self.fig.update_layout(legend={'itemsizing': 'constant'})
 
     def _transform(self, points, inverse=False):

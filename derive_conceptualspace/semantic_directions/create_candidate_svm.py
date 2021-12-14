@@ -25,6 +25,7 @@ def create_candidate_svms(dcm, mds, descriptions, verbose):
                        f", kappa: {metrics['kappa']:.4f}"+f", samples: {len(dcm.term_existinds(use_index=False)[term])}"
                        for term, metrics in sorted_by[:20]]
             print("  "+"\n  ".join(strings))
+    sorted_kappa = [(i[0], i[1]["kappa"]) for i in sorted(metrics.items(), key=lambda x:x[1]["kappa"], reverse=True)]
 
 
 def create_candidate_svm(mds, term, exist_indices, descriptions):
@@ -39,8 +40,8 @@ def create_candidate_svm(mds, term, exist_indices, descriptions):
     tn, fp, fn, tp = confusion_matrix(labels, [i > 0 for i in svm_results]).ravel()
     precision = tp / (tp + fp); recall = tp / (tp + fn); accuracy = (tp + tn) / len(labels)
     # print(f"accuracy: {accuracy:.2f} | precision: {precision:.2f} | recall: {recall:.2f}")
-    # if term == "tutorial" and mds.embedding_.shape[1] == 3:
-    #     display_svm(mds.embedding_, np.array(labels, dtype=int), svm)
+    if term in ["component", "theory"] and mds.embedding_.shape[1] == 3:
+        display_svm(mds.embedding_, np.array(labels, dtype=int), svm, name=term)
 
     #now, in [DESC15:4.2.1], they compare the "ranking induced by \vec{v_t} with the number of times the term occurs in the entity's documents" with Cohen's Kappa.
     num_occurances = [descriptions[ind].count_phrase(term) if occurs else 0 for ind, occurs in enumerate(labels)]
@@ -57,12 +58,13 @@ def create_candidate_svm(mds, term, exist_indices, descriptions):
 
 
 
-def display_svm(X, y, svm):
+def display_svm(X, y, svm, name=None):
     assert X.shape[1] <= 3
     decision_plane = Plane(*svm.coef_[0], svm.intercept_[0])
-    with ThreeDFigure() as fig:
-        fig.add_markers(X, color=y, size=2)  # samples
-        fig.add_surface(decision_plane, X, y)  # decision hyperplane
+    with ThreeDFigure(name=name) as fig:
+        fig.add_markers(X[np.where(y)], color="red", size=2, name="positive samples")  # samples
+        fig.add_markers(X[np.where(~y)], color="blue", size=2, name="negative samples")  # samples
+        fig.add_surface(decision_plane, X, y, color="gray")  # decision hyperplane
         fig.add_line(X.mean(axis=0)-decision_plane.normal*2, X.mean(axis=0)+decision_plane.normal*2, width=2)  # orthogonal of decision hyperplane through mean of points
         fig.add_markers([0, 0, 0], size=3)  # coordinate center
         # fig.add_line(-decision_plane.normal * 5, decision_plane.normal * 5)  # orthogonal of decision hyperplane through [0,0,0]
