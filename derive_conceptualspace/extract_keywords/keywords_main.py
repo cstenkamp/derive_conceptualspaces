@@ -66,7 +66,7 @@ def extract_candidateterms_keybert_preprocessed(vocab, descriptions, faster_keyb
 def postprocess_candidateterms(base_dir, descriptions):
     candidate_terms, meta_inf = json_load(join(base_dir, "candidate_terms.json"), return_meta=True)
     model = candidate_terms["model"]
-    assert len(candidate_terms["candidate_terms"]) == len(descriptions)
+    assert len(candidate_terms["candidate_terms"]) == len(descriptions), f"Candidate Terms: {len(candidate_terms['candidate_terms'])}, Descriptions: {len(descriptions)}"
     candidate_terms["candidate_terms"] = postprocess_candidates(candidate_terms, descriptions)
     # assert all(j.lower() in mds_obj.descriptions[i].lower() for i in range(len(mds_obj.descriptions)) for j in candidate_terms[i])
     return model, candidate_terms

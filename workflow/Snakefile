@@ -65,6 +65,7 @@ rule preprocess_descriptions:
         "translated_descriptions.json"
     output:
         "preprocessed_descriptions.json"
+    threads: 1
     params:
         translate_policy=TRANSL,
         pp_components=dict(
@@ -86,6 +87,7 @@ rule create_dissim_mat:
         descs="preprocessed_descriptions.json"
     output:
         "dissim_matrix_{quantification_measure}.json"
+    threads: 1
     run:
         quantification, dissim_mat, pp_components = create_dissim_mat_base(os.getcwd(), input.descs, wildcards.quantification_measure)
         quantification = Struct(**{k:v for k,v in quantification.__dict__.items() if not k.startswith("_") and k not in ["csr_matrix", "doc_freqs", "reverse_term_dict"]})
@@ -97,6 +99,7 @@ rule create_mds:
         dissim_mat="dissim_matrix_{quantification_measure}.json"
     output:
         "mds_{mds_dims}d_{quantification_measure}.json"
+    threads: 1
     run:
         mds = create_mds_json_base(os.getcwd(), input.dissim_mat, int(wildcards.mds_dims))
         mds["mds"] = Struct(**mds["mds"].__dict__)
@@ -108,6 +111,7 @@ rule create_candidate_terms_pp:
         descs = "preprocessed_descriptions.json"
     output:
         "candidate_terms.json"
+    threads: 1
     run:
         vocab, descriptions, pp_components = load_preprocessed_descriptions(input.descs)
         candidates, model_name = extract_candidateterms_keybert_preprocessed_base(vocab, descriptions, faster_keybert=False)

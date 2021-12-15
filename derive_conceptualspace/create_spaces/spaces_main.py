@@ -15,7 +15,7 @@ from misc_util.pretty_print import pretty_print as print
 from .create_mds import ppmi, create_dissimilarity_matrix
 
 from .translate_descriptions import create_load_languages_file
-from derive_conceptualspace.util.mds_object import MDSObject, Description
+from derive_conceptualspace.util.mds_object import Description
 from derive_conceptualspace.util.jsonloadstore import json_dump, json_load
 from derive_conceptualspace.settings import TRANSL, ORIGLAN, ONLYENG, DEBUG_N_ITEMS
 from derive_conceptualspace.settings import SID_DATA_BASE, SPACES_DATA_BASE, get_setting
@@ -46,6 +46,7 @@ def load_preprocessed_descriptions(filepath):
     vocab, descriptions, pp_components = (tmp := json_load(filepath))["vocab"], tmp["descriptions"], tmp["pp_components"]
     descriptions = [Description.fromstruct(i[1]) for i in descriptions]
     if get_setting("DEBUG"):
+        assert DEBUG_N_ITEMS <= len(descriptions), f"The Descriptions-Dataset contains {len(descriptions)} samples, but you want to draw {DEBUG_N_ITEMS}!"
         descriptions = [descriptions[key] for key in random.sample(range(len(descriptions)), k=DEBUG_N_ITEMS)]
         vocab = sorted(set(flatten([set(i.bow.keys()) for i in descriptions])))
     return vocab, descriptions, pp_components
@@ -71,7 +72,7 @@ def create_mds_json(base_dir, dissim_mat_filename, n_dims):
     #TODO - isn't isomap better suited than MDS? https://scikit-learn.org/stable/modules/manifold.html#multidimensional-scaling
     # !! [DESC15] say they compared it and it's worse ([15] of [DESC15])!!!
     loaded = json_load(join(base_dir, dissim_mat_filename))
-    embedding = MDS(n_components=n_dims, random_state=get_setting("RANDOM_SEED", default_none=True))
+    embedding = MDS(n_components=n_dims, random_state=get_setting("RANDOM_SEED", default_none=True), dissimilarity="precomputed")
     mds = embedding.fit(loaded["dissim_mat"])
     return {"mds": mds, "pp_components": loaded["pp_components"], "quant_measure": loaded["quant_measure"]}
     #TODO translate_policy wird nicht mitgespeichert und die referenz auf die Descriptions wäre noch nice
@@ -183,46 +184,46 @@ def preprocess_descriptions(descriptions, components):
 # ########################################################################################################################
 # ########################################################################################################################
 #
-def load_translate_mds(file_path, file_name, translate_policy, assert_meta=(), translations_filename="translated_descriptions.json", assert_allexistent=True):
-    #TODO what now with this?! is this superflous? What about filgering the MDS?!
-    print("DEPRECATED!!!")
-    print(f"Working with file *b*{file_name}*b* in *b*{file_path}*b*!")
-    loaded = json_load(join(file_path, file_name), assert_meta=assert_meta)
-    names, descriptions, mds = loaded["names"], loaded["descriptions"], loaded["mds"]
-    if assert_allexistent:
-        assert len(names) == len(descriptions) == mds.embedding_.shape[0]
-    languages = create_load_languages_file(file_path, names, descriptions)
-    orig_n_samples = len(names)
-    additional_kwargs = {}
-    if translate_policy == ORIGLAN:
-        pass
-    elif translate_policy == ONLYENG:
-        indices = [ind for ind, elem in enumerate(languages) if elem == "en"]
-        print(f"Dropped {len(names)-len(indices)} out of {len(names)} descriptions because I will take only the english ones")
-        names, descriptions, languages = [names[i] for i in indices], [descriptions[i] for i in indices], [languages[i] for i in indices]
-        mds.embedding_ = np.array([mds.embedding_[i] for i in indices])
-        mds.dissimilarity_matrix_ = np.array([mds.dissimilarity_matrix_[i] for i in indices])
-    elif translate_policy == TRANSL:
-        additional_kwargs["original_descriptions"] = descriptions
-        with open(join(file_path, translations_filename), "r") as rfile:
-            translations = json.load(rfile)
-        new_descriptions, new_indices = [], []
-        for ind, name in enumerate(names):
-            if languages[name] == "en":
-                new_descriptions.append(descriptions[ind])
-                new_indices.append(ind)
-            elif name in translations:
-                new_descriptions.append(translations[name])
-                new_indices.append(ind)
-        dropped_indices = set(range(len(new_indices))) - set(new_indices)
-        if dropped_indices:
-            print(f"Dropped {len(names) - len(new_indices)} out of {len(names)} descriptions because I will take english ones and ones with a translation")
-        descriptions = new_descriptions
-        names, languages = [names[i] for i in new_indices], [list(languages.values())[i] for i in new_indices]
-        mds.embedding_ = np.array([mds.embedding_[i] for i in new_indices])
-        mds.dissimilarity_matrix_ = np.array([mds.dissimilarity_matrix_[i] for i in new_indices])
-    descriptions = [html.unescape(i).replace("  ", " ") for i in descriptions]
-    if assert_allexistent:
-        assert len(names) == len(descriptions) == mds.embedding_.shape[0] == orig_n_samples
-    return MDSObject(names, descriptions, mds, languages, translate_policy, orig_n_samples, **additional_kwargs)
+# def load_translate_mds(file_path, file_name, translate_policy, assert_meta=(), translations_filename="translated_descriptions.json", assert_allexistent=True):
+#     #TODO what now with this?! is this superflous? What about filgering the MDS?!
+#     print("DEPRECATED!!!")
+#     print(f"Working with file *b*{file_name}*b* in *b*{file_path}*b*!")
+#     loaded = json_load(join(file_path, file_name), assert_meta=assert_meta)
+#     names, descriptions, mds = loaded["names"], loaded["descriptions"], loaded["mds"]
+#     if assert_allexistent:
+#         assert len(names) == len(descriptions) == mds.embedding_.shape[0]
+#     languages = create_load_languages_file(file_path, names, descriptions)
+#     orig_n_samples = len(names)
+#     additional_kwargs = {}
+#     if translate_policy == ORIGLAN:
+#         pass
+#     elif translate_policy == ONLYENG:
+#         indices = [ind for ind, elem in enumerate(languages) if elem == "en"]
+#         print(f"Dropped {len(names)-len(indices)} out of {len(names)} descriptions because I will take only the english ones")
+#         names, descriptions, languages = [names[i] for i in indices], [descriptions[i] for i in indices], [languages[i] for i in indices]
+#         mds.embedding_ = np.array([mds.embedding_[i] for i in indices])
+#         mds.dissimilarity_matrix_ = np.array([mds.dissimilarity_matrix_[i] for i in indices])
+#     elif translate_policy == TRANSL:
+#         additional_kwargs["original_descriptions"] = descriptions
+#         with open(join(file_path, translations_filename), "r") as rfile:
+#             translations = json.load(rfile)
+#         new_descriptions, new_indices = [], []
+#         for ind, name in enumerate(names):
+#             if languages[name] == "en":
+#                 new_descriptions.append(descriptions[ind])
+#                 new_indices.append(ind)
+#             elif name in translations:
+#                 new_descriptions.append(translations[name])
+#                 new_indices.append(ind)
+#         dropped_indices = set(range(len(new_indices))) - set(new_indices)
+#         if dropped_indices:
+#             print(f"Dropped {len(names) - len(new_indices)} out of {len(names)} descriptions because I will take english ones and ones with a translation")
+#         descriptions = new_descriptions
+#         names, languages = [names[i] for i in new_indices], [list(languages.values())[i] for i in new_indices]
+#         mds.embedding_ = np.array([mds.embedding_[i] for i in new_indices])
+#         mds.dissimilarity_matrix_ = np.array([mds.dissimilarity_matrix_[i] for i in new_indices])
+#     descriptions = [html.unescape(i).replace("  ", " ") for i in descriptions]
+#     if assert_allexistent:
+#         assert len(names) == len(descriptions) == mds.embedding_.shape[0] == orig_n_samples
+#     return MDSObject(names, descriptions, mds, languages, translate_policy, orig_n_samples, **additional_kwargs)
 

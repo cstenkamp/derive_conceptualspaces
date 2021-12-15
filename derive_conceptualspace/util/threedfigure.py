@@ -73,8 +73,8 @@ class ThreeDFigure():
     def _get_surface_tight(self, plane, samples, labels, margin):
         xx, yy, minz, maxz = self._get_meshgrid(plane, samples, labels, margin)
         xy_arr = np.vstack([xx.flatten(), yy.flatten()]).T
-        col_fn = lambda x, y: 0 if minz - margin < plane.z(x, y) < maxz + margin else 1
-        z_fn = lambda x, y: min(max(plane.z(x, y), minz - margin), maxz + margin)
+        col_fn = lambda x, y: 0 if minz - margin < plane.z(np.array([x,y])) < maxz + margin else 1
+        z_fn = lambda x, y: min(max(plane.z(np.array([x, y])), minz - margin), maxz + margin)
         cols = np.array([col_fn(*xy) for xy in xy_arr])
         z_arr = np.array([z_fn(*xy) for xy in xy_arr])
         points = np.column_stack([xy_arr, z_arr])
@@ -146,7 +146,7 @@ class ThreeDFigure():
                 extra_keys = [i for i in custom_data[0]["extra"].keys()]
                 all_args["customdata"] = [list([v for k,v in i.items() if k.lower() != "extra"])+list(i["extra"].values()) for i in custom_data]
                 hovertemplate = hovertemplate+"<extra>"+"<br>".join([f"{key}: %{{customdata[{i+len(keys)}]}}" for i, key in enumerate(extra_keys)])+"</extra>"
-                all_args["customdata"] = [["<br>".join(textwrap.wrap(textwrap.shorten(str(j), maxlen), linelen_left if n < len(keys) else linelen_right)) for n, j in enumerate(i)] for i in all_args["customdata"]]
+                all_args["customdata"] = [[("<br>" if n >= len(keys) else "")+"<br>".join(textwrap.wrap(textwrap.shorten(str(j), maxlen), linelen_left if n < len(keys) else linelen_right)) for n, j in enumerate(i)] for i in all_args["customdata"]]
         else:
             hovertemplate = self.hovertemplate
         trace = go.Scatter3d(**all_args)

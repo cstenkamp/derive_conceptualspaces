@@ -45,7 +45,7 @@ def json_dump(*args, forbid_overwrite=True, **kwargs):
     fpath = str(args[1])
     if forbid_overwrite and isfile(fpath):
         for i in range(2, 999):
-            fpath = splitext(fpath)[0]+f"_{i}"+splitext(fpath)[1]
+            fpath = splitext(str(args[1]))[0]+f"_{i}"+splitext(fpath)[1]
             if not isfile(fpath): break
     with open(fpath, "w") as wfile:
         return json.dump(content, wfile, *args[2:], cls=NumpyEncoder, **kwargs)

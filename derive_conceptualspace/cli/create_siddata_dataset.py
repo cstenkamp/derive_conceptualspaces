@@ -41,7 +41,6 @@ from derive_conceptualspace.extract_keywords.keywords_main import (
     extract_candidateterms_keybert_preprocessed
 )
 from derive_conceptualspace.create_spaces.spaces_main import (
-    load_translate_mds,
     preprocess_descriptions_full,
     create_dissim_mat as create_dissim_mat_base,
     create_mds_json as create_mds_json_base,
@@ -355,12 +354,52 @@ def create_candidate_svm(ctx, pp_descriptions_filename, mds_filename, dcm_filena
     ctx.obj["mds_filename"] = mds_filename
     tmp = json_load(join(ctx.obj["base_dir"], mds_filename))
     assert tmp["pp_components"] == ctx.obj["pp_components"]
+    quant_meas = tmp["quant_measure"]
+    print(f"Using the MDS which had {quant_meas} as quantification measure!")
+    mds = tmp["mds"]
+    dcm = DocTermMatrix(json_load(join(ctx.obj["base_dir"], dcm_filename), assert_meta=("CANDIDATETERM_MIN_OCCURSIN_DOCS", "STANFORDNLP_VERSION")))
+    descriptions = ctx.obj["descriptions"]
+    assert len(dcm.dtm) == len(descriptions), f"The Doc-Candidate-Matrix contains {len(dcm.dtm)} items and you have {len(descriptions)} descriptions!"
+    clusters, cluster_directions, kappa_scores, decision_planes = create_candidate_svms_base(dcm, mds, ctx.obj["descriptions"], ctx.obj["verbose"])
+    #TODO make some smart function that forwards all metadata from a loaded json to a saved json
+    filename = f"clustered_candidates_{quant_meas}_{mds.embedding_.shape[1]}d.json"
+    json_dump({"clusters": clusters, "cluster_directions": cluster_directions, "kappa_scores": kappa_scores, "decision_planes": decision_planes}, join(ctx.obj["base_dir"], filename))
+    #TODO ndims etc im filename!
+
+
+
+@cli.command()
+@click.argument("pp-descriptions-filename")
+@click.argument("mds-filename")
+@click.argument("dcm-filename")
+@click.argument("clusteredcands-filename")
+@click.pass_context
+def rank_courses_saldirs(ctx, pp_descriptions_filename, mds_filename, dcm_filename, clusteredcands_filename):
+    from derive_conceptualspace.util.base_changer import NDPlane
+    import numpy as np
+    ctx.obj["pp_descriptions_filename"] = pp_descriptions_filename
+    ctx.obj["vocab"], ctx.obj["descriptions"], ctx.obj["pp_components"] = load_preprocessed_descriptions(join(ctx.obj["base_dir"], pp_descriptions_filename))
+    ctx.obj["mds_filename"] = mds_filename
+    tmp = json_load(join(ctx.obj["base_dir"], mds_filename))
+    assert tmp["pp_components"] == ctx.obj["pp_components"]
     print(f"Using the MDS which had {tmp['quant_measure']} as quantification measure!")
     mds = tmp["mds"]
     dcm = DocTermMatrix(json_load(join(ctx.obj["base_dir"], dcm_filename), assert_meta=("CANDIDATETERM_MIN_OCCURSIN_DOCS", "STANFORDNLP_VERSION")))
     descriptions = ctx.obj["descriptions"]
-    assert len(dcm.dtm) == len(descriptions)
-    create_candidate_svms_base(dcm, mds, ctx.obj["descriptions"], ctx.obj["verbose"])
+    assert len(dcm.dtm) == len(descriptions), f"The Doc-Candidate-Matrix contains {len(dcm.dtm)} items and you have {len(descriptions)} descriptions!"
+    for desc, embedding in zip(descriptions, list(mds.embedding_)):
+        desc.embedding = embedding
+    tmp = json_load(join(ctx.obj["base_dir"], clusteredcands_filename))
+    clusters, cluster_directions, kappa_scores, decision_planes = tmp["clusters"], tmp["cluster_directions"], tmp["kappa_scores"], tmp["decision_planes"]
+    clusters = {k: {"components": [k]+v, "direction": cluster_directions[k], "kappa_scores": {i: kappa_scores[i] for i in [k]+v}, "decision_planes": {i: NDPlane(np.array(decision_planes[i][1]), decision_planes[i][0]) for i in [k]+v}} for k,v in clusters.items()}
+    rank_courses_saldirs_base(descriptions, clusters)
+
+
+def rank_courses_saldirs_base(descriptions, clusters):
+    assert hasattr(descriptions[0], "embedding")
+    print()
+
+
 
 ########################################################################################################################
 ########################################################################################################################

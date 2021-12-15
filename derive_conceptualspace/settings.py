@@ -31,7 +31,7 @@ COURSE_TYPES = ["colloquium", "seminar", "internship", "practice", "lecture"]
 DEFAULT_TRANSLATE_POLICY = TRANSL
 
 ## other
-DEBUG_N_ITEMS = 300
+DEBUG_N_ITEMS = 2000
 ENV_PREFIX = "MA"
 OVEWRITE_SETTINGS_PREFIX="MA2"
 DATA_SET = "movies" # "movies", "places", "wines", "courses"
@@ -40,7 +40,7 @@ DEFAULT_DEBUG = False
 DEFAULT_VERBOSE = True
 RANDOM_SEED = 1
 MONGO_URI = f"mongodb://{os.environ['MONGO_INITDB_ROOT_USERNAME']}:{os.environ['MONGO_INITDB_ROOT_PASSWORD']}@127.0.0.1/?authMechanism=SCRAM-SHA-1"
-CANDIDATETERM_MIN_OCCURSIN_DOCS = 10
+CANDIDATETERM_MIN_OCCURSIN_DOCS = 25
 
 STANFORDNLP_VERSION = "4.2.2" #whatever's newest at https://stanfordnlp.github.io/CoreNLP/history.html
 MDS_DEFAULT_BASENAME = "siddata_names_descriptions_mds_"
@@ -59,7 +59,7 @@ def get_setting(name, default_none=False):
     elif os.getenv(ENV_PREFIX+"_"+name+"_FALSE"):
         return False
     if "DEFAULT_"+name in globals():
-        print(f"returning setting for {name} from default value!")
+        print(f"returning setting for {name} from default value: {globals()['DEFAULT_'+name]}")
         return globals()["DEFAULT_"+name]
     if default_none:
         return None
