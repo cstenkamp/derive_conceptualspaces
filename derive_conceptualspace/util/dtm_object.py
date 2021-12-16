@@ -3,15 +3,20 @@ from collections import Counter
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
 
-from derive_conceptualspace.settings import CANDIDATETERM_MIN_OCCURSIN_DOCS
+from derive_conceptualspace.settings import get_setting
+from derive_conceptualspace.util.jsonloadstore import Struct
 from derive_conceptualspace.util.mpl_tools import show_hist
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
 
 class DocTermMatrix():
-    #TODO add working json-serialize-way
-    #TODO add fromstruct like in Description
+
+    @staticmethod
+    def fromstruct(struct):
+        assert not struct["includes_pseudodocs"], "TODO"
+        return DocTermMatrix({"doc_term_matrix": struct["dtm"], "all_terms": struct["all_terms"]})
+
 
     def __init__(self, *args, verbose=False, **kwargs):
         self.includes_pseudodocs = False
@@ -44,13 +49,16 @@ class DocTermMatrix():
         if verbose:
             self.show_info()
 
+    def json_serialize(self):
+        return Struct(**{k:v for k,v in self.__dict__.items() if not k.startswith("_") and k not in ["csr_matrix", "doc_freqs", "reverse_term_dict"]})
+
     def show_info(self):
         occurs_in = [set(j[0] for j in i) if i else [] for i in self.dtm]
         num_occurences = [sum([term_ind in i for i in occurs_in]) for term_ind in tqdm(range(len(self.all_terms)))]
         show_hist(num_occurences, "Docs per Keyword", xlabel="# Documents the Keyword appears in", ylabel="Count (log scale)", cutoff_percentile=98, log=True)
-        above_threshold = len([i for i in num_occurences if i>= CANDIDATETERM_MIN_OCCURSIN_DOCS])
+        above_threshold = len([i for i in num_occurences if i>= get_setting("CANDIDATETERM_MIN_OCCURSIN_DOCS")])
         sorted_canditerms = sorted([[ind, elem] for ind, elem in enumerate(num_occurences)], key=lambda x:x[1], reverse=True)
-        print(f"Found {len(self.all_terms)} candidate Terms, {above_threshold} ({round(above_threshold/len(self.all_terms)*100)}%) of which occur in at least {CANDIDATETERM_MIN_OCCURSIN_DOCS} descriptions.")
+        print(f"Found {len(self.all_terms)} candidate Terms, {above_threshold} ({round(above_threshold/len(self.all_terms)*100)}%) of which occur in at least {get_setting('CANDIDATETERM_MIN_OCCURSIN_DOCS')} descriptions.")
         print("The 25 terms that occur in the most descriptions (incl the #descriptions they occur in):",
               ", ".join([f"{self.all_terms[ind]} ({occs})" for ind, occs in sorted_canditerms[:25]]))
 
@@ -64,6 +72,11 @@ class DocTermMatrix():
             self._doc_freqs = {term: sum(term in doc for doc in occurences) for term in tqdm(list(self.all_terms.keys()))}
             print("Most frequent term:", self.all_terms[max(self._doc_freqs.items(), key=lambda x:x[1])[0]])
         return self._doc_freqs
+
+    def terms_per_doc(self):
+        if not hasattr(self, "_terms_per_doc"):
+            self._terms_per_doc = [[self.all_terms[j[0]] for j in i] for i in self.dtm]
+        return self._terms_per_doc
 
     @property
     def reverse_term_dict(self):
@@ -93,3 +106,13 @@ class DocTermMatrix():
         self.dtm += [[[i, max_val]] for i in self.all_terms.keys()]
         if hasattr(self, "_csr"): del self._csr
         if hasattr(self, "_term_existinds"): del self._term_existinds
+
+
+def dtm_dissimmat_loader(quant_dtm, dissim_mat):
+    return dtm_loader(quant_dtm), dissim_mat
+
+def dtm_loader(doc_term_matrix):
+    dtm = DocTermMatrix.fromstruct(doc_term_matrix[1][1])
+    if get_setting("DEBUG"):
+        assert len(dtm.dtm) == get_setting("DEBUG_N_ITEMS") #TODO if not
+    return dtm

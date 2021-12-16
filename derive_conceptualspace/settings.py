@@ -2,9 +2,29 @@ from os.path import join, isdir, isfile, abspath, dirname, splitext
 import os
 from dotenv import load_dotenv
 
-ORIGLAN = 1
-ONLYENG = 2
-TRANSL = 3
+#TODO use get_setting EVERYWHERE and have only defaults here!!!
+
+################ new stuff #################
+
+ALL_PP_COMPONENTS = ["tcsldp", "tcsdp"]
+ALL_TRANSLATE_POLICY = ["translate", "origlan"] # "onlyeng"
+ALL_EXTRACTION_METHOD = ["pp_keybert", "keybert"]
+ALL_QUANTIFICATION_MEASURE = ["ppmi", "tf-idf"]
+ALL_MDS_DIMENSIONS = [3, 100]
+ALL_DCM_QUANT_MEASURE = ["tf-idf", "count", "binary"] #TODO check if these and the quantification_measure are interchangeable!! (also: tag-share is missing)
+
+#set default-values for the ALL_... variables
+for k, v in {k[4:]: v[0] for k,v in dict(locals()).items() if isinstance(v, list) and k.startswith("ALL_")}.items():
+    locals()["DEFAULT_"+k] = v
+
+ENV_PREFIX = "MA"
+
+DEFAULT_DEBUG = False
+DEFAULT_DEBUG_N_ITEMS = 50
+DEFAULT_CANDIDATETERM_MIN_OCCURSIN_DOCS = 25
+################ /new stuff #################
+
+
 
 ## Paths
 ENV_FILE_PATH = os.getenv("ENV_FILE_PATH") or abspath(join(dirname(__file__), "", "..", "docker", ".env"))
@@ -28,19 +48,18 @@ SIDDATA_SEAFILE_MODEL_VERSIONS = {"siddata_semspaces": 1} #"semanticspaces": 1,
 
 ## specifically for courses-dataset
 COURSE_TYPES = ["colloquium", "seminar", "internship", "practice", "lecture"]
-DEFAULT_TRANSLATE_POLICY = TRANSL
+# DEFAULT_TRANSLATE_POLICY = TRANSL
 
 ## other
-DEBUG_N_ITEMS = 2000
-ENV_PREFIX = "MA"
+
 OVEWRITE_SETTINGS_PREFIX="MA2"
 DATA_SET = "movies" # "movies", "places", "wines", "courses"
 # DEFAULT_MDS_DIMENSIONS = 20 #20,50,100,200
 DEFAULT_DEBUG = False
 DEFAULT_VERBOSE = True
-RANDOM_SEED = 1
+DEFAULT_RANDOM_SEED = 1
 MONGO_URI = f"mongodb://{os.environ['MONGO_INITDB_ROOT_USERNAME']}:{os.environ['MONGO_INITDB_ROOT_PASSWORD']}@127.0.0.1/?authMechanism=SCRAM-SHA-1"
-CANDIDATETERM_MIN_OCCURSIN_DOCS = 25
+# DEFAULT_CANDIDATETERM_MIN_OCCURSIN_DOCS = CANDIDATETERM_MIN_OCCURSIN_DOCS = 25
 
 STANFORDNLP_VERSION = "4.2.2" #whatever's newest at https://stanfordnlp.github.io/CoreNLP/history.html
 MDS_DEFAULT_BASENAME = "siddata_names_descriptions_mds_"
@@ -94,14 +113,6 @@ for k, v in _overwrites.items():
         locals()[k] = v
 
 
-# checkers etc
-import os
-if not os.environ.get("SETTINGS_WARNINGS_GIVEN"):
-    # if DEFAULT_DEBUG:
-    #     print("DEBUG is activated!!!")
-    if RANDOM_SEED:
-        print("Using a random seed!!!")
-os.environ["SETTINGS_WARNINGS_GIVEN"] = "1"
 
 #actually make all defined directories (global vars that end in "_PATH")
 for key, val in dict(locals()).items():

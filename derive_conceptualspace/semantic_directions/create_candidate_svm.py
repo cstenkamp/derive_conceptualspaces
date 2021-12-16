@@ -1,5 +1,5 @@
 from textwrap import shorten
-from derive_conceptualspace.settings import CANDIDATETERM_MIN_OCCURSIN_DOCS
+from derive_conceptualspace.settings import get_setting
 from derive_conceptualspace.util.jsonloadstore import json_load
 from tqdm import tqdm
 import sklearn.svm
@@ -14,11 +14,13 @@ norm = lambda vec: vec/np.linalg.norm(vec)
 vec_cos = lambda v1, v2: np.arccos(np.clip(np.dot(norm(v1), norm(v2)), -1.0, 1.0))  #https://stackoverflow.com/a/13849249/5122790
 
 
-def create_candidate_svms(dcm, mds, descriptions, verbose):
+def create_candidate_svms(dcm, mds, pp_descriptions, verbose):
+    _, descriptions = pp_descriptions.values()
     metrics = {}
     decision_planes = {}
     for term, exist_indices in tqdm(dcm.term_existinds(use_index=False).items()):
-        assert len(exist_indices) >= CANDIDATETERM_MIN_OCCURSIN_DOCS
+        if not get_setting("DEBUG"):
+            assert len(exist_indices) >= get_setting("CANDIDATETERM_MIN_OCCURSIN_DOCS") #TODO this is relevant-metainf!!
         cand_mets, decision_plane = create_candidate_svm(mds, term, exist_indices, descriptions)
         metrics[term] = cand_mets
         decision_planes[term] = decision_plane

@@ -9,7 +9,6 @@ from sklearn.manifold import MDS
 import scipy.sparse.csr
 
 
-from derive_conceptualspace.settings import RANDOM_SEED
 from derive_conceptualspace.util.np_tools import np_divide, np_log
 from derive_conceptualspace.util.text_tools import print_quantification
 from derive_conceptualspace.util.tokenizers import tokenize_sentences_countvectorizer

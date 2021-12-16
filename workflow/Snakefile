@@ -4,13 +4,19 @@ from os.path import join as pjoin
 
 from derive_conceptualspace.extract_keywords.keywords_main import (
     extract_candidateterms_keybert_preprocessed as extract_candidateterms_keybert_preprocessed_base,
+    postprocess_candidateterms as postprocess_candidateterms_base,
+    create_doc_cand_matrix as create_doc_cand_matrix_base,
+    filter_keyphrases as filter_keyphrases_base,
 )
 from derive_conceptualspace.util.jsonloadstore import Struct, json_dump
-from derive_conceptualspace.settings import ORIGLAN, ONLYENG, TRANSL
+from derive_conceptualspace.settings import ORIGLAN, ONLYENG, TRANSL, get_setting
 from derive_conceptualspace.create_spaces.spaces_main import (
     create_dissim_mat as create_dissim_mat_base,
     create_mds_json as create_mds_json_base,
     preprocess_descriptions_full as preprocess_descriptions_full_base, load_preprocessed_descriptions,
+)
+from derive_conceptualspace.semantic_directions.create_candidate_svm import (
+    create_candidate_svms as create_candidate_svms_base
 )
 from misc_util.telegram_notifier import telegram_notify
 
@@ -24,7 +30,8 @@ def cnf(name, val):
     globals()[name] = config.setdefault(name, val)
 
 QUANTIFICATION_MEASURES = ["ppmi", "tf-idf"]
-MDS_DIMENSIONS = [3, 50, 100]
+MDS_DIMENSIONS = [3, 100]
+DOC_CAND_MATRIX_VALS = ["count", "tf-idf"]
 
 ########################################################################################
 #the file `kurse-beschreibungen.csv` is the absolute basis, that one I need to get and cannot create.
@@ -56,7 +63,8 @@ MDS_DIMENSIONS = [3, 50, 100]
 
 rule all:
     input:
-        expand("mds_{mds_dims}d_{quant_meas}.json", quant_meas=QUANTIFICATION_MEASURES, mds_dims=MDS_DIMENSIONS)
+        expand("mds_{mds_dims}d_{quant_meas}.json", quant_meas=QUANTIFICATION_MEASURES, mds_dims=MDS_DIMENSIONS),
+        expand("doc_cand_matrix_{matrix_val}.json", matrix_val=DOC_CAND_MATRIX_VALS),
 
 
 rule preprocess_descriptions:
@@ -117,6 +125,64 @@ rule create_candidate_terms_pp:
         candidates, model_name = extract_candidateterms_keybert_preprocessed_base(vocab, descriptions, faster_keybert=False)
         res = {"model": model_name, "candidate_terms":candidates, "pp_txt_for_cands": True, "pp_components": pp_components, "pp_descriptions_filename": input.descs}
         json_dump(res, "candidate_terms.json")
+
+
+rule postprocess_candidateterms:
+    input:
+        descs = "preprocessed_descriptions.json",
+        cand_terms = "candidate_terms.json"
+    output:
+        "candidate_terms_postprocessed.json"
+    threads: 1
+    run:
+        model, candidate_terms = postprocess_candidateterms_base(os.getcwd(), input.descs)
+        candidate_terms["postprocessed"] = True
+        json_dump(candidate_terms, pjoin(os.getcwd(), "candidate_terms_postprocessed.json"))
+
+
+rule create_doc_cand_matrix:
+    input:
+        descs = "preprocessed_descriptions.json",
+        pp_cand_terms = "candidate_terms_postprocessed.json"
+    output:
+        "doc_cand_matrix.json"
+    threads: 1
+    run:
+        doc_term_matrix = create_doc_cand_matrix_base(os.getcwd(), input.descs, input.pp_cand_terms)
+        json_dump({"all_terms": doc_term_matrix.all_terms, "doc_term_matrix": doc_term_matrix.dtm}, pjoin(os.getcwd(), "doc_cand_matrix.json"))
+
+
+rule filter_keyphrases:
+    input:
+        descs = "preprocessed_descriptions.json",
+        doc_cand_matrix = "doc_cand_matrix.json"
+    output:
+        "doc_cand_matrix_{matrix_val}.json"
+    threads: 1
+    params:
+        min_term_count=get_setting("CANDIDATETERM_MIN_OCCURSIN_DOCS"),
+        matrix_val="count"
+    run:
+        doc_term_matrix, all_terms = filter_keyphrases_base(os.getcwd(),  input.descs, min_term_count=params.min_term_count, matrix_val=params.matrix_val)
+        json_dump({"all_terms": all_terms, "doc_term_matrix": doc_term_matrix}, pjoin(os.getcwd(), "doc_cand_matrix_"+params.matrix_val+".json"))
+
+
+# rule create_candidate_svm:
+#     input:
+#         descs = "preprocessed_descriptions.json",
+#         doc_cand_matrix = "doc_cand_matrix.json"
+#     output:
+#         "candidate_terms_postprocessed.json"
+#     threads: 1
+#     params:
+#         min_term_count=get_setting("CANDIDATETERM_MIN_OCCURSIN_DOCS"),
+#         matrix_val="count"
+#     run:
+#         doc_term_matrix, all_terms = filter_keyphrases_base(os.getcwd(),  input.descs, min_term_count=params.min_term_count, matrix_val=params.matrix_val)
+#         json_dump({"all_terms": all_terms, "doc_term_matrix": doc_term_matrix}, pjoin(os.getcwd(), f"doc_cand_matrix_{params.matrix_val}.json"))
+#
+
+
 
 
 #

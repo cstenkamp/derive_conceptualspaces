@@ -12,7 +12,8 @@ import nltk
 from HanTa import HanoverTagger as ht
 from nltk.corpus import stopwords as nlstopwords
 
-from derive_conceptualspace.util.mds_object import Description
+from derive_conceptualspace.util.desc_object import Description
+from derive_conceptualspace.util.dtm_object import DocTermMatrix
 from derive_conceptualspace.util.nltk_util import NLTK_LAN_TRANSLATOR, wntag
 from derive_conceptualspace.util.tokenizers import tokenize_text
 
@@ -212,6 +213,7 @@ def tf_idf(doc_term_matrix, verbose=False, mds_obj=None, descriptions=None):
     if verbose:
         print("Running TF-IDF on the corpus...")
         print_quantification(doc_term_matrix, quantifications, mds_obj, descriptions)
+    quantifications = DocTermMatrix(dict(doc_term_matrix=quantifications, all_terms=doc_term_matrix.all_terms))
     return quantifications
 
 

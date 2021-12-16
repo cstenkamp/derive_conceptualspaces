@@ -22,11 +22,15 @@ def fix_cand(cand, text):
     return cand
 
 
-def postprocess_candidates(candtermobj, descriptions):
-    candidate_terms = candtermobj["candidate_terms"]
+def postprocess_candidateterms(candidate_terms, descriptions, extraction_method):
+    assert extraction_method in ["pp_keybert", "keybert"]
+    candidate_terms, = candidate_terms.values()
+    _, descriptions = descriptions.values()
+    assert len(candidate_terms) == len(descriptions), f"Candidate Terms: {len(candidate_terms)}, Descriptions: {len(descriptions)}"
+
     postprocessed_candidates = [[] for _ in candidate_terms]
     fails = set()
-    in_text = (lambda phrase, desc: phrase in desc) if candtermobj["pp_txt_for_cands"] else (lambda phrase, desc: phrase_in_text(phrase, desc.text))
+    in_text = (lambda phrase, desc: phrase in desc) if extraction_method == "pp_keybert" else (lambda phrase, desc: phrase_in_text(phrase, desc.text))
 
     for desc_ind, desc in enumerate(tqdm(descriptions)):
         for cand in candidate_terms[desc_ind]:

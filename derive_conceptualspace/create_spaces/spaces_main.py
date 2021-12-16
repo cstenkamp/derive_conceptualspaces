@@ -15,9 +15,9 @@ from misc_util.pretty_print import pretty_print as print
 from .create_mds import ppmi, create_dissimilarity_matrix
 
 from .translate_descriptions import create_load_languages_file
-from derive_conceptualspace.util.mds_object import Description
+from derive_conceptualspace.util.desc_object import Description
 from derive_conceptualspace.util.jsonloadstore import json_dump, json_load
-from derive_conceptualspace.settings import TRANSL, ORIGLAN, ONLYENG, DEBUG_N_ITEMS
+# from derive_conceptualspace.settings import DEBUG_N_ITEMS
 from derive_conceptualspace.settings import SID_DATA_BASE, SPACES_DATA_BASE, get_setting
 from derive_conceptualspace.util.text_tools import run_preprocessing_funcs, make_bow, tf_idf
 from derive_conceptualspace.util.dtm_object import DocTermMatrix
@@ -27,34 +27,47 @@ logger = logging.getLogger(basename(__file__))
 flatten = lambda l: [item for sublist in l for item in sublist]
 
 
+class PPComponents():
+    def __init__(self, sent_tokenize=True, convert_lower=True, remove_stopwords=True, lemmatize=True, remove_diacritics=True, remove_punctuation=True):
+        self.di = dict(sent_tokenize=sent_tokenize, convert_lower=convert_lower, remove_stopwords=remove_stopwords,
+                       lemmatize=lemmatize, remove_diacritics=remove_diacritics, remove_punctuation=remove_punctuation)
+
+    def __getattr__(self, item):
+        return self.di.get(item, False)
+
+    def get(self, item, default=None):
+        return self.di.get(item, default)
+
+    def __repr__(self):
+        return (
+            "t" if self["sent_tokenize"] else "" + "c" if self["convert_lower"] else "" +
+            "s" if self["remove_stopwords"] else "" + "l" if self["lemmatize"] else "" +
+            "d" if self["remove_diacritics"] else "" + "p" if self["remove_punctuation"] else ""
+        )
+
+    @staticmethod
+    def from_str(string):
+        return PPComponents(sent_tokenize="t" in string, convert_lower="c" in string, remove_stopwords="s" in string,
+                            lemmatize="l" in string, remove_diacritics="d" in string, remove_punctuation="p" in string)
+
 ########################################################################################################################
 ########################################################################################################################
 ########################################################################################################################
 # pipeline to the MDS representation from course descriptions
 
-def preprocess_descriptions_full(from_path, translate_policy, pp_components, from_name="kurse-beschreibungen.csv"):
+def preprocess_descriptions_full(raw_descriptions, pp_components, translate_policy, languages, translations):
     #TODO options to consider language, fachbereich, and to add [translated] title to description
-    df = load_preprocess_raw_course_file(join(from_path, from_name))
+    descriptions = preprocess_raw_course_file(raw_descriptions)
     if get_setting("DEBUG"):
-        df = pd.DataFrame([df.iloc[key] for key in random.sample(range(len(df)), k=DEBUG_N_ITEMS)])
-    descriptions = handle_translations(from_path, list(df["Name"]), list(df["Beschreibung"]), translate_policy)
-    vocab, descriptions = preprocess_descriptions(descriptions, pp_components)
+        descriptions = pd.DataFrame([descriptions.iloc[key] for key in random.sample(range(len(descriptions)), k=get_setting("DEBUG_N_ITEMS"))])
+    descriptions = handle_translations(languages, translations, list(descriptions["Name"]), list(descriptions["Beschreibung"]), translate_policy)
+    vocab, descriptions = preprocess_descriptions(descriptions, PPComponents.from_str(pp_components))
     return vocab, descriptions
 
 
-def load_preprocessed_descriptions(filepath):
-    vocab, descriptions, pp_components = (tmp := json_load(filepath))["vocab"], tmp["descriptions"], tmp["pp_components"]
-    descriptions = [Description.fromstruct(i[1]) for i in descriptions]
-    if get_setting("DEBUG"):
-        assert DEBUG_N_ITEMS <= len(descriptions), f"The Descriptions-Dataset contains {len(descriptions)} samples, but you want to draw {DEBUG_N_ITEMS}!"
-        descriptions = [descriptions[key] for key in random.sample(range(len(descriptions)), k=DEBUG_N_ITEMS)]
-        vocab = sorted(set(flatten([set(i.bow.keys()) for i in descriptions])))
-    return vocab, descriptions, pp_components
-
-
-def create_dissim_mat(base_dir, pp_descriptions_filename, quantification_measure):
-    vocab, descriptions, pp_components = load_preprocessed_descriptions(join(base_dir, pp_descriptions_filename))
+def create_dissim_mat(pp_descriptions, quantification_measure):
     assert quantification_measure in ["tf-idf", "ppmi"]
+    vocab, descriptions = pp_descriptions.values()
     # TODO: # vocab, counts = tokenize_sentences_nltk(descriptions) if use_nltk_tokenizer else tokenize_sentences_countvectorizer(descriptions) allow countvectorizer!
     dtm = DocTermMatrix(all_terms=vocab, descriptions=descriptions)
     if quantification_measure == "tf-idf":
@@ -65,28 +78,26 @@ def create_dissim_mat(base_dir, pp_descriptions_filename, quantification_measure
     #cannot use ppmis directly, because a) too sparse, and b) we need a geometric representation with euclidiean props (betweeness, parallism,..)
     assert all(len(set((lst := [i[0] for i in dtm]))) == len(lst) for dtm in quantification.dtm)
     dissim_mat = create_dissimilarity_matrix(quantification.as_csr())
-    return quantification, dissim_mat, pp_components
+    return quantification, dissim_mat
 
 
-def create_mds_json(base_dir, dissim_mat_filename, n_dims):
+def create_mds_json(dissim_mat, mds_dimensions):
+    dtm, dissim_mat = dissim_mat
     #TODO - isn't isomap better suited than MDS? https://scikit-learn.org/stable/modules/manifold.html#multidimensional-scaling
     # !! [DESC15] say they compared it and it's worse ([15] of [DESC15])!!!
-    loaded = json_load(join(base_dir, dissim_mat_filename))
-    embedding = MDS(n_components=n_dims, random_state=get_setting("RANDOM_SEED", default_none=True), dissimilarity="precomputed")
-    mds = embedding.fit(loaded["dissim_mat"])
-    return {"mds": mds, "pp_components": loaded["pp_components"], "quant_measure": loaded["quant_measure"]}
-    #TODO translate_policy wird nicht mitgespeichert und die referenz auf die Descriptions wäre noch nice
+    embedding = MDS(n_components=mds_dimensions, random_state=get_setting("RANDOM_SEED", default_none=True), dissimilarity="precomputed")
+    mds = embedding.fit(dissim_mat)
+    return mds
 
 
     # # names, descriptions, mds = preprocess_descriptions(df, n_dims=n_dims, **kwargs)
     # # return names, descriptions, mds
 
 
-def load_preprocess_raw_course_file(fpath, min_desc_len=10):
+def preprocess_raw_course_file(df, min_desc_len=10):
     """loads the given Siddata-Style CSV into a pandas-dataframe, already performing some processing like
         dropping duplicates"""
     #TODO in exploration I also played around with Levenhsthein-distance etc!
-    df = pd.read_csv(fpath)
     #remove those for which the Name (exluding stuff in parantheses) is equal...
     df['NameNoParanth'] = df['Name'].str.replace(re.compile(r'\([^)]*\)'), '')
     df = df.drop_duplicates(subset='NameNoParanth')
@@ -101,30 +112,29 @@ def load_preprocess_raw_course_file(fpath, min_desc_len=10):
     return df
 
 
-def handle_translations(from_path, names, descriptions, translate_policy, translations_filename="translated_descriptions.json", assert_all_translated=True):
-    lang_dict = create_load_languages_file(from_path, names, descriptions)
-    orig_lans = [lang_dict[i] for i in names]
-    if translate_policy == ORIGLAN:
+def handle_translations(languages, translations, names, descriptions, translate_policy, assert_all_translated=True):
+    orig_lans = [languages[i] for i in names]
+    if translate_policy == "origlan":
         result = [Description(text=descriptions[i], lang=orig_lans[i], for_name=names[i], orig_lang=orig_lans[i]) for i in range(len(descriptions))]
-    elif translate_policy == ONLYENG:
+    elif translate_policy == "onlyeng":
         indices = [ind for ind, elem in enumerate(orig_lans) if elem == "en"]
         print(f"Dropped {len(names)-len(indices)} out of {len(names)} descriptions because I will take only the english ones")
         names, descriptions = [names[i] for i in indices], [descriptions[i] for i in indices]
         result = [Description(text=descriptions[i], lang="en", for_name=names[i], orig_lang="en") for i in range(len(descriptions))]
-    elif translate_policy == TRANSL:
+    elif translate_policy == "translate":
         result = []
-        with open(join(from_path, translations_filename), "r") as rfile:
-            translations = json.load(rfile)
         missing_names = set()
         for desc, name in zip(descriptions, names):
-            if lang_dict[name] == "en":
+            if languages[name] == "en":
                 result.append(Description(text=desc, lang="en", for_name=name, orig_lang="en", orig_text=desc))
             elif name in translations:
-                result.append(Description(text=translations[name], lang="en", for_name=name, orig_lang=lang_dict[name], orig_text=desc))
+                result.append(Description(text=translations[name], lang="en", for_name=name, orig_lang=languages[name], orig_text=desc))
             elif name+" " in translations:
-                result.append(Description(text=translations[name+" "], lang="en", for_name=name, orig_lang=lang_dict[name], orig_text=desc))
+                print("REMOVE THIS CRAP!!")
+                result.append(Description(text=translations[name+" "], lang="en", for_name=name, orig_lang=languages[name], orig_text=desc))
             elif " "+name in translations:
-                result.append(Description(text=translations[" "+name], lang="en", for_name=name, orig_lang=lang_dict[name], orig_text=desc))
+                print("REMOVE THIS CRAP!!")
+                result.append(Description(text=translations[" "+name], lang="en", for_name=name, orig_lang=languages[name], orig_text=desc))
             else:
                 missing_names.add(name)
         if len(result) < len(names):
