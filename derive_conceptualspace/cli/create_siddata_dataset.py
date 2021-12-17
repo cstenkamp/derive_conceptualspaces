@@ -1,3 +1,5 @@
+import inspect
+from functools import wraps
 import os
 from os.path import join, dirname, basename, abspath
 import random
@@ -14,17 +16,10 @@ import click
 from misc_util.telegram_notifier import telegram_notify
 from misc_util.logutils import setup_logging
 from misc_util.pretty_print import pretty_print as print
-from derive_conceptualspace.settings import (
-    DEFAULT_TRANSLATE_POLICY,
-    DEFAULT_PP_COMPONENTS,
-    DEFAULT_QUANTIFICATION_MEASURE,
-    DEFAULT_MDS_DIMENSIONS,
-    DEFAULT_DEBUG,
-    ENV_PREFIX,
-    get_setting,
-)
+
+from derive_conceptualspace.settings import ALL_DCM_QUANT_MEASURE, ENV_PREFIX, get_setting, set_envvar, get_envvar
 from derive_conceptualspace.util.desc_object import pp_descriptions_loader
-from derive_conceptualspace.util.jsonloadstore import json_dump, Struct, json_load, JsonPersister
+from derive_conceptualspace.util.jsonloadstore import JsonPersister
 from derive_conceptualspace.create_spaces.translate_descriptions import (
     translate_descriptions as translate_descriptions_base,
     count_translations as count_translations_base
@@ -45,34 +40,32 @@ from derive_conceptualspace.create_spaces.spaces_main import (
 from derive_conceptualspace.semantic_directions.create_candidate_svm import (
     create_candidate_svms as create_candidate_svms_base
 )
-from derive_conceptualspace.util.dtm_object import DocTermMatrix, dtm_dissimmat_loader, dtm_loader
+from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
 
 logger = logging.getLogger(basename(__file__))
 
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
+#cli helpers & main
 
-########################################################################################################################
-########################################################################################################################
-########################################################################################################################
-#cli main
-
-def loadstore_settings_envvars(ctx):
+def loadstore_settings_envvars(ctx, use_auto_envvar_prefix=False):
     """auto_envvar_prefix only works for options, not for arguments. So this function overwrites ctx.params & ctx.obj
        from env-vars (if they have the correct prefix), and also SETS these env-vars from the cmd-args such that they
        can be accessed using get_setting() """
+    env_prefix = ctx.auto_envvar_prefix if use_auto_envvar_prefix else ENV_PREFIX
+    #the auto_envvar_prefix always gets appended the subcommand, I don't want that generally though.
     for param, val in ctx.params.items():
         ctx.obj[param] = val
-        envvarname = ctx.auto_envvar_prefix+"_"+param.upper().replace("-","_")
-        if (envvar := os.environ.get(envvarname)): #https://github.com/pallets/click/issues/714#issuecomment-651389598
+        envvarname = env_prefix+"_"+param.upper().replace("-","_")
+        # https://github.com/pallets/click/issues/714#issuecomment-651389598
+        if (envvar := get_envvar(envvarname)) is not None and envvar != ctx.params[param]:
+            print(f"The param {param} used to be {ctx.params[param]}, but is overwritten by an env-var to {envvar}")
             ctx.params[param] = envvar
             ctx.obj[param] = envvar
         else:
-            if isinstance(ctx.obj[param], bool):
-                if ctx.obj[param]:
-                    os.environ[envvarname] = "1"
-                else:
-                    os.environ[envvarname+"_FALSE"] = "1"
-            else:
-                os.environ[envvarname] = ctx.obj[param]
+            set_envvar(envvarname, ctx.obj[param])
+
 
 def setup_json_persister(ctx):
     json_persister = JsonPersister(ctx.obj["base_dir"], ctx.obj["base_dir"], ctx, ctx.obj.get("add_relevantparams_to_filename", True))
@@ -80,35 +73,56 @@ def setup_json_persister(ctx):
     return json_persister
 
 
-def set_debug(ctx):
-    if get_setting("DEBUG") and not os.getenv(ctx.auto_envvar_prefix+"_DEBUG_SET"):
-        print(f"Debug is active! #Items for Debug: {get_setting('DEBUG_N_ITEMS')}")
+def set_debug(ctx, use_auto_envvar_prefix=False):
+    env_prefix = ctx.auto_envvar_prefix if use_auto_envvar_prefix else ENV_PREFIX
+    if get_setting("DEBUG"):
+        if not os.getenv(env_prefix+"_DEBUG_SET"):
+            assert env_prefix+"_CANDIDATE_MIN_TERM_COUNT" not in os.environ
+            os.environ[env_prefix + "_CANDIDATE_MIN_TERM_COUNT"] = "1"
+            print(f"Debug is active! #Items for Debug: {get_setting('DEBUG_N_ITEMS')}")
+            if get_setting("RANDOM_SEED", default_none=True): print("Using a random seed!")
         if get_setting("RANDOM_SEED", default_none=True):
             random.seed(get_setting("RANDOM_SEED"))
-        assert ctx.auto_envvar_prefix+"_CANDIDATE_MIN_TERM_COUNT" not in os.environ
-        os.environ[ctx.auto_envvar_prefix+"_CANDIDATE_MIN_TERM_COUNT"] = "1"
-        os.environ[ctx.auto_envvar_prefix+"_DEBUG_SET"] = "1"
+        assert os.environ[env_prefix + "_CANDIDATE_MIN_TERM_COUNT"] == "1"
+        os.environ[env_prefix+"_DEBUG_SET"] = "1"
 
+
+
+def click_pass_add_context(fn):
+    @click.pass_context
+    @wraps(fn)
+    def wrapped(*args, **kwargs):
+        assert isinstance(args[0], click.Context)
+        for k, v in kwargs.items():
+            assert k not in args[0].obj
+            args[0].obj[k] = v
+        ctx = args[0]
+        nkw = {k:v for k,v in kwargs.items() if k in set(inspect.getfullargspec(fn).args)-{"ctx", "context"}}
+        loadstore_settings_envvars(ctx)
+        res = fn(*args, **nkw)
+        if isinstance(ctx.command, click.Group):
+            if ctx.obj["notify_telegram"] == True:
+                print("wtfff")
+                if not isinstance(cli.get_command(ctx, ctx.invoked_subcommand), click.Group):
+                    ctx.command.get_command(ctx, ctx.invoked_subcommand).callback = telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(ctx.command.get_command(ctx, ctx.invoked_subcommand).callback)
+        return res
+    return wrapped
 
 
 @click.group()
 @click.argument("base-dir", type=str)
 @click.option("--verbose/--no-verbose", default=True, help="default: True")
-@click.option("--debug/--no-debug", default=DEFAULT_DEBUG, help=f"If True, many functions will only run on a few samples, such that everything should run really quickly. Default: {DEFAULT_DEBUG}")
+@click.option("--debug/--no-debug", default=get_setting("DEBUG"), help=f"If True, many functions will only run on a few samples, such that everything should run really quickly. Default: {get_setting('DEBUG')}")
 @click.option("--log", type=str, default="INFO", help="log-level for logging-module. one of [DEBUG, INFO, WARNING, ERROR, CRITICAL]")
 @click.option("--logfile", type=str, default="", help="logfile to log to. If not set, it will be logged to standard stdout/stderr")
 @click.option("--notify-telegram/--no-notify-telegram", default=False, help="If you want to get telegram-notified of start & end of the command")
-@click.pass_context
-def cli(ctx, base_dir, verbose=False, debug=DEFAULT_DEBUG, log="INFO", logfile=None, notify_telegram=False):
+@click_pass_add_context
+def cli(ctx):
     print("Starting up at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
-    loadstore_settings_envvars(ctx)
-    del base_dir, verbose, debug, log, logfile, notify_telegram #after the loadstore you cannot use the original ones anymore
     setup_logging(ctx.obj["log"], ctx.obj["logfile"])
     set_debug(ctx)
     ctx.obj["json_persister"] = setup_json_persister(ctx)
-    if ctx.obj["notify_telegram"] == True:
-        if not isinstance(cli.get_command(ctx, ctx.invoked_subcommand), click.Group):
-            ctx.command.get_command(ctx, ctx.invoked_subcommand).callback = telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(ctx.command.get_command(ctx, ctx.invoked_subcommand).callback)
+
 
 @cli.resultcallback()
 def process_result(*args, **kwargs):
@@ -145,14 +159,12 @@ def process_result(*args, **kwargs):
 @click.option("--raw-descriptions-file", type=str, default="kurse-beschreibungen.csv")
 @click.option("--languages-file", type=str, default="languages.json")
 @click.option("--translations-file", type=str, default="translated_descriptions.json")
-@click.pass_context
-def preprocess_descriptions(ctx, pp_components, translate_policy, raw_descriptions_file, languages_file, translations_file):
-    ctx.obj["pp_components"] = pp_components
-    ctx.obj["translate_policy"] = translate_policy
+@click_pass_add_context
+def preprocess_descriptions(ctx, raw_descriptions_file, languages_file, translations_file):
     raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
     languages = ctx.obj["json_persister"].load(languages_file, "languages", ignore_params=["pp_components", "translate_policy"])
     translations = ctx.obj["json_persister"].load(translations_file, "translations", ignore_params=["pp_components", "translate_policy"])
-    vocab, descriptions = preprocess_descriptions_base(raw_descriptions, pp_components, translate_policy, languages, translations)
+    vocab, descriptions = preprocess_descriptions_base(raw_descriptions, ctx.obj["pp_components"], ctx.obj["translate_policy"], languages, translations)
     ctx.obj["json_persister"].save("preprocessed_descriptions.json", vocab=vocab, descriptions=descriptions, relevant_metainf={"n_samples": len(descriptions)})
 
 
@@ -165,32 +177,26 @@ def preprocess_descriptions(ctx, pp_components, translate_policy, raw_descriptio
 @click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS"))
 @click.option("--translate-policy", type=str, default=lambda: get_setting("TRANSLATE_POLICY"))
 @click.option("--quantification-measure", type=str, default=lambda: get_setting("QUANTIFICATION_MEASURE"))
-@click.pass_context
-def create_spaces(ctx, pp_components, translate_policy, quantification_measure):
+@click_pass_add_context
+def create_spaces(ctx):
     """[group] CLI base to create the spaces from texts"""
-    ctx.obj["pp_components"] = pp_components
-    ctx.obj["translate_policy"] = translate_policy
-    ctx.obj["quantification_measure"] = quantification_measure
-    if ctx.obj["notify_telegram"] == True:
-        if not isinstance(cli.get_command(ctx, ctx.invoked_subcommand), click.Group):
-            ctx.command.get_command(ctx, ctx.invoked_subcommand).callback = telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(ctx.command.get_command(ctx, ctx.invoked_subcommand).callback)
+    pass
 
 
 @create_spaces.command()
-@click.pass_context
+@click_pass_add_context
 def create_dissim_mat(ctx):
-    pp_descriptions = ctx.obj["json_persister"].load(None, "preprocessed_descriptions", by_config=True, ignore_params=["quantification_measure"], loader=pp_descriptions_loader)
+    pp_descriptions = ctx.obj["json_persister"].load(None, "preprocessed_descriptions", ignore_params=["quantification_measure"], loader=pp_descriptions_loader)
     quant_dtm, dissim_mat = create_dissim_mat_base(pp_descriptions, ctx.obj["quantification_measure"])
     ctx.obj["json_persister"].save("dissim_matrix.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat)
 
 
 @create_spaces.command()
 @click.option("--mds-dimensions", type=int, default=lambda: get_setting("MDS_DIMENSIONS"))
-@click.pass_context
-def create_mds_json(ctx, mds_dimensions):
-    ctx.obj["mds_dimensions"] = mds_dimensions
-    dissim_mat = ctx.obj["json_persister"].load(None, "dissim_matrix", by_config=True, ignore_params=["mds_dimensions"], loader=dtm_dissimmat_loader)
-    mds = create_mds_json_base(dissim_mat, mds_dimensions)
+@click_pass_add_context
+def create_mds_json(ctx):
+    dissim_mat = ctx.obj["json_persister"].load(None, "dissim_matrix", ignore_params=["mds_dimensions"], loader=dtm_dissimmat_loader)
+    mds = create_mds_json_base(dissim_mat, ctx.obj["mds_dimensions"])
     ctx.obj["json_persister"].save("mds.json", mds=mds)
 
 ########################################################################################################################
@@ -202,20 +208,14 @@ def create_mds_json(ctx, mds_dimensions):
 @click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS"))
 @click.option("--translate-policy", type=str, default=lambda: get_setting("TRANSLATE_POLICY"))
 @click.option("--extraction-method", type=str, default=lambda: get_setting("EXTRACTION_METHOD"))
-@click.pass_context
-def prepare_candidateterms(ctx, pp_components, translate_policy, extraction_method):
+@click_pass_add_context
+def prepare_candidateterms(ctx):
     """[group] CLI base to extract candidate-terms from texts"""
-    ctx.obj["pp_components"] = pp_components
-    ctx.obj["translate_policy"] = translate_policy
-    ctx.obj["extraction_method"] = extraction_method
-    ctx.obj["pp_descriptions"] = ctx.obj["json_persister"].load(None, "preprocessed_descriptions", by_config=True, loader=pp_descriptions_loader)
-    if ctx.obj["notify_telegram"] == True:
-        if not isinstance(cli.get_command(ctx, ctx.invoked_subcommand), click.Group):
-            ctx.command.get_command(ctx, ctx.invoked_subcommand).callback = telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(ctx.command.get_command(ctx, ctx.invoked_subcommand).callback)
+    ctx.obj["pp_descriptions"] = ctx.obj["json_persister"].load(None, "preprocessed_descriptions", loader=pp_descriptions_loader)
 
 
 @prepare_candidateterms.command()
-@click.pass_context
+@click_pass_add_context
 def extract_candidateterms_stanfordlp(ctx):
     raise NotImplementedError()
     # names, descriptions, _, _ = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_20.json"))
@@ -225,15 +225,15 @@ def extract_candidateterms_stanfordlp(ctx):
 
 @prepare_candidateterms.command()
 @click.option("--faster-keybert/--no-faster-keybert", default=lambda: get_setting("FASTER_KEYBERT"))
-@click.pass_context
-@telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
-def extract_candidateterms_keybert(ctx, faster_keybert):
-    candidateterms = extract_candidateterms_keybert_base(ctx.obj["pp_descriptions"], ctx.obj["extraction_method"], faster_keybert, verbose=ctx.obj["verbose"])
-    ctx.obj["json_persister"].save("candidate_terms.json", candidateterms=candidateterms, relevant_metainf={"faster_keybert": faster_keybert})
+@click_pass_add_context
+# @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
+def extract_candidateterms_keybert(ctx):
+    candidateterms = extract_candidateterms_keybert_base(ctx.obj["pp_descriptions"], ctx.obj["extraction_method"], ctx.obj["faster_keybert"], verbose=ctx.obj["verbose"])
+    ctx.obj["json_persister"].save("candidate_terms.json", candidateterms=candidateterms, relevant_metainf={"faster_keybert": ctx.obj["faster_keybert"]})
 
 
 @prepare_candidateterms.command()
-@click.pass_context
+@click_pass_add_context
 def postprocess_candidateterms(ctx):
     ctx.obj["candidate_terms"] = ctx.obj["json_persister"].load(None, "candidate_terms", by_config=True)
     postprocessed_candidates = postprocess_candidateterms_base(ctx.obj["candidate_terms"], ctx.obj["pp_descriptions"], ctx.obj["extraction_method"])
@@ -241,8 +241,8 @@ def postprocess_candidateterms(ctx):
 
 
 @prepare_candidateterms.command()
-@click.pass_context
-@telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
+@click_pass_add_context
+# @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
 def create_doc_cand_matrix(ctx):
     ctx.obj["postprocessed_candidates"] = ctx.obj["json_persister"].load(None, "postprocessed_candidates", by_config=True)
     doc_term_matrix = create_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"])
@@ -251,18 +251,15 @@ def create_doc_cand_matrix(ctx):
     #TODO the create_doc_cand_matrix_base function used to have a "assert_postprocessed" arguement, can I still do this?!
 
 
-#TODO the click.Choice muss als argument settings.ALL_... haben
 @prepare_candidateterms.command()
 @click.option("--candidate-min-term-count", type=int, default=lambda: get_setting("CANDIDATE_MIN_TERM_COUNT"))
-@click.option("--dcm-quant-measure", type=click.Choice(["count", "binary", "tf-idf"], case_sensitive=False), default=lambda: get_setting("DCM_QUANT_MEASURE"))
-@click.pass_context
-@telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
-def filter_keyphrases(ctx, candidate_min_term_count, dcm_quant_measure):
+@click.option("--dcm-quant-measure", type=click.Choice(ALL_DCM_QUANT_MEASURE, case_sensitive=False), default=lambda: get_setting("DCM_QUANT_MEASURE"))
+@click_pass_add_context
+# @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
+def filter_keyphrases(ctx, candidate_min_term_count):
     # TODO missing options here: `tag-share` (chap. 4.2.1 of [VISR12]), PPMI,
-    ctx.obj["candidate_min_term_count"] = candidate_min_term_count
-    ctx.obj["dcm_quant_measure"] = dcm_quant_measure
-    ctx.obj["doc_cand_matrix"] = ctx.obj["json_persister"].load(None, "doc_cand_matrix", by_config=True, loader=dtm_loader)
-    filtered_dcm = filter_keyphrases_base(ctx.obj["doc_cand_matrix"], ctx.obj["pp_descriptions"], min_term_count=candidate_min_term_count, dcm_quant_measure=dcm_quant_measure, verbose=ctx.obj["verbose"])
+    ctx.obj["doc_cand_matrix"] = ctx.obj["json_persister"].load(None, "doc_cand_matrix", loader=dtm_loader)
+    filtered_dcm = filter_keyphrases_base(ctx.obj["doc_cand_matrix"], ctx.obj["pp_descriptions"], min_term_count=candidate_min_term_count, dcm_quant_measure=ctx.obj["dcm_quant_measure"], verbose=ctx.obj["verbose"])
     ctx.obj["json_persister"].save("filtered_dcm.json", relevant_metainf={"candidate_min_term_count": candidate_min_term_count}, doc_term_matrix=filtered_dcm)
     #TODO: use_n_docs_count as argument
 
@@ -272,39 +269,31 @@ def filter_keyphrases(ctx, candidate_min_term_count, dcm_quant_measure):
 ########################################################################################################################
 # generate-conceptualspace group
 
-#TODO the click.Choice muss als argument settings.ALL_... haben
+
 @cli.group()
 @click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS"))
 @click.option("--translate-policy", type=str, default=lambda: get_setting("TRANSLATE_POLICY"))
 @click.option("--quantification-measure", type=str, default=lambda: get_setting("QUANTIFICATION_MEASURE"))
 @click.option("--mds-dimensions", type=int, default=lambda: get_setting("MDS_DIMENSIONS"))
 @click.option("--extraction-method", type=str, default=lambda: get_setting("EXTRACTION_METHOD"))
-@click.option("--dcm-quant-measure", type=click.Choice(["count", "binary", "tf-idf"], case_sensitive=False), default=lambda: get_setting("DCM_QUANT_MEASURE"))
-@click.pass_context
-def generate_conceptualspace(ctx, pp_components, translate_policy, quantification_measure, mds_dimensions, extraction_method, dcm_quant_measure):
+@click.option("--dcm-quant-measure", type=click.Choice(ALL_DCM_QUANT_MEASURE, case_sensitive=False), default=lambda: get_setting("DCM_QUANT_MEASURE"))
+@click_pass_add_context
+def generate_conceptualspace(ctx):
     """[group] CLI base to create the actual conceptual spaces"""
-    ctx.obj["pp_components"] = pp_components
-    ctx.obj["translate_policy"] = translate_policy
-    ctx.obj["quantification_measure"] = quantification_measure
-    ctx.obj["mds_dimensions"] = mds_dimensions
-    ctx.obj["extraction_method"] = extraction_method
-    ctx.obj["dcm_quant_measure"] = dcm_quant_measure
-    ctx.obj["pp_descriptions"] = ctx.obj["json_persister"].load(None, "preprocessed_descriptions", by_config=True, loader=pp_descriptions_loader, ignore_params=["quantification_measure", "mds_dimensions"])
-    ctx.obj["filtered_dcm"] = ctx.obj["json_persister"].load(None, "filtered_dcm", by_config=True, loader=dtm_loader, ignore_params=["quantification_measure", "mds_dimensions"])
-    ctx.obj["mds"] = ctx.obj["json_persister"].load(None, "mds", by_config=True, loader=lambda **args: args["mds"])
+    ctx.obj["pp_descriptions"] = ctx.obj["json_persister"].load(None, "preprocessed_descriptions", loader=pp_descriptions_loader, ignore_params=["quantification_measure", "mds_dimensions"])
+    ctx.obj["filtered_dcm"] = ctx.obj["json_persister"].load(None, "filtered_dcm", loader=dtm_loader, ignore_params=["quantification_measure", "mds_dimensions"])
+    ctx.obj["mds"] = ctx.obj["json_persister"].load(None, "mds", ignore_params=["extraction_method", "dcm_quant_measure"], loader=lambda **args: args["mds"])
     assert ctx.obj["mds"].embedding_.shape[0] == len(ctx.obj["filtered_dcm"].dtm), f'The Doc-Candidate-Matrix contains {len(ctx.obj["filtered_dcm"].dtm)} items But your MDS has {ctx.obj["mds"].embedding_.shape[0] } descriptions!'
-    if ctx.obj["notify_telegram"] == True:
-        if not isinstance(cli.get_command(ctx, ctx.invoked_subcommand), click.Group):
-            ctx.command.get_command(ctx, ctx.invoked_subcommand).callback = telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(ctx.command.get_command(ctx, ctx.invoked_subcommand).callback)
 
 
 @generate_conceptualspace.command()
-@click.pass_context
+@click_pass_add_context
 def create_candidate_svm(ctx):
     clusters, cluster_directions, kappa_scores, decision_planes = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["mds"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"])
     ctx.obj["json_persister"].save("clusters.json", clusters=clusters, cluster_directions=cluster_directions, kappa_scores=kappa_scores, decision_planes=decision_planes)
     #TODO hier war dcm = DocTermMatrix(json_load(join(ctx.obj["base_dir"], dcm_filename), assert_meta=("CANDIDATE_MIN_TERM_COUNT", "STANFORDNLP_VERSION"))), krieg ich das wieder hin?
 
+#TODO I can do something like autodetect_relevant_params und metainf im json_persister
 #
 #
 # @prepare_candidateterms.command()

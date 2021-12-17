@@ -130,10 +130,8 @@ def handle_translations(languages, translations, names, descriptions, translate_
             elif name in translations:
                 result.append(Description(text=translations[name], lang="en", for_name=name, orig_lang=languages[name], orig_text=desc))
             elif name+" " in translations:
-                print("REMOVE THIS CRAP!!")
                 result.append(Description(text=translations[name+" "], lang="en", for_name=name, orig_lang=languages[name], orig_text=desc))
             elif " "+name in translations:
-                print("REMOVE THIS CRAP!!")
                 result.append(Description(text=translations[" "+name], lang="en", for_name=name, orig_lang=languages[name], orig_text=desc))
             else:
                 missing_names.add(name)

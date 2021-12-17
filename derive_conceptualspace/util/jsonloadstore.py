@@ -5,7 +5,6 @@ import sys
 import subprocess
 from datetime import datetime
 from os.path import isfile, splitext, dirname, join, isdir
-from pprint import pprint
 
 import numpy as np
 import pandas as pd
@@ -195,13 +194,13 @@ class JsonPersister():
                 return correct_cands
 
 
-    def load(self, filename, save_basename, by_config=False, relevant_metainf=None, ignore_params=None, loader=None):
+    def load(self, filename, save_basename, relevant_metainf=None, ignore_params=None, loader=None):
         complete_metainf = {**{k: v() for k, v in self.default_metainf_getters.items()}, **(relevant_metainf or {})}
         ignore_params = ignore_params or []
         subdir = ""
-        if not filename and by_config:
+        if filename is None:
             subdir, _ = self.get_subdir(complete_metainf, ignore_params)
-            assert isdir(join(self.in_dir, subdir)), f"Directory `{join(self.in_dir, subdir)}` doesn't exist!"
+            assert isdir(join(self.in_dir, subdir)), f"Directory `{join(self.in_dir, subdir)}` doesn't exist - Cannot get {save_basename}"
             candidates = self.get_file_by_config(subdir, complete_metainf, save_basename)
             assert len(candidates) == 1, "TODO: still wrong?!"
             filename = candidates[0]
@@ -221,7 +220,7 @@ class JsonPersister():
                 if k in self.loaded_relevant_metainf: assert self.loaded_relevant_metainf[k] == v
                 else: self.loaded_relevant_metainf[k] = v
                 assert k in complete_metainf, f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}`, but you don't have a value for this!"
-                assert complete_metainf[k] in [v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{relevant_metainf[k]}`!"
+                assert complete_metainf[k] in [v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
             obj = tmp["object"] if "object" in tmp else tmp
         if loader is not None:
             obj = loader(**obj)

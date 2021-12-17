@@ -68,29 +68,50 @@ MDS_DEFAULT_BASENAME = "siddata_names_descriptions_mds_"
 ########################################################################################################################
 # KEEP THIS AT THE BOTTOM!
 
-def get_setting(name, default_none=False, silent=False):
-    if os.getenv(ENV_PREFIX+"_"+name):
-        tmp = os.environ[ENV_PREFIX+"_"+name]
+def set_envvar(envvarname, value):
+    if isinstance(value, bool):
+        if value:
+            os.environ[envvarname] = "1"
+        else:
+            os.environ[envvarname + "_FALSE"] = "1"
+    else:
+        os.environ[envvarname] = str(value)
+
+
+def get_envvar(envvarname):
+    if os.getenv(envvarname):
+        tmp = os.environ[envvarname]
         if tmp.lower() == "none":
-            return None
+            return "none"
         elif tmp.isnumeric():
             return int(tmp)
         elif all([i.isdecimal() or i in ".," for i in tmp]):
             return float(tmp)
         return tmp
-    elif os.getenv(ENV_PREFIX+"_"+name+"_FALSE"):
+    elif os.getenv(envvarname+"_FALSE"):
         return False
+    return None
+
+
+def get_setting(name, default_none=False, silent=False, set_env_from_default=False):
+    if get_envvar(ENV_PREFIX+"_"+name) is not None:
+        return get_envvar(ENV_PREFIX+"_"+name) if get_envvar(ENV_PREFIX+"_"+name) != "none" else None
     if "DEFAULT_"+name in globals():
-        if not silent:
+        if not silent and not get_envvar(ENV_PREFIX+"_"+name+"_shutup"):
             print(f"returning setting for {name} from default value: {globals()['DEFAULT_'+name]}")
+            set_envvar(ENV_PREFIX+"_"+name+"_shutup", True)
+        if set_env_from_default:
+            set_envvar(ENV_PREFIX+"_"+name, globals()['DEFAULT_'+name])
         return globals()["DEFAULT_"+name]
     if default_none:
         return None
     assert False, f"Couldn't get setting {name}"
 
+
+
 #TODO now I can overwrite the env-vars both in click and with this, this is stupid argh
 
-#overwriting env-vars
+#overwriting env-vars (OLD WAY)
 from types import ModuleType  # noqa: E402
 _all_settings = {
     k: v
