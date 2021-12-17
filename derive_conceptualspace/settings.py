@@ -6,8 +6,8 @@ from dotenv import load_dotenv
 
 ################ new stuff #################
 
-ALL_PP_COMPONENTS = ["tcsldp", "tcsdp"]
-ALL_TRANSLATE_POLICY = ["translate", "origlan"] # "onlyeng"
+ALL_PP_COMPONENTS = ["tcsldp"] #, "tcsdp"
+ALL_TRANSLATE_POLICY = ["translate"] #, "onlyeng", "origlan"
 ALL_EXTRACTION_METHOD = ["pp_keybert", "keybert"]
 ALL_QUANTIFICATION_MEASURE = ["ppmi", "tf-idf"]
 ALL_MDS_DIMENSIONS = [3, 100]
@@ -20,8 +20,9 @@ for k, v in {k[4:]: v[0] for k,v in dict(locals()).items() if isinstance(v, list
 ENV_PREFIX = "MA"
 
 DEFAULT_DEBUG = False
-DEFAULT_DEBUG_N_ITEMS = 50
-DEFAULT_CANDIDATETERM_MIN_OCCURSIN_DOCS = 25
+DEFAULT_DEBUG_N_ITEMS = 10
+DEFAULT_CANDIDATE_MIN_TERM_COUNT = 25
+DEFAULT_FASTER_KEYBERT = False
 ################ /new stuff #################
 
 
@@ -59,7 +60,7 @@ DEFAULT_DEBUG = False
 DEFAULT_VERBOSE = True
 DEFAULT_RANDOM_SEED = 1
 MONGO_URI = f"mongodb://{os.environ['MONGO_INITDB_ROOT_USERNAME']}:{os.environ['MONGO_INITDB_ROOT_PASSWORD']}@127.0.0.1/?authMechanism=SCRAM-SHA-1"
-# DEFAULT_CANDIDATETERM_MIN_OCCURSIN_DOCS = CANDIDATETERM_MIN_OCCURSIN_DOCS = 25
+# DEFAULT_CANDIDATE_MIN_TERM_COUNT = CANDIDATE_MIN_TERM_COUNT = 25
 
 STANFORDNLP_VERSION = "4.2.2" #whatever's newest at https://stanfordnlp.github.io/CoreNLP/history.html
 MDS_DEFAULT_BASENAME = "siddata_names_descriptions_mds_"
@@ -67,10 +68,12 @@ MDS_DEFAULT_BASENAME = "siddata_names_descriptions_mds_"
 ########################################################################################################################
 # KEEP THIS AT THE BOTTOM!
 
-def get_setting(name, default_none=False):
+def get_setting(name, default_none=False, silent=False):
     if os.getenv(ENV_PREFIX+"_"+name):
         tmp = os.environ[ENV_PREFIX+"_"+name]
-        if tmp.isnumeric():
+        if tmp.lower() == "none":
+            return None
+        elif tmp.isnumeric():
             return int(tmp)
         elif all([i.isdecimal() or i in ".," for i in tmp]):
             return float(tmp)
@@ -78,7 +81,8 @@ def get_setting(name, default_none=False):
     elif os.getenv(ENV_PREFIX+"_"+name+"_FALSE"):
         return False
     if "DEFAULT_"+name in globals():
-        print(f"returning setting for {name} from default value: {globals()['DEFAULT_'+name]}")
+        if not silent:
+            print(f"returning setting for {name} from default value: {globals()['DEFAULT_'+name]}")
         return globals()["DEFAULT_"+name]
     if default_none:
         return None

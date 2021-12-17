@@ -88,6 +88,8 @@ class Description():
 def pp_descriptions_loader(vocab, descriptions):
     descriptions = [Description.fromstruct(i[1][1]) for i in descriptions]
     if get_setting("DEBUG"):
+        assert get_setting("RANDOM_SEED", default_none=True)
+        random.seed(get_setting("RANDOM_SEED"))
         n_items = get_setting("DEBUG_N_ITEMS")
         assert n_items <= len(descriptions), f"The Descriptions-Dataset contains {len(descriptions)} samples, but you want to draw {n_items}!"
         descriptions = [descriptions[key] for key in random.sample(range(len(descriptions)), k=n_items)]

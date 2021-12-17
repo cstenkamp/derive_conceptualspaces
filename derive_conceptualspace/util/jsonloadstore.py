@@ -13,6 +13,8 @@ from sklearn.manifold._mds import MDS
 
 from derive_conceptualspace import settings
 
+flatten = lambda l: [item for sublist in l for item in sublist]
+
 
 class Struct:
     def __init__(self, **entries):
@@ -128,15 +130,21 @@ def json_load(*args, assert_meta=(), return_meta=False, **kwargs):
         return npify_rek(tmp["content"])
     return npify_rek(tmp)
 
+class format_dict(dict):
+    def __missing__(self, key):
+        return "UNDEFINED"
 
 
 class JsonPersister():
-    FORWARD_SETTINGS = ["pp_components", "translate_policy", "extraction_method", "quantification_measure", "space_dims", "dcm_quant_measure"]
-    META_INF = ["n_samples"]
-    DIR_STRUCT = [["n_samples"], ["pp_components", "translate_policy"], ["quantification_measure"], ["mds_dimensions"]]
+    FORWARD_PARAMS = ["pp_components", "translate_policy", "extraction_method", "quantification_measure", "mds_dimensions", "dcm_quant_measure"]
+    FORWARD_META_INF = ["n_samples", "faster_keybert", "candidate_min_term_count"]
+    DIR_STRUCT = ["{pp_components}_{translate_policy}","{quantification_measure}_{mds_dimensions}d", "{extraction_method}_{dcm_quant_measure}"]
+                 #["{n_samples}_samples", "preproc-{pp_components}_{translate_policy}", "{quantification_measure}_{mds_dimensions}dim",]
+    #TODO the FORWARD_META_INF here is not used - I can use it to automatically add this in the save-method if the respective keys are in the ctx.obj, such that I don't need to
+    # explitly specify them when saving!
 
     #TODO a very important thing this should do is not done yet: Er soll von der kompletten historie an required files auch die kompletten meta-infos speichern,
-    # also das was json_store mitspeichert! Das muss alles an loaded_objects hängen!
+    # also das was json_store mitspeichert! Das muss alles an loaded_objects hängen! Ich möchte wissen was der git-commit der jeweiligen benötigten files war!
     # - dementsprechend muss es auch klappen, dass wenn ich in extract_candidates als relevant_metainfo das model anhänge, ich auch in den postprocessed_descriptions
     #   noch sehe was das originale model war! original code:
     #     candidate_terms, meta_inf = json_load(join(base_dir, "candidate_terms.json"), return_meta=True)
@@ -153,32 +161,48 @@ class JsonPersister():
         self.loaded_relevant_params = {}
         self.loaded_relevant_metainf = {}
         self.add_relevantparams_to_filename = add_relevantparams_to_filename
+        self.default_metainf_getters = {}
+
 
     def get_subdir(self, relevant_metainf, ignore_params=None):
-        dirstruct = [[self.ctx.obj.get(i) or relevant_metainf.get(i) for i in dir if i not in (ignore_params or [])] for dir in self.DIR_STRUCT]
-        return os.sep.join(["_".join([str(i) for i in j if i]) for j in dirstruct if j and any(i is not None for i in j)])
+        if not (self.DIR_STRUCT and all(i for i in self.DIR_STRUCT)):
+            return "", []
+        di = format_dict({**{k:v for k,v in self.ctx.obj.items() if k not in (ignore_params or [])}, **relevant_metainf})
+        dirstruct = [d.format_map(di) for d in self.DIR_STRUCT]
+        fulfilled_dirs = len(dirstruct) if not (tmp := [i for i, el in enumerate(dirstruct) if "UNDEFINED" in el]) else tmp[0]
+        used_params = [k for k in di.keys() if "{"+k+"}" in "".join(self.DIR_STRUCT[:fulfilled_dirs])] #"verbrauchte", damit die nicht mehr zum filename hinzugefügt werden müssen
+        return os.sep.join(dirstruct[:fulfilled_dirs]), used_params
+
+
+    def get_file_by_config(self, subdir, relevant_metainf, save_basename):
+        candidates = [join(path, name)[len(join(self.in_dir, subdir)) + 1:] for path, subdirs, files in
+                      os.walk(join(self.in_dir, subdir)) for name in files if name.startswith(save_basename)]
+        assert candidates, f"No Candidate for {save_basename}! Subdir: {subdir}"
+        if len(candidates) == 1:
+            return candidates
+        elif len(candidates) > 1:
+            if all([splitext(i)[1] == ".json" for i in candidates]):
+                correct_cands = []
+                for cand in candidates:
+                    tmp = json_load(join(self.in_dir, subdir, cand))
+                    if all(tmp.get("relevant_metainf", {}).get(k) == v for k, v in
+                           {**self.loaded_relevant_metainf, **relevant_metainf}.items()) and \
+                            all(tmp.get("relevant_params", {}).get(k) == v for k, v in
+                                self.loaded_relevant_params.items()) and \
+                            all(self.ctx.obj.get(k) == tmp["relevant_params"][k] for k in
+                                set(self.FORWARD_PARAMS) & set(tmp.get("relevant_params", {}).keys())):
+                        correct_cands.append(cand)
+                return correct_cands
+
 
     def load(self, filename, save_basename, by_config=False, relevant_metainf=None, ignore_params=None, loader=None):
-        #TODO er muss noch die meta-infos mitladen und speichern!!!
-        #TODO und die previous relevant params forwarden
-        relevant_metainf = relevant_metainf or {}
+        complete_metainf = {**{k: v() for k, v in self.default_metainf_getters.items()}, **(relevant_metainf or {})}
         ignore_params = ignore_params or []
         subdir = ""
         if not filename and by_config:
-            subdir = self.get_subdir(relevant_metainf, ignore_params)
-            assert isdir(join(self.in_dir, subdir))
-            candidates = [join(path, name)[len(join(self.in_dir, subdir))+1:] for path, subdirs, files in os.walk(join(self.in_dir, subdir)) for name in files if name.startswith(save_basename)]
-            assert candidates, f"No Candidate for {save_basename}! Subdir: {subdir}"
-            if len(candidates) > 1:
-                if all([splitext(i)[1] == ".json" for i in candidates]):
-                    correct_cands = []
-                    for cand in candidates:
-                        tmp = json_load(join(self.in_dir, subdir, cand))
-                        if all(tmp.get("relevant_metainf", {}).get(k) == v for k, v in {**self.loaded_relevant_metainf, **relevant_metainf}.items()) and \
-                          all(tmp.get("relevant_params", {}).get(k) == v for k, v in self.loaded_relevant_params.items()) and \
-                          all(self.ctx.obj.get(k) == tmp["relevant_params"][k] for k in set(self.FORWARD_SETTINGS) & set(tmp.get("relevant_params", {}).keys())):
-                            correct_cands.append(cand)
-                    candidates = correct_cands
+            subdir, _ = self.get_subdir(complete_metainf, ignore_params)
+            assert isdir(join(self.in_dir, subdir)), f"Directory `{join(self.in_dir, subdir)}` doesn't exist!"
+            candidates = self.get_file_by_config(subdir, complete_metainf, save_basename)
             assert len(candidates) == 1, "TODO: still wrong?!"
             filename = candidates[0]
         if splitext(filename)[1] == ".csv":
@@ -196,6 +220,8 @@ class JsonPersister():
             for k, v in tmp.get("relevant_metainf", {}).items():
                 if k in self.loaded_relevant_metainf: assert self.loaded_relevant_metainf[k] == v
                 else: self.loaded_relevant_metainf[k] = v
+                assert k in complete_metainf, f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}`, but you don't have a value for this!"
+                assert complete_metainf[k] in [v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{relevant_metainf[k]}`!"
             obj = tmp["object"] if "object" in tmp else tmp
         if loader is not None:
             obj = loader(**obj)
@@ -207,20 +233,21 @@ class JsonPersister():
         return obj
 
     def save(self, basename, /, relevant_params=None, relevant_metainf=None, **kwargs):
-        relevant_params = relevant_params or []
-        relevant_metainf = relevant_metainf or {}
         basename, ext = splitext(basename)
         filename = basename
+        if relevant_params:
+            relevant_params += self.loaded_relevant_params
+            assert len(set(relevant_params)) == len(relevant_params)
+        else:
+            relevant_params = [i for i in self.FORWARD_PARAMS if i in self.ctx.obj]
+        relevant_metainf = {**self.loaded_relevant_metainf, **(relevant_metainf or {})}
+        subdir, used_args = self.get_subdir(relevant_metainf)
+        if self.add_relevantparams_to_filename and [i for i in relevant_params if i not in used_args]:
+            filename += "_" + "_".join([str(self.ctx.obj[i]) for i in [i for i in relevant_params if i not in used_args]])
         loaded_files = {k:[None, v[1], [i if i != "this" else basename for i in v[2]]] for k,v in self.loaded_objects.items()}
-        if self.add_relevantparams_to_filename and relevant_params:
-            filename += "_" + "_".join([str(self.ctx.obj[i]) for i in relevant_params])
-        relevant_metainf = {**self.loaded_relevant_metainf, **relevant_metainf}
         assert all(self.ctx.obj[v] == k for v, k in self.loaded_relevant_params.items())
-        relevant_params += self.loaded_relevant_params
-        if self.DIR_STRUCT and all(i for i in self.DIR_STRUCT):
-            subdir = self.get_subdir(relevant_metainf)
         os.makedirs(join(self.out_dir, subdir), exist_ok=True)
         obj = {"loaded_files": loaded_files, "relevant_params": {i: self.ctx.obj[i] for i in relevant_params}, "relevant_metainf": relevant_metainf, "basename": basename, "object": kwargs}
         name = json_dump(obj, join(self.out_dir, subdir, filename+ext))
-        print(f"Saved under {name}")
+        print(f"Saved under {name}. Relevant Params: {relevant_params}. Relevant Meta-Inf: {relevant_metainf}")
         return name

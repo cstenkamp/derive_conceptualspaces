@@ -20,7 +20,7 @@ def create_candidate_svms(dcm, mds, pp_descriptions, verbose):
     decision_planes = {}
     for term, exist_indices in tqdm(dcm.term_existinds(use_index=False).items()):
         if not get_setting("DEBUG"):
-            assert len(exist_indices) >= get_setting("CANDIDATETERM_MIN_OCCURSIN_DOCS") #TODO this is relevant-metainf!!
+            assert len(exist_indices) >= get_setting("CANDIDATE_MIN_TERM_COUNT") #TODO this is relevant-metainf!!
         cand_mets, decision_plane = create_candidate_svm(mds, term, exist_indices, descriptions)
         metrics[term] = cand_mets
         decision_planes[term] = decision_plane

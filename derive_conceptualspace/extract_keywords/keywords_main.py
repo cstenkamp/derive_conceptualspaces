@@ -25,7 +25,16 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 ########################################################################################################################
 ########################################################################################################################
 
-def extract_candidateterms_keybert(pp_descriptions, faster_keybert=False, verbose=False):
+def extract_candidateterms_keybert(pp_descriptions, extraction_method, faster_keybert=False, verbose=False):
+    if extraction_method == "keybert":
+        candidateterms, model_name = extract_candidateterms_keybert_nopp(pp_descriptions, faster_keybert, verbose=verbose)
+    elif extraction_method == "pp_keybert":
+        candidateterms, model_name = extract_candidateterms_keybert_preprocessed(pp_descriptions, faster_keybert)
+    else:
+        raise NotImplementedError()
+    return candidateterms
+
+def extract_candidateterms_keybert_nopp(pp_descriptions, faster_keybert=False, verbose=False):
     vocab, descriptions = pp_descriptions.values()
     extractor = KeyBertExtractor(False, faster=faster_keybert)
     candidateterms = []

@@ -1,24 +1,45 @@
-from pathlib import Path
 import os
-from os.path import join as pjoin
+from os.path import join, dirname, basename, abspath
+import sys
 
-from derive_conceptualspace.extract_keywords.keywords_main import (
-    extract_candidateterms_keybert_preprocessed as extract_candidateterms_keybert_preprocessed_base,
+if abspath(join(dirname(__file__), "../..")) not in sys.path:
+    sys.path.append(abspath(join(dirname(__file__), "../..")))
+
+from misc_util.pretty_print import pretty_print as print
+from derive_conceptualspace.util.desc_object import pp_descriptions_loader
+from derive_conceptualspace.create_spaces.translate_descriptions import (
+    translate_descriptions as translate_descriptions_base,
+    count_translations as count_translations_base
+)
+from derive_conceptualspace.extract_keywords.postprocess_candidates import (
     postprocess_candidateterms as postprocess_candidateterms_base,
+)
+from derive_conceptualspace.extract_keywords.keywords_main import (
+    extract_candidateterms_keybert as extract_candidateterms_keybert_base,
     create_doc_cand_matrix as create_doc_cand_matrix_base,
     filter_keyphrases as filter_keyphrases_base,
 )
-from derive_conceptualspace.util.jsonloadstore import Struct, json_dump
-from derive_conceptualspace.settings import ORIGLAN, ONLYENG, TRANSL, get_setting
 from derive_conceptualspace.create_spaces.spaces_main import (
+    preprocess_descriptions_full as preprocess_descriptions_base,
     create_dissim_mat as create_dissim_mat_base,
-    create_mds_json as create_mds_json_base,
-    preprocess_descriptions_full as preprocess_descriptions_full_base, load_preprocessed_descriptions,
+    create_mds_json as create_mds_json_base
 )
 from derive_conceptualspace.semantic_directions.create_candidate_svm import (
     create_candidate_svms as create_candidate_svms_base
 )
+from derive_conceptualspace.util.dtm_object import DocTermMatrix, dtm_dissimmat_loader, dtm_loader
+
+from snakemake.io import expand
+
+from derive_conceptualspace.cli.create_siddata_dataset import setup_json_persister, set_debug
+from derive_conceptualspace.settings import get_setting, ALL_PP_COMPONENTS, ALL_TRANSLATE_POLICY, ENV_PREFIX
+from derive_conceptualspace.create_spaces.spaces_main import (
+    preprocess_descriptions_full as preprocess_descriptions_full_base,
+)
+from derive_conceptualspace.util.desc_object import pp_descriptions_loader
 from misc_util.telegram_notifier import telegram_notify
+
+
 
 if os.getenv("MA_SMK_TGRAM"):
     print("Telegaram-Notifications ON.")
@@ -39,7 +60,6 @@ DOC_CAND_MATRIX_VALS = ["count", "tf-idf"]
 
 #how-to plot graph (KEEP ME): `PYTHONPATH=. snakemake --cores 1 -np --directory /home/chris/Documents/UNI_neu/Masterarbeit/DATA_CLONE_3/  --dag | grep -A99999 "digraph" | dot -Tsvg > dag.svg`
 #run as eg. `MA_DEBUG=1 PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory /home/chris/Documents/UNI_neu/Masterarbeit/DATA_CLONE_3/`
-
 #run as eg.  PYTHONPATH=/home/chris/Documents/UNI_neu/Masterarbeit/Derive_Conceptualspace snakemake --cores 1 -p "siddata_names_descriptions_mds_3.json" --directory /home/chris/Documents/UNI_neu/Masterarbeit/DATA_CLONE/
 #  crsync /home/chris/Documents/UNI_neu/Masterarbeit/DATA_CLONE/ etlpipelines:~/data --exclude .snakemake
 
@@ -60,237 +80,267 @@ DOC_CAND_MATRIX_VALS = ["count", "tf-idf"]
 #     base, = glob_wildcards(pjoin(VIDEO_BASE, "{base}.mp4"))
 #     return [fn + ext for fn in base]
 
+class Context():
+    obj = {"base_dir": os.getcwd(), "add_relevantparams_to_filename": True, "verbose": False}
+    auto_envvar_prefix = ENV_PREFIX
+
+
+ctx = Context()
+json_persister = setup_json_persister(ctx)
+json_persister.DIR_STRUCT = ["{pp_components}_{translate_policy}","{quantification_measure}_{mds_dimensions}d", "{extraction_method}_{dcm_quant_measure}"]
+set_debug(ctx)
+
+def add_to_ctx(wildcards, ctx):
+    for k, v in wildcards.items():
+        if isinstance(v, str) and v.isnumeric():
+            ctx.obj[k] = int(v)
+        else:
+            ctx.obj[k] = v
 
 rule all:
+    # input:
+    #     expand("mds_{mds_dims}d_{quant_meas}.json", quant_meas=QUANTIFICATION_MEASURES, mds_dims=MDS_DIMENSIONS),
+    #     expand("doc_cand_matrix_{matrix_val}.json", matrix_val=DOC_CAND_MATRIX_VALS),
     input:
-        expand("mds_{mds_dims}d_{quant_meas}.json", quant_meas=QUANTIFICATION_MEASURES, mds_dims=MDS_DIMENSIONS),
-        expand("doc_cand_matrix_{matrix_val}.json", matrix_val=DOC_CAND_MATRIX_VALS),
+        expand("{pp_components}_{translate_policy}/preprocessed_descriptions.json", pp_components=ALL_PP_COMPONENTS, translate_policy=ALL_TRANSLATE_POLICY)
 
 
 rule preprocess_descriptions:
     input:
-        "kurse-beschreibungen.csv",
-        "translated_descriptions.json"
+        raw_descriptions_file = "kurse-beschreibungen.csv",
+        translations_file = "translated_descriptions.json",
+        languages_file = "languages.json"
     output:
-        "preprocessed_descriptions.json"
+        "{pp_components}_{translate_policy}/preprocessed_descriptions.json"
     threads: 1
-    params:
-        translate_policy=TRANSL,
-        pp_components=dict(
-            sent_tokenize=True,
-            convert_lower=True,
-            remove_stopwords=True,
-            lemmatize=True,
-            remove_diacritics=True,
-            remove_punctuation=True,
-        )
     run:
-        vocab, descriptions = preprocess_descriptions_full_base(os.getcwd(), params.translate_policy, params.pp_components)
-        descriptions = [Struct(**desc.__dict__) for desc in descriptions]
-        json_dump({"vocab": vocab, "descriptions": descriptions, "pp_components": params.pp_components}, output)
+        add_to_ctx(wildcards, ctx)
+        raw_descriptions = json_persister.load(input.raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
+        languages = json_persister.load(input.languages_file, "languages", ignore_params=["pp_components", "translate_policy"])
+        translations = json_persister.load(input.translations_file, "translations", ignore_params=["pp_components", "translate_policy"])
+        vocab, descriptions = preprocess_descriptions_full_base(raw_descriptions, wildcards.pp_components, wildcards.translate_policy, languages, translations)
+        json_persister.save("preprocessed_descriptions.json", vocab=vocab, descriptions=descriptions, relevant_metainf={"n_samples": len(descriptions)})
 
 
 rule create_dissim_mat:
     input:
-        descs="preprocessed_descriptions.json"
+        descs="{pp_components}_{translate_policy}/preprocessed_descriptions.json"
     output:
-        "dissim_matrix_{quantification_measure}.json"
+        "{pp_components}_{translate_policy}/dissim_matrix_{quantification_measure}.json"
     threads: 1
     run:
-        quantification, dissim_mat, pp_components = create_dissim_mat_base(os.getcwd(), input.descs, wildcards.quantification_measure)
-        quantification = Struct(**{k:v for k,v in quantification.__dict__.items() if not k.startswith("_") and k not in ["csr_matrix", "doc_freqs", "reverse_term_dict"]})
-        json_dump({"quantification": quantification, "dissim_mat": dissim_mat, "pp_components": pp_components, "quant_measure": wildcards.quantification_measure}, output)
+        add_to_ctx(wildcards, ctx)
+        ctx.obj["pp_descriptions"] = json_persister.load(None, "preprocessed_descriptions", by_config=True, ignore_params=["quantification_measure"], loader=pp_descriptions_loader)
+        quant_dtm, dissim_mat = create_dissim_mat_base(ctx.obj["pp_descriptions"], ctx.obj["quantification_measure"])
+        json_persister.save("dissim_matrix.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat)
 
 
 rule create_mds:
     input:
-        dissim_mat="dissim_matrix_{quantification_measure}.json"
+        dissim_mat="{pp_components}_{translate_policy}/dissim_matrix_{quantification_measure}.json",
     output:
-        "mds_{mds_dims}d_{quantification_measure}.json"
+        "{pp_components}_{translate_policy}/{quantification_measure}_{mds_dimensions}d/mds.json"
     threads: 1
     run:
-        mds = create_mds_json_base(os.getcwd(), input.dissim_mat, int(wildcards.mds_dims))
-        mds["mds"] = Struct(**mds["mds"].__dict__)
-        json_dump(mds, input.dissim_mat.replace("dissim_matrix", "mds_"+wildcards.mds_dims+"d"))
+        add_to_ctx(wildcards, ctx)
+        dissim_mat = json_persister.load(input.dissim_mat, "dissim_matrix", loader=dtm_dissimmat_loader)
+        mds = create_mds_json_base(dissim_mat, ctx.obj["mds_dimensions"])
+        json_persister.save("mds.json", mds=mds)
 
 
-rule create_candidate_terms_pp:
+
+rule extract_candidate_terms:
     input:
-        descs = "preprocessed_descriptions.json"
+        descs="{pp_components}_{translate_policy}/preprocessed_descriptions.json"
     output:
-        "candidate_terms.json"
+        "{pp_components}_{translate_policy}/candidate_terms_{extraction_method}.json"
     threads: 1
+    params:
+        faster_keybert=get_setting("FASTER_KEYBERT")
     run:
-        vocab, descriptions, pp_components = load_preprocessed_descriptions(input.descs)
-        candidates, model_name = extract_candidateterms_keybert_preprocessed_base(vocab, descriptions, faster_keybert=False)
-        res = {"model": model_name, "candidate_terms":candidates, "pp_txt_for_cands": True, "pp_components": pp_components, "pp_descriptions_filename": input.descs}
-        json_dump(res, "candidate_terms.json")
+        add_to_ctx(wildcards,ctx)
+        ctx.obj["pp_descriptions"] = json_persister.load(input.descs, "preprocessed_descriptions", loader=pp_descriptions_loader)
+        candidateterms = extract_candidateterms_keybert_base(ctx.obj["pp_descriptions"], ctx.obj["extraction_method"], params.faster_keybert, verbose=ctx.obj["verbose"])
+        json_persister.save("candidate_terms.json", candidateterms=candidateterms, relevant_metainf={"faster_keybert": params.faster_keybert})
+
 
 
 rule postprocess_candidateterms:
     input:
-        descs = "preprocessed_descriptions.json",
-        cand_terms = "candidate_terms.json"
+        descs="{pp_components}_{translate_policy}/preprocessed_descriptions.json",
+        cand_terms="{pp_components}_{translate_policy}/candidate_terms_{extraction_method}.json"
     output:
-        "candidate_terms_postprocessed.json"
+        "{pp_components}_{translate_policy}/postprocessed_candidates_{extraction_method}.json"
     threads: 1
     run:
-        model, candidate_terms = postprocess_candidateterms_base(os.getcwd(), input.descs)
-        candidate_terms["postprocessed"] = True
-        json_dump(candidate_terms, pjoin(os.getcwd(), "candidate_terms_postprocessed.json"))
+        add_to_ctx(wildcards, ctx)
+        ctx.obj["pp_descriptions"] = json_persister.load(input.descs, "preprocessed_descriptions", loader=pp_descriptions_loader)
+        ctx.obj["candidate_terms"] = json_persister.load(input.cand_terms, "candidate_terms")
+        postprocessed_candidates = postprocess_candidateterms_base(ctx.obj["candidate_terms"], ctx.obj["pp_descriptions"], ctx.obj["extraction_method"])
+        json_persister.save("postprocessed_candidates.json", postprocessed_candidates=postprocessed_candidates)
 
 
 rule create_doc_cand_matrix:
     input:
-        descs = "preprocessed_descriptions.json",
-        pp_cand_terms = "candidate_terms_postprocessed.json"
+        descs="{pp_components}_{translate_policy}/preprocessed_descriptions.json",
+        postprocessed_candidates="{pp_components}_{translate_policy}/postprocessed_candidates_{extraction_method}.json"
     output:
-        "doc_cand_matrix.json"
+        "{pp_components}_{translate_policy}/doc_cand_matrix_{extraction_method}.json"
     threads: 1
     run:
-        doc_term_matrix = create_doc_cand_matrix_base(os.getcwd(), input.descs, input.pp_cand_terms)
-        json_dump({"all_terms": doc_term_matrix.all_terms, "doc_term_matrix": doc_term_matrix.dtm}, pjoin(os.getcwd(), "doc_cand_matrix.json"))
+        add_to_ctx(wildcards,ctx)
+        ctx.obj["pp_descriptions"] = json_persister.load(input.descs, "preprocessed_descriptions", loader=pp_descriptions_loader)
+        ctx.obj["postprocessed_candidates"] = json_persister.load(input.postprocessed_candidates, "postprocessed_candidates")
+        doc_term_matrix = create_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"])
+        json_persister.save("doc_cand_matrix.json", doc_term_matrix=doc_term_matrix)
 
 
 rule filter_keyphrases:
     input:
-        descs = "preprocessed_descriptions.json",
-        doc_cand_matrix = "doc_cand_matrix.json"
+        descs="{pp_components}_{translate_policy}/preprocessed_descriptions.json",
+        doc_cand_matrix="{pp_components}_{translate_policy}/doc_cand_matrix_{extraction_method}.json"
     output:
-        "doc_cand_matrix_{matrix_val}.json"
+        "{pp_components}_{translate_policy}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json"
     threads: 1
     params:
-        min_term_count=get_setting("CANDIDATETERM_MIN_OCCURSIN_DOCS"),
-        matrix_val="count"
+        candidate_min_term_count=get_setting("CANDIDATE_MIN_TERM_COUNT"),
     run:
-        doc_term_matrix, all_terms = filter_keyphrases_base(os.getcwd(),  input.descs, min_term_count=params.min_term_count, matrix_val=params.matrix_val)
-        json_dump({"all_terms": all_terms, "doc_term_matrix": doc_term_matrix}, pjoin(os.getcwd(), "doc_cand_matrix_"+params.matrix_val+".json"))
-
-
-# rule create_candidate_svm:
-#     input:
-#         descs = "preprocessed_descriptions.json",
-#         doc_cand_matrix = "doc_cand_matrix.json"
-#     output:
-#         "candidate_terms_postprocessed.json"
-#     threads: 1
-#     params:
-#         min_term_count=get_setting("CANDIDATETERM_MIN_OCCURSIN_DOCS"),
-#         matrix_val="count"
-#     run:
-#         doc_term_matrix, all_terms = filter_keyphrases_base(os.getcwd(),  input.descs, min_term_count=params.min_term_count, matrix_val=params.matrix_val)
-#         json_dump({"all_terms": all_terms, "doc_term_matrix": doc_term_matrix}, pjoin(os.getcwd(), f"doc_cand_matrix_{params.matrix_val}.json"))
-#
+        add_to_ctx(wildcards,ctx)
+        add_to_ctx(params,ctx)   #TODO functions die die inputs übergeben bekommen und die automatisch zum ctx.obj hinzufügen
+        ctx.obj["pp_descriptions"] = json_persister.load(input.descs, "preprocessed_descriptions", loader=pp_descriptions_loader)
+        ctx.obj["doc_cand_matrix"] = json_persister.load(input.doc_cand_matrix, "doc_cand_matrix", loader=dtm_loader)
+        filtered_dcm = filter_keyphrases_base(ctx.obj["doc_cand_matrix"], ctx.obj["pp_descriptions"], min_term_count=ctx.obj["candidate_min_term_count"], dcm_quant_measure=ctx.obj["dcm_quant_measure"], verbose=ctx.obj["verbose"])
+        json_persister.save("filtered_dcm.json", relevant_metainf={"candidate_min_term_count": ctx.obj["candidate_min_term_count"]}, doc_term_matrix=filtered_dcm)
 
 
 
-
-#
-# checkpoint create_mds:
-#     "Produce the Siddata Dataset from the kurse-beschreibungen CSV"
-#     input:
-#         "kurse-beschreibungen.csv"
-#     output:
-#         "siddata_names_descriptions_mds_{n_dims}.json"
-#     run:
-#         print(f"running pipeline for {wildcards.n_dims} dims")
-#         create_mds(f"siddata_names_descriptions_mds_{wildcards.n_dims}.json", wildcards.n_dims, from_csv_path=".", to_data_path=".")
-#
-#
-# def input_for_translate_descriptions(wildcards):
-#     try:
-#         return next(Path(".").glob("siddata_names_descriptions_mds_*.json"))
-#     except StopIteration as err:
-#         raise Exception("No n_dims JSON files found") from err
-#
-# rule translate_descriptions:
-#     input:
-#         input_for_translate_descriptions
-#     output:
-#         "translated_descriptions.json",
-#     shell:
-#         "echo {input} &&"
-#         "touch {output}"
-#
-#
-# rule create_desc15style_mds:
-#     input:
-#         "translated_descriptions.json", #TODO ists ja nur bei translate_policy=TRANSL
-#         "siddata_names_descriptions_mds_{n_dims}.json"
-#     output:
-#         # "languages.json",  #cannot have multiple outputs, only one of which with wildcards :/
-#         "d{n_dims}/courses{n_dims}.mds",
-#         # "courseNames.txt" #TODO "course" noch als variable?
-#     run:
-#         create_descstyle_dataset(wildcards.n_dims, "courses", from_path=".", to_path=".", translate_policy=ORIGLAN)
-#
-#
-# rule extract_candidateterms_keybert:
-#     input:
-#         input_for_translate_descriptions
-#     output:
-#         "candidate_terms.json"
-#     run:
-#         extract_candidateterms_keybert.callback(".")
-#
-#
-# rule postprocess_candidateterms:
-#     input:
-#         input_for_translate_descriptions,
-#         "candidate_terms.json"
-#     output:
-#         "candidate_terms_postprocessed.json"
-#     run:
-#         postprocess_candidateterms.callback(".", postfix="_postprocessed")
-#
-#
-# rule create_doc_term_matrix:
-#     input:
-#         input_for_translate_descriptions,
-#         "candidate_terms_postprocessed.json"
-#     output:
-#         "doc_term_matrix.json"
-#     run:
-#         create_doc_term_matrix.callback(".")
-#
-#
-#
-#
-
-
-# rule get_gcn_weights:
-#     output:
-#         directory(GCN_WEIGHTS)
-#     shell:
-#         "mkdir -p " + GCN_WEIGHTS + " && " +
-#         "cd " + GCN_WEIGHTS + " && " +
-#         "wget http://guanghan.info/download/Data/LightTrack/weights/GCN.zip && " +
-#         "unzip GCN.zip"
-#
-# rule tmpl_gcn_config:
-#     input:
-#         GCN_WEIGHTS
-#     output:
-#         GCN_CONFIG
-#     run:
-#         open(GCN_CONFIG, "w").write(
-#             GCN_INFERNENCE_YAML.format(
-#                 gcn_weights=pjoin(os.getcwd(), GCN_WEIGHTS, "GCN/epoch210_model.pt")
-#             )
-#         )
-#
-# rule drawsticks:
-#     "Produces stick videos"
-#     input:
-#         skels = pjoin(DUMP_BASE, "{base}.{var}.h5"),
-#         video = pjoin(VIDEO_BASE, "{base}.mp4")
-#     output:
-#         pjoin(DUMP_BASE, "{base}.{var}.sticks.mp4")
-#     shell:
-#         "python -m skelshop --ffprobe-bin {FFPROBE_BIN} drawsticks " +
-#         "{input.skels} {input.video} {output}"
+rule create_candidate_svm:
+    input:
+        descs="{pp_components}_{translate_policy}/preprocessed_descriptions.json",
+        filtered_dcm="{pp_components}_{translate_policy}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json",
+        mds="{pp_components}_{translate_policy}/{quantification_measure}_{mds_dimensions}d/mds.json"
+    output:
+        "{pp_components}_{translate_policy}/{quantification_measure}_{mds_dimensions}d/{extraction_method}_{dcm_quant_measure}/clusters.json"
+    threads: 1
+    run:
+        add_to_ctx(wildcards,ctx)
+        ctx.obj["pp_descriptions"] = json_persister.load(input.descs, "preprocessed_descriptions", loader=pp_descriptions_loader)
+        ctx.obj["filtered_dcm"] = json_persister.load(input.filtered_dcm, "filtered_dcm", loader=dtm_loader)
+        ctx.obj["mds"] = json_persister.load(input.mds, "mds", loader=lambda **args: args["mds"])
+        clusters, cluster_directions, kappa_scores, decision_planes = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["mds"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"])
+        json_persister.save("clusters.json", clusters=clusters, cluster_directions=cluster_directions, kappa_scores=kappa_scores, decision_planes=decision_planes)
 
 
 
-
-
+#
+#
+#
+# #
+# # checkpoint create_mds:
+# #     "Produce the Siddata Dataset from the kurse-beschreibungen CSV"
+# #     input:
+# #         "kurse-beschreibungen.csv"
+# #     output:
+# #         "siddata_names_descriptions_mds_{n_dims}.json"
+# #     run:
+# #         print(f"running pipeline for {wildcards.n_dims} dims")
+# #         create_mds(f"siddata_names_descriptions_mds_{wildcards.n_dims}.json", wildcards.n_dims, from_csv_path=".", to_data_path=".")
+# #
+# #
+# # def input_for_translate_descriptions(wildcards):
+# #     try:
+# #         return next(Path(".").glob("siddata_names_descriptions_mds_*.json"))
+# #     except StopIteration as err:
+# #         raise Exception("No n_dims JSON files found") from err
+# #
+# # rule translate_descriptions:
+# #     input:
+# #         input_for_translate_descriptions
+# #     output:
+# #         "translated_descriptions.json",
+# #     shell:
+# #         "echo {input} &&"
+# #         "touch {output}"
+# #
+# #
+# # rule create_desc15style_mds:
+# #     input:
+# #         "translated_descriptions.json", #TODO ists ja nur bei translate_policy=TRANSL
+# #         "siddata_names_descriptions_mds_{n_dims}.json"
+# #     output:
+# #         # "languages.json",  #cannot have multiple outputs, only one of which with wildcards :/
+# #         "d{n_dims}/courses{n_dims}.mds",
+# #         # "courseNames.txt" #TODO "course" noch als variable?
+# #     run:
+# #         create_descstyle_dataset(wildcards.n_dims, "courses", from_path=".", to_path=".", translate_policy=ORIGLAN)
+# #
+# #
+# # rule extract_candidateterms_keybert:
+# #     input:
+# #         input_for_translate_descriptions
+# #     output:
+# #         "candidate_terms.json"
+# #     run:
+# #         extract_candidateterms_keybert.callback(".")
+# #
+# #
+# # rule postprocess_candidateterms:
+# #     input:
+# #         input_for_translate_descriptions,
+# #         "candidate_terms.json"
+# #     output:
+# #         "candidate_terms_postprocessed.json"
+# #     run:
+# #         postprocess_candidateterms.callback(".", postfix="_postprocessed")
+# #
+# #
+# # rule create_doc_term_matrix:
+# #     input:
+# #         input_for_translate_descriptions,
+# #         "candidate_terms_postprocessed.json"
+# #     output:
+# #         "doc_term_matrix.json"
+# #     run:
+# #         create_doc_term_matrix.callback(".")
+# #
+# #
+# #
+# #
+#
+#
+# # rule get_gcn_weights:
+# #     output:
+# #         directory(GCN_WEIGHTS)
+# #     shell:
+# #         "mkdir -p " + GCN_WEIGHTS + " && " +
+# #         "cd " + GCN_WEIGHTS + " && " +
+# #         "wget http://guanghan.info/download/Data/LightTrack/weights/GCN.zip && " +
+# #         "unzip GCN.zip"
+# #
+# # rule tmpl_gcn_config:
+# #     input:
+# #         GCN_WEIGHTS
+# #     output:
+# #         GCN_CONFIG
+# #     run:
+# #         open(GCN_CONFIG, "w").write(
+# #             GCN_INFERNENCE_YAML.format(
+# #                 gcn_weights=pjoin(os.getcwd(), GCN_WEIGHTS, "GCN/epoch210_model.pt")
+# #             )
+# #         )
+# #
+# # rule drawsticks:
+# #     "Produces stick videos"
+# #     input:
+# #         skels = pjoin(DUMP_BASE, "{base}.{var}.h5"),
+# #         video = pjoin(VIDEO_BASE, "{base}.mp4")
+# #     output:
+# #         pjoin(DUMP_BASE, "{base}.{var}.sticks.mp4")
+# #     shell:
+# #         "python -m skelshop --ffprobe-bin {FFPROBE_BIN} drawsticks " +
+# #         "{input.skels} {input.video} {output}"
+#
+#
+#
+#
+#
