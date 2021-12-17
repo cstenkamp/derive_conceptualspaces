@@ -69,7 +69,9 @@ def loadstore_settings_envvars(ctx, use_auto_envvar_prefix=False):
 
 def setup_json_persister(ctx):
     json_persister = JsonPersister(ctx.obj["base_dir"], ctx.obj["base_dir"], ctx, ctx.obj.get("add_relevantparams_to_filename", True))
-    json_persister.default_metainf_getters = {"n_samples": lambda: get_setting("DEBUG_N_ITEMS"), "faster_keybert": lambda: get_setting("FASTER_KEYBERT"), "candidate_min_term_count": lambda: get_setting("CANDIDATE_MIN_TERM_COUNT")}
+    json_persister.default_metainf_getters = {"n_samples": lambda: get_setting("DEBUG_N_ITEMS", silent=True) if get_setting("DEBUG", silent=True) else 7588, #TODO don't hard-code this!
+                                              "faster_keybert": lambda: get_setting("FASTER_KEYBERT", silent=True),
+                                              "candidate_min_term_count": lambda: get_setting("CANDIDATE_MIN_TERM_COUNT", silent=True)}
     return json_persister
 
 
