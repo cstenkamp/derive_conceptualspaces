@@ -1,4 +1,5 @@
 """https://stackoverflow.com/a/47626762/5122790"""
+import inspect
 import json
 import os
 import sys
@@ -14,6 +15,10 @@ from derive_conceptualspace import settings
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
+
+########################################################################################################################
+########################################################################################################################
+# stuff to serialize to JSON
 
 class Struct:
     def __init__(self, **entries):
@@ -36,34 +41,6 @@ class NumpyEncoder(json.JSONEncoder):
         elif isinstance(obj, MDS):
             return Struct(**obj.__dict__) #let's return the dict of the MDS such that we can load it from json and its equal
         return json.JSONEncoder.default(self, obj)
-
-
-def prepare_dump(*args, write_meta=True, **kwargs):
-    assert "cls" not in kwargs
-    if write_meta:
-        content = {"git_hash": get_commithash(), "settings": get_settings(), "date": str(datetime.now()),
-                   "env_vars": {k:v for k,v in os.environ.items() if k.startswith(settings.ENV_PREFIX+"_") or k.startswith(settings.OVEWRITE_SETTINGS_PREFIX+"_")}, "cmdargs": sys.argv, "content": args[0]}
-        #TODO: also captured std-out, stored plots, ...
-    else:
-        content = args[0]
-    return content
-
-
-def json_dump(*args, forbid_overwrite=True, **kwargs):
-    content = prepare_dump(*args, **kwargs)
-    fpath = str(args[1])
-    if forbid_overwrite and isfile(fpath):
-        for i in range(2, 999):
-            fpath = splitext(str(args[1]))[0]+f"_{i}"+splitext(fpath)[1]
-            if not isfile(fpath): break
-    with open(fpath, "w") as wfile:
-        json.dump(content, wfile, *args[2:], cls=NumpyEncoder, **kwargs)
-    return fpath
-
-
-def json_dumps(*args, **kwargs):
-    content = prepare_dump(*args, **kwargs)
-    return json.dumps(content, *args[2:], cls=NumpyEncoder, **kwargs)
 
 
 def npify_rek(di):
@@ -92,6 +69,23 @@ def npify_rek(di):
                 res.append(i)
         return res
 
+
+########################################################################################################################
+########################################################################################################################
+# stuff to get meta-info
+
+def get_all_info():
+    return {"git_hash": get_commithash(),
+            "settings": get_settings(),
+            "date": str(datetime.now()),
+            "env_vars": get_envvars(),
+            "startup_env_vars": settings.STARTUP_ENVVARS,
+            "cmdargs": sys.argv
+            }
+
+def get_envvars():
+    return {k:v for k,v in os.environ.items() if k.startswith(settings.ENV_PREFIX+"_")}
+
 def get_commithash():
     res = {}
     try:
@@ -114,6 +108,39 @@ def get_settings():
     }
 
 
+########################################################################################################################
+########################################################################################################################
+# json-dump
+
+def prepare_dump(*args, write_meta=True, **kwargs):
+    assert "cls" not in kwargs
+    if write_meta:
+        content = {"git_hash": get_commithash(), "settings": get_settings(), "date": str(datetime.now()),
+                   "env_vars": {k:v for k,v in os.environ.items() if k.startswith(settings.ENV_PREFIX+"_") or k.startswith(settings.OVEWRITE_SETTINGS_PREFIX+"_")}, "cmdargs": sys.argv, "content": args[0]}
+        #TODO: also captured std-out, stored plots, ...
+    else:
+        content = args[0]
+    return content
+
+
+def json_dump(*args, forbid_overwrite=True, **kwargs):
+    content = prepare_dump(*args, **kwargs)
+    kwargs = {k:v for k,v in kwargs.items() if k not in inspect.getfullargspec(prepare_dump).kwonlyargs}
+    fpath = str(args[1])
+    if forbid_overwrite and isfile(fpath):
+        for i in range(2, 999):
+            fpath = splitext(str(args[1]))[0]+f"_{i}"+splitext(fpath)[1]
+            if not isfile(fpath): break
+    with open(fpath, "w") as wfile:
+        json.dump(content, wfile, *args[2:], cls=NumpyEncoder, **kwargs)
+    return fpath
+
+
+def json_dumps(*args, **kwargs):
+    content = prepare_dump(*args, **kwargs)
+    return json.dumps(content, *args[2:], cls=NumpyEncoder, **kwargs)
+
+
 def json_load(*args, assert_meta=(), return_meta=False, **kwargs):
     if isinstance(args[0], str):
         with open(args[0], "r") as rfile:
@@ -129,6 +156,11 @@ def json_load(*args, assert_meta=(), return_meta=False, **kwargs):
         return npify_rek(tmp["content"])
     return npify_rek(tmp)
 
+
+########################################################################################################################
+########################################################################################################################
+# json-persister
+
 class format_dict(dict):
     def __missing__(self, key):
         return "UNDEFINED"
@@ -137,7 +169,7 @@ class format_dict(dict):
 class JsonPersister():
     FORWARD_PARAMS = ["pp_components", "translate_policy", "extraction_method", "quantification_measure", "mds_dimensions", "dcm_quant_measure"]
     FORWARD_META_INF = ["n_samples", "faster_keybert", "candidate_min_term_count"]
-    DIR_STRUCT = ["{pp_components}_{translate_policy}","{quantification_measure}_{mds_dimensions}d", "{extraction_method}_{dcm_quant_measure}"]
+    DIR_STRUCT = ["{n_samples}_samples", "{pp_components}_{translate_policy}","{quantification_measure}_{mds_dimensions}d", "{extraction_method}_{dcm_quant_measure}"]
                  #["{n_samples}_samples", "preproc-{pp_components}_{translate_policy}", "{quantification_measure}_{mds_dimensions}dim",]
     #TODO the FORWARD_META_INF here is not used - I can use it to automatically add this in the save-method if the respective keys are in the ctx.obj, such that I don't need to
     # explitly specify them when saving!
@@ -206,11 +238,13 @@ class JsonPersister():
             filename = candidates[0]
         if splitext(filename)[1] == ".csv":
             obj = pd.read_csv(join(self.in_dir, subdir, filename))
+            obj_info = {}
         elif splitext(filename)[1] == ".json":
             tmp = json_load(join(self.in_dir, subdir, filename))
             for k, v in tmp.get("loaded_files", {}).items():
                 if k not in self.loaded_objects: self.loaded_objects[k] = v
                 elif tmp["basename"] in v[2]:
+                    assert str(self.loaded_objects[k][3]) == str(v[3])
                     self.loaded_objects[k][2].extend(v[2])
                     #the pp_descriptions are used in candidate_terms AND in postprocess_candidates. So when pp_cands loads stuff, it needs to note that pp_descriptions were used in boht.
             for k, v in tmp.get("relevant_params", {}).items():
@@ -222,13 +256,14 @@ class JsonPersister():
                 assert k in complete_metainf, f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}`, but you don't have a value for this!"
                 assert complete_metainf[k] in [v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
             obj = tmp["object"] if "object" in tmp else tmp
+            obj_info = tmp.get("obj_info")
         if loader is not None:
             obj = loader(**obj)
         for k, v in self.loaded_relevant_params.items():
             if k in self.ctx.obj: assert self.ctx.obj[k] == v
             else: self.ctx.obj[k] = v
         assert save_basename not in self.loaded_objects
-        self.loaded_objects[save_basename] = (obj, join(self.in_dir, subdir, filename), ["this"])
+        self.loaded_objects[save_basename] = (obj, join(self.in_dir, subdir, filename), ["this"], obj_info)
         return obj
 
     def save(self, basename, /, relevant_params=None, relevant_metainf=None, **kwargs):
@@ -243,10 +278,11 @@ class JsonPersister():
         subdir, used_args = self.get_subdir(relevant_metainf)
         if self.add_relevantparams_to_filename and [i for i in relevant_params if i not in used_args]:
             filename += "_" + "_".join([str(self.ctx.obj[i]) for i in [i for i in relevant_params if i not in used_args]])
-        loaded_files = {k:[None, v[1], [i if i != "this" else basename for i in v[2]]] for k,v in self.loaded_objects.items()}
+        loaded_files = {k:[None, v[1], [i if i != "this" else basename for i in v[2]], v[3]] for k,v in self.loaded_objects.items()}
         assert all(self.ctx.obj[v] == k for v, k in self.loaded_relevant_params.items())
         os.makedirs(join(self.out_dir, subdir), exist_ok=True)
-        obj = {"loaded_files": loaded_files, "relevant_params": {i: self.ctx.obj[i] for i in relevant_params}, "relevant_metainf": relevant_metainf, "basename": basename, "object": kwargs}
-        name = json_dump(obj, join(self.out_dir, subdir, filename+ext))
+        obj = {"loaded_files": loaded_files, "relevant_params": {i: self.ctx.obj[i] for i in relevant_params},
+               "relevant_metainf": relevant_metainf, "basename": basename, "obj_info": get_all_info(), "object": kwargs}
+        name = json_dump(obj, join(self.out_dir, subdir, filename+ext), write_meta=False)
         print(f"Saved under {name}. Relevant Params: {relevant_params}. Relevant Meta-Inf: {relevant_metainf}")
         return name

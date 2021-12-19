@@ -1,4 +1,3 @@
-from functools import partial
 import math
 import logging
 from os.path import basename
@@ -8,41 +7,9 @@ from tqdm import tqdm
 from sklearn.manifold import MDS
 import scipy.sparse.csr
 
-
-from derive_conceptualspace.util.np_tools import np_divide, np_log
-from derive_conceptualspace.util.text_tools import print_quantification
-from derive_conceptualspace.util.tokenizers import tokenize_sentences_countvectorizer
-from derive_conceptualspace.util.jsonloadstore import Struct
+from derive_conceptualspace.settings import get_setting
 
 logger = logging.getLogger(basename(__file__))
-
-
-
-def pmi(doc_term_matrix, positive=False, verbose=False, mds_obj=None, descriptions=None):
-    """
-    calculation of ppmi/pmi ([DESC15] 3.4 first lines)
-    see https://stackoverflow.com/a/58725695/5122790
-    see https://www.overleaf.com/project/609bbdd6a07c203c38a07ab4
-    """
-    logger.info("Calculating PMIs...")
-    #see doc_term_matrix.as_csr().toarray() - spalten pro doc und zeilen pro term
-    words_per_doc = doc_term_matrix.as_csr().sum(axis=0)       #old name: col_totals
-    total_words = words_per_doc.sum()                          #old name: total
-    ges_occurs_per_term = doc_term_matrix.as_csr().sum(axis=1) #old name: row_totals
-    expected = np.outer(ges_occurs_per_term, words_per_doc)
-    expected = np_divide(expected, total_words)
-    quantifications = np_divide(doc_term_matrix.as_csr(), expected)
-    # Silence distracting warnings about log(0):
-    with np.errstate(divide='ignore'):
-        quantifications = np_log(quantifications)
-    if positive:
-        quantifications[quantifications < 0] = 0.0
-    quantifications  = [[[i,elem] for i, elem in enumerate(quantifications[:,i]) if elem != 0] for i in range(quantifications.shape[1])]
-    if verbose:
-        print_quantification(doc_term_matrix, quantifications, mds_obj=mds_obj, descriptions=descriptions)
-    return quantifications
-
-ppmi = partial(pmi, positive=True)
 
 
 def create_dissimilarity_matrix(arr, full=False):
@@ -51,6 +18,7 @@ def create_dissimilarity_matrix(arr, full=False):
     ppmi(e,t) for all entity-term-combinations. Output is the normalized angular difference between
     all entities ei,ej --> an len(e)*len(e) matrix. This is needed as input for the MDS.
     See [DESC15] section 3.4."""
+    #TODO why is it only 1 minute for 1000*1000 but >40 hours for 8000*8000?! it should be factor 64, not factor 2400
     if isinstance(arr, scipy.sparse.csr.csr_matrix):
         arr = arr.toarray().T
     assert arr.shape[0] < arr.shape[1], "I cannot believe your Doc-Term-Matrix has less distinct words then documents."
@@ -72,3 +40,12 @@ def create_dissimilarity_matrix(arr, full=False):
         res[res.T > 0] = res.T[res.T > 0]
     assert np.allclose(res, res.T, atol=1e-10)
     return res
+
+
+def create_mds_json(dissim_mat, mds_dimensions):
+    dtm, dissim_mat = dissim_mat
+    #TODO - isn't isomap better suited than MDS? https://scikit-learn.org/stable/modules/manifold.html#multidimensional-scaling
+    # !! [DESC15] say they compared it and it's worse ([15] of [DESC15])!!!
+    embedding = MDS(n_components=mds_dimensions, random_state=get_setting("RANDOM_SEED", default_none=True), dissimilarity="precomputed")
+    mds = embedding.fit(dissim_mat)
+    return mds

@@ -1,7 +1,7 @@
-from derive_conceptualspace.settings import COURSE_TYPES
+from derive_conceptualspace.settings import get_setting
 
 def extract_coursetype(desc, coursetypes=None):
-    coursetypes = coursetypes or COURSE_TYPES
+    coursetypes = coursetypes or get_setting("COURSE_TYPES")
     for type in coursetypes:
         if any(i in desc.text.lower() for i in [f"this {type}"]):
             return type

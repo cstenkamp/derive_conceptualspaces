@@ -1,5 +1,3 @@
-from collections import Counter
-
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
 

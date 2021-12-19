@@ -67,11 +67,17 @@ def loadstore_settings_envvars(ctx, use_auto_envvar_prefix=False):
             set_envvar(envvarname, ctx.obj[param])
 
 
-def setup_json_persister(ctx):
+def setup_json_persister(ctx, ignore_nsamples=False):
     json_persister = JsonPersister(ctx.obj["base_dir"], ctx.obj["base_dir"], ctx, ctx.obj.get("add_relevantparams_to_filename", True))
-    json_persister.default_metainf_getters = {"n_samples": lambda: get_setting("DEBUG_N_ITEMS", silent=True) if get_setting("DEBUG", silent=True) else 7588, #TODO don't hard-code this!
+    if ignore_nsamples:
+        n_samples_getter = lambda: "ANY"
+        cand_ntc_getter = lambda: "ANY"
+    else:
+        n_samples_getter = lambda: get_setting("DEBUG_N_ITEMS", silent=True) if get_setting("DEBUG", silent=True) else 7588 #TODO don't hard-code this!
+        cand_ntc_getter = lambda: get_setting("CANDIDATE_MIN_TERM_COUNT", silent=True)
+    json_persister.default_metainf_getters = {"n_samples": n_samples_getter,
                                               "faster_keybert": lambda: get_setting("FASTER_KEYBERT", silent=True),
-                                              "candidate_min_term_count": lambda: get_setting("CANDIDATE_MIN_TERM_COUNT", silent=True)}
+                                              "candidate_min_term_count": cand_ntc_getter}
     return json_persister
 
 
@@ -237,7 +243,7 @@ def extract_candidateterms_keybert(ctx):
 @prepare_candidateterms.command()
 @click_pass_add_context
 def postprocess_candidateterms(ctx):
-    ctx.obj["candidate_terms"] = ctx.obj["json_persister"].load(None, "candidate_terms", by_config=True)
+    ctx.obj["candidate_terms"] = ctx.obj["json_persister"].load(None, "candidate_terms")
     postprocessed_candidates = postprocess_candidateterms_base(ctx.obj["candidate_terms"], ctx.obj["pp_descriptions"], ctx.obj["extraction_method"])
     ctx.obj["json_persister"].save("postprocessed_candidates.json", postprocessed_candidates=postprocessed_candidates)
 
@@ -246,7 +252,7 @@ def postprocess_candidateterms(ctx):
 @click_pass_add_context
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
 def create_doc_cand_matrix(ctx):
-    ctx.obj["postprocessed_candidates"] = ctx.obj["json_persister"].load(None, "postprocessed_candidates", by_config=True)
+    ctx.obj["postprocessed_candidates"] = ctx.obj["json_persister"].load(None, "postprocessed_candidates")
     doc_term_matrix = create_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"])
     ctx.obj["json_persister"].save("doc_cand_matrix.json", doc_term_matrix=doc_term_matrix)
     #TODO can't I go for a quantification_measure in this doc-cand-matrix as well?!

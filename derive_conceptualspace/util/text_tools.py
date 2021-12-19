@@ -1,4 +1,4 @@
-from functools import lru_cache
+import logging
 from math import log
 from os.path import join, isdir, isfile, abspath, dirname, splitext, basename, split
 import unidecode
@@ -16,6 +16,9 @@ from derive_conceptualspace.util.desc_object import Description
 from derive_conceptualspace.util.dtm_object import DocTermMatrix
 from derive_conceptualspace.util.nltk_util import NLTK_LAN_TRANSLATOR, wntag
 from derive_conceptualspace.util.tokenizers import tokenize_text
+from derive_conceptualspace.util.np_tools import np_divide, np_log
+
+logger = logging.getLogger(basename(__file__))
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
@@ -203,6 +206,35 @@ def make_bow(descriptions):
 ########################################################################################################################
 ########################################################################################################################
 ########################################################################################################################
+
+
+def pmi(doc_term_matrix, positive=False, verbose=False, mds_obj=None, descriptions=None):
+    """
+    calculation of ppmi/pmi ([DESC15] 3.4 first lines)
+    see https://stackoverflow.com/a/58725695/5122790
+    see https://www.overleaf.com/project/609bbdd6a07c203c38a07ab4
+    """
+    logger.info("Calculating PMIs...")
+    #see doc_term_matrix.as_csr().toarray() - spalten pro doc und zeilen pro term
+    words_per_doc = doc_term_matrix.as_csr().sum(axis=0)       #old name: col_totals
+    total_words = words_per_doc.sum()                          #old name: total
+    ges_occurs_per_term = doc_term_matrix.as_csr().sum(axis=1) #old name: row_totals
+    expected = np.outer(ges_occurs_per_term, words_per_doc)
+    expected = np_divide(expected, total_words)
+    quantifications = np_divide(doc_term_matrix.as_csr(), expected)
+    # Silence distracting warnings about log(0):
+    with np.errstate(divide='ignore'):
+        quantifications = np_log(quantifications)
+    if positive:
+        quantifications[quantifications < 0] = 0.0
+    quantifications  = [[[i,elem] for i, elem in enumerate(quantifications[:,i]) if elem != 0] for i in range(quantifications.shape[1])]
+    if verbose:
+        print_quantification(doc_term_matrix, quantifications, mds_obj=mds_obj, descriptions=descriptions)
+    return quantifications
+
+ppmi = partial(pmi, positive=True)
+
+
 
 #TODO use tf-idf as alternative keyword-detection! (erst mit gensim.dictionary alle Wörter holen, dann tf-idf drauffwerfen)
 def tf_idf(doc_term_matrix, verbose=False, mds_obj=None, descriptions=None):

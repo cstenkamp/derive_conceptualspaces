@@ -1,14 +1,13 @@
 from textwrap import shorten
-from derive_conceptualspace.settings import get_setting
-from derive_conceptualspace.util.jsonloadstore import json_load
+
 from tqdm import tqdm
 import sklearn.svm
 import numpy as np
-
 from sklearn.metrics import confusion_matrix, cohen_kappa_score
 
+from derive_conceptualspace.settings import get_setting
 from derive_conceptualspace.util.base_changer import NDPlane, ThreeDPlane
-from derive_conceptualspace.util.threedfigure import ThreeDFigure, make_meshgrid
+from derive_conceptualspace.util.threedfigure import ThreeDFigure
 
 norm = lambda vec: vec/np.linalg.norm(vec)
 vec_cos = lambda v1, v2: np.arccos(np.clip(np.dot(norm(v1), norm(v2)), -1.0, 1.0))  #https://stackoverflow.com/a/13849249/5122790

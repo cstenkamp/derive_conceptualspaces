@@ -8,7 +8,6 @@ from langdetect import detect
 from langdetect.lang_detect_exception import LangDetectException
 from tqdm import tqdm
 
-from derive_conceptualspace.settings import SID_DATA_BASE
 from derive_conceptualspace.util.jsonloadstore import json_load
 from misc_util.pretty_print import pretty_print as print
 from derive_conceptualspace.util.google_translate import translate_text
@@ -71,7 +70,7 @@ def translate_descriptions(base_dir, mds_basename):
     translations = translate_text([name_desc[k] for k in untranslated], origlans=[languages[k] for k in untranslated])
     # hash_translates = dict(zip([hashlib.sha256(i.encode("UTF-8")).hexdigest() for i in to_translate], translations))
     translateds.update(dict(zip(untranslated.keys(), translations)))
-    with open(join(SID_DATA_BASE, "translated_descriptions.json"), "w") as wfile:
+    with open(join(base_dir, "translated_descriptions.json"), "w") as wfile:
         json.dump(translateds, wfile)
     translation_new_len = len("".join(translations))
     translated_descs = [name_desc[i] for i in name_desc.keys() if i in set(dict(zip([k for k in untranslated], translations)).keys())]

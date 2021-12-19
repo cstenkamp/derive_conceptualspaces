@@ -1,4 +1,4 @@
-from os.path import join, isdir, isfile, abspath, dirname, splitext, basename, split
+from os.path import join, isdir, isfile
 import nltk
 import logging
 import os
@@ -6,8 +6,9 @@ import urllib
 import zipfile
 
 from stanfordcorenlp import StanfordCoreNLP
-from derive_conceptualspace.settings import STANFORDNLP_VERSION
 from nltk.corpus import wordnet as wn
+
+from derive_conceptualspace.settings import get_setting
 
 NLTK_LAN_TRANSLATOR = {
     "en": "english",
@@ -63,7 +64,7 @@ def download_nltk_dependencies(base_dir=None):
 def download_activate_stanfordnlp(data_dir, langs):
     """https://stanfordnlp.github.io/CoreNLP/history.html"""
     #TODO - the model I'm using, is it cased or caseless? That's important!
-    pkg = f"stanford-corenlp-{STANFORDNLP_VERSION}"
+    pkg = f"stanford-corenlp-{get_setting('STANFORDNLP_VERSION')}"
     if not (pkg in os.listdir(data_dir) and isdir(join(data_dir, pkg))):
         print(f"Downloading Stanfort Core NLP....")
         urllib.request.urlretrieve(f"https://nlp.stanford.edu/software/{pkg}.zip", filename=join(data_dir, pkg+".zip"))

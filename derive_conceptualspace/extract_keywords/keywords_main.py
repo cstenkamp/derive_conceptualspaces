@@ -10,8 +10,6 @@ from .get_candidates_rules import extract_coursetype
 
 from derive_conceptualspace.util.text_tools import tf_idf, get_stopwords
 from derive_conceptualspace.util.mpl_tools import show_hist
-from derive_conceptualspace.util.jsonloadstore import json_load
-from derive_conceptualspace.util.tokenizers import phrase_in_text, tokenize_text
 
 
 from misc_util.pretty_print import pretty_print as print

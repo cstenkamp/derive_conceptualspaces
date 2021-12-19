@@ -1,7 +1,6 @@
-#docker build -f Dockerfile --build-arg uid=${COMPOSE_UID:-1000} --build-arg gid=${COMPOSE_GID:-1000} --rm --tag derive_conceptualspaces .
-#docker run -it --name derive_conceptualspaces_cont -v /home/chris/Documents/UNI_neu/Masterarbeit/data/:/opt/data derive_conceptualspaces zsh
-#docker start derive_conceptualspaces_cont -i
-#docker container rm derive_conceptualspaces_cont -f && docker build -f Dockerfile --build-arg uid=${COMPOSE_UID:-1000} --build-arg gid=${COMPOSE_GID:-1000} --rm --tag derive_conceptualspaces .
+#BUILD: `docker build -f $MA_CODE_BASE/Dockerfile --build-arg git_commit=$(git rev-parse --short HEAD) --build-arg uid=$(id -u) --build-arg gid=$(id -g) --rm --tag derive_conceptualspaces $MA_CODE_BASE`
+#RUN: `docker run -it --rm --user $(id -u):$(id -g) --name derive_conceptualspaces_cont -v $MA_DATA_DIR:/opt/data --env-file $MA_ENV_FILE derive_conceptualspaces`
+# with that as ma_cont eg. `MA_SNAKEMAKE_TELEGRAM=1 ma_cont snakemake --cores 3 -p  --directory /opt/data default`
 
 ARG PYTHON_VERSION=3.9.1
 FROM python:${PYTHON_VERSION}-buster

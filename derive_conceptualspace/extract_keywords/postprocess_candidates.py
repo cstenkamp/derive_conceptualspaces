@@ -1,8 +1,6 @@
-import re
 from tqdm import tqdm
 from itertools import product
 
-from .get_candidates_keybert import WORD_NUM_APOSTR_REGEX
 from derive_conceptualspace.util.tokenizers import phrase_in_text
 
 flatten = lambda l: [item for sublist in l for item in sublist]
