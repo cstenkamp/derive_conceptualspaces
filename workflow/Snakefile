@@ -27,10 +27,14 @@ from derive_conceptualspace.extract_keywords.keywords_main import (
     create_doc_cand_matrix as create_doc_cand_matrix_base,
     filter_keyphrases as filter_keyphrases_base,
 )
+from derive_conceptualspace.create_spaces.preprocess_descriptions import (
+    preprocess_descriptions_full as preprocess_descriptions_base,
+)
 from derive_conceptualspace.create_spaces.spaces_main import (
     create_dissim_mat as create_dissim_mat_base,
-    create_mds_json as create_mds_json_base,
-    preprocess_descriptions_full as preprocess_descriptions_full_base,
+)
+from derive_conceptualspace.create_spaces.create_mds import (
+    create_mds as create_mds_json_base,
 )
 from derive_conceptualspace.semantic_directions.create_candidate_svm import (
     create_candidate_svms as create_candidate_svms_base

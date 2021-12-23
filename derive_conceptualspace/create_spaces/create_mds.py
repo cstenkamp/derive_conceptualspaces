@@ -42,7 +42,7 @@ def create_dissimilarity_matrix(arr, full=False):
     return res
 
 
-def create_mds_json(dissim_mat, mds_dimensions):
+def create_mds(dissim_mat, mds_dimensions):
     dtm, dissim_mat = dissim_mat
     #TODO - isn't isomap better suited than MDS? https://scikit-learn.org/stable/modules/manifold.html#multidimensional-scaling
     # !! [DESC15] say they compared it and it's worse ([15] of [DESC15])!!!
