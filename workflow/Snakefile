@@ -143,7 +143,7 @@ rule preprocess_descriptions:
     threads: 1
     run:
         autoload_context_inputs(ctx, input, wildcards)
-        vocab, descriptions = preprocess_descriptions_full_base(ctx.obj["raw_descriptions"], wildcards.pp_components, wildcards.translate_policy, ctx.obj["languages"], ctx.obj["translations"])
+        vocab, descriptions = preprocess_descriptions_base(ctx.obj["raw_descriptions"], wildcards.pp_components, wildcards.translate_policy, ctx.obj["languages"], ctx.obj["translations"])
         json_persister.save("preprocessed_descriptions.json", vocab=vocab, descriptions=descriptions, relevant_metainf={"n_samples": len(descriptions)})
 
 

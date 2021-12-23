@@ -311,7 +311,8 @@ def create_candidate_svm(ctx):
 @click_pass_add_context
 def rank_courses_saldirs(ctx):
     ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, "clusters")
-    print()
+    for desc, embedding in zip(ctx.obj["pp_descriptions"]["descriptions"], list(ctx.obj["mds"].embedding_)):
+        desc.embedding = embedding
 
 # def rank_courses_saldirs(ctx, pp_descriptions_filename, mds_filename, dcm_filename, clusteredcands_filename):
 #     from derive_conceptualspace.util.base_changer import NDPlane
@@ -331,7 +332,7 @@ def rank_courses_saldirs(ctx):
 #     tmp = json_load(join(ctx.obj["base_dir"], clusteredcands_filename))
 #     clusters, cluster_directions, kappa_scores, decision_planes = tmp["clusters"], tmp["cluster_directions"], tmp["kappa_scores"], tmp["decision_planes"]
 #     clusters = {k: {"components": [k]+v, "direction": cluster_directions[k], "kappa_scores": {i: kappa_scores[i] for i in [k]+v}, "decision_planes": {i: NDPlane(np.array(decision_planes[i][1]), decision_planes[i][0]) for i in [k]+v}} for k,v in clusters.items()}
-#     rank_courses_saldirs_base(descriptions, clusters)
+#
 #
 
 #
