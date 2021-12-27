@@ -62,16 +62,16 @@ class ThreeDFigure():
         points[:, ind2] = tmp
         return points
 
-    def _get_meshgrid(self, plane, samples, labels, margin):
+    def _get_meshgrid(self, plane, samples, margin):
         trafo, back_trafo = make_base_changer(plane)
-        onto_plane = np.array([back_trafo([0, trafo(point)[1], trafo(point)[2]]) for point, side in zip(samples, labels)])
+        onto_plane = np.array([back_trafo([0, trafo(point)[1], trafo(point)[2]]) for point in samples])
         minx, miny, minz = onto_plane.min(axis=0)
         maxx, maxy, maxz = onto_plane.max(axis=0)
         xx, yy = make_meshgrid(minx=minx, miny=miny, maxx=maxx, maxy=maxy, margin=margin)
         return xx, yy, minz, maxz
 
-    def _get_surface_tight(self, plane, samples, labels, margin):
-        xx, yy, minz, maxz = self._get_meshgrid(plane, samples, labels, margin)
+    def _get_surface_tight(self, plane, samples, margin):
+        xx, yy, minz, maxz = self._get_meshgrid(plane, samples, margin)
         xy_arr = np.vstack([xx.flatten(), yy.flatten()]).T
         col_fn = lambda x, y: 0 if minz - margin < plane.z(np.array([x,y])) < maxz + margin else 1
         z_fn = lambda x, y: min(max(plane.z(np.array([x, y])), minz - margin), maxz + margin)
@@ -82,8 +82,8 @@ class ThreeDFigure():
         res = {k: surface_form(points[:, ind]) for ind, k in enumerate("xyz")}
         return {**res, **{"surfacecolor": surface_form(cols)}}
 
-    def add_surface(self, plane, samples, labels, margin=0, swap_axes=None, opacity=0.9, color="blue", showlegend=False):
-        xx, yy, zz, cols = [v for v in self._get_surface_tight(plane, samples, labels, margin).values()]
+    def add_surface(self, plane, samples, labels=None, margin=0, swap_axes=None, opacity=0.9, color="blue", showlegend=False):
+        xx, yy, zz, cols = [v for v in self._get_surface_tight(plane, samples, margin).values()]
         points = np.vstack([xx.flatten(), yy.flatten(), zz.flatten()]).T
         points = self._transform(points)
         if swap_axes:
@@ -101,7 +101,7 @@ class ThreeDFigure():
                        )
         )
 
-    def add_surface_old(self, xx, yy, z_func, swap_axes=None, opacity=None): #TODO merge with ^
+    def add_surface_old(self, xx, yy, z_func, swap_axes=None, opacity=None, color=None, showlegend=False, name=None): #TODO merge with ^
         xy_arr = np.vstack([xx.flatten(), yy.flatten()]).T
         z_arr = np.array([z_func(*i) for i in xy_arr])
         points = np.column_stack([xy_arr, z_arr])
@@ -109,9 +109,11 @@ class ThreeDFigure():
         if swap_axes:
             points = self._swap_axes(points, swap_axes)
         surface_form = lambda x: x.reshape(round(math.sqrt(x.shape[0])), -1)
+        kwargs = dict(colorscale=[[0, color], [1, color]]) if color is not None else {}
         self.fig.add_trace(
             go.Surface(x=surface_form(points[:, 0]), y=surface_form(points[:, 1]), z=surface_form(points[:, 2]),
-                       opacity=opacity, showlegend=False, showscale=False))
+                       opacity=opacity, showlegend=showlegend, showscale=False, name=name, **kwargs))
+
 
     def add_line(self, point1, point2, width=6, do_transform=True, name=None, **kwargs):
         if do_transform:

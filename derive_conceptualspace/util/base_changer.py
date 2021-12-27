@@ -35,8 +35,11 @@ class ThreeDPlane(NDPlane):
 
 def make_base_changer(plane: ThreeDPlane):
     uvec1 = plane.normal
-    uvec2 = [0, -plane.d / plane.b, plane.d / plane.c]  # NOT [1, 0, plane.z(model, 1, 0)] !!
-    uvec3 = np.cross(uvec1, uvec2)
+    if plane.intercept == 0 and len([i for i in plane.normal if i != 0]) == 1:
+        uvec2, uvec3 = [(np.eye(3)*[i for i in plane.normal if i != 0][0])[i] for i in set(range(3))-set([np.argmax(plane.normal)])]
+    else:
+        uvec2 = [0, -plane.d / plane.b, plane.d / plane.c]  # NOT [1, 0, plane.z(model, 1, 0)] !!
+        uvec3 = np.cross(uvec1, uvec2)
     transition_matrix = np.linalg.inv(np.array([uvec1, uvec2, uvec3]).T)
 
     origin = np.array([0, 0, 0])

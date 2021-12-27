@@ -6,11 +6,19 @@ import numpy as np
 from tqdm import tqdm
 from sklearn.manifold import MDS
 import scipy.sparse.csr
+from scipy.spatial.distance import pdist, squareform, cdist
 
 from derive_conceptualspace.settings import get_setting
 
 logger = logging.getLogger(basename(__file__))
 
+
+norm_ang_diff = lambda v1, v2: 2/math.pi * np.arccos(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
+cos_to_normangdiff = lambda cosine: 2/math.pi*(np.arccos(-cosine+1))
+# https://stackoverflow.com/questions/35758612/most-efficient-way-to-construct-similarity-matrix
+# https://www.kaggle.com/cpmpml/ultra-fast-distance-matrix-computation/notebook
+# https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.cosine.html -> it's 2/math.pi*(np.arccos(-cosine+1)
+# it WOULD be squareform(np.apply_along_axis(cos_to_normangdiff, 0, pdist(arr, metric="cosine"))), but this way we don't have a progressbar
 
 def create_dissimilarity_matrix(arr, full=False):
     """returns the dissimilarity matrix, needed as input for the MDS. Input is the dataframe
@@ -24,22 +32,32 @@ def create_dissimilarity_matrix(arr, full=False):
     assert arr.shape[0] < arr.shape[1], "I cannot believe your Doc-Term-Matrix has less distinct words then documents."
     assert arr.max(axis=1).min() > 0, "If one of the vectors is zero the calculation will fail!"
     logger.info("Creating the dissimilarity matrix...")
-    res = np.zeros((arr.shape[0],arr.shape[0]))
-    with tqdm(total=round(((arr.shape[0]*arr.shape[0])-arr.shape[0])*(1 if full else 0.5))) as pbar:
-        for n1, e1 in enumerate(arr):
-            for n2, e2 in enumerate(arr):
-                if not full and n2 < n1:
-                    continue
-                if n1 != n2:
-                    p1 = np.dot(e1, e2) / (np.linalg.norm(e1) * np.linalg.norm(e2))
-                    if 0 < p1-1 < 1e-12:
-                        p1 = 1 #aufgrund von rundungsfehlern kann es >1 sein
-                    res[n1,n2] = 2 / math.pi * math.acos(p1)
-                    pbar.update(1)
-    if not full:
-        res[res.T > 0] = res.T[res.T > 0]
-    assert np.allclose(res, res.T, atol=1e-10)
+    # return squareform(np.apply_along_axis(cos_to_normangdiff, 0, pdist(arr, metric="cosine")))
+    # assert np.allclose(np.hstack([cdist(arr, arr[i*10:(i+1)*10], "cosine") for i in range(10)]), squareform(tmp))
+    tmp = []
+    N_CHUNKS = 200
+    for chunk in tqdm(np.array_split(arr, N_CHUNKS)):
+        tmp.append(cdist(arr, chunk, "cosine"))
+    assert np.allclose(np.hstack(tmp), np.hstack(tmp).T), "The matrix must be symmetric!"
+    flat = squareform(np.hstack(tmp), checks=False) #I check in the line above, dunno why this one fails if the upper works..
+    res = squareform(np.apply_along_axis(cos_to_normangdiff, 0, flat))
     return res
+    # res = np.zeros((arr.shape[0],arr.shape[0]))
+    # with tqdm(total=round(((arr.shape[0]*arr.shape[0])-arr.shape[0])*(1 if full else 0.5))) as pbar:
+    #     for n1, e1 in enumerate(arr):
+    #         for n2, e2 in enumerate(arr):
+    #             if not full and n2 < n1:
+    #                 continue
+    #             if n1 != n2:
+    #                 p1 = np.dot(e1, e2) / (np.linalg.norm(e1) * np.linalg.norm(e2))
+    #                 if 0 < p1-1 < 1e-12:
+    #                     p1 = 1 #aufgrund von rundungsfehlern kann es >1 sein
+    #                 res[n1,n2] = 2 / math.pi * math.acos(p1)
+    #                 pbar.update(1)
+    # if not full:
+    #     res[res.T > 0] = res.T[res.T > 0]
+    # assert np.allclose(res, res.T, atol=1e-10)
+    # return res
 
 
 def create_mds(dissim_mat, mds_dimensions):

@@ -4,6 +4,9 @@ import json
 
 import numpy as np
 
+from derive_conceptualspace.util.base_changer import ThreeDPlane
+from derive_conceptualspace.util.threedfigure import ThreeDFigure, make_meshgrid
+
 flatten = lambda l: [item for sublist in l for item in sublist]
 
 TRANSLATE_FNAME = {"movies": "films"}
@@ -11,6 +14,27 @@ TRANSLATE_FNAME = {"movies": "films"}
 #TODO If I want to do that for classes as well, I have to create these as well, not only load
 #TODO Do this ones also for the [ALBS20] and [AGKS18] datasets
 data_base, data_set, n_dims = "/home/chris/Documents/UNI_neu/Masterarbeit/data/semanticspaces/", "movies", 20
+
+
+def main():
+    canditerms, cluster_directions, mds_class_dict = get_all()
+    three_dims = list(cluster_directions.keys())[:3]
+    entities = {k: (v[1], np.array([v[2][k2] for k2 in three_dims])) for k, v in mds_class_dict.items()}
+    display_svm(entities, {k: cluster_directions[k] for k in three_dims})
+
+
+def display_svm(entities, cluster_directions):
+    X = np.array([i[1] for i in entities.values()])
+    assert X.shape[1] == 3
+    extras = [{"Name": i[0], "Classes": i[1][0]} for i in list(entities.items())]
+    with ThreeDFigure(name=",".join(cluster_directions.keys())) as fig:
+        fig.add_markers(X, color="blue", custom_data=extras, name="samples")
+        for num, (dirname, sw_ax, color) in enumerate(zip(cluster_directions.keys(), ["xz", "yz", None], ["red", "green", "yellow"])):
+            # fig.add_surface(ThreeDPlane(np.eye(3)[num], 0), X, color="gray")
+            fig.add_surface_old(*make_meshgrid(size=0.2), lambda _, __: 0, opacity=0.3, showlegend=True, color=color, name=dirname, swap_axes=sw_ax)
+        fig.add_markers([0, 0, 0], size=3, name="Coordinate Center")  # coordinate center
+        fig.show()
+
 
 def get_all():
     feat_vecs = load_ppmi_weighted_feature_vectors(data_base, data_set)            #./Tokens/*  & Tokens.json
@@ -32,14 +56,16 @@ def get_all():
     proj1, proj2 = load_projections(data_base, data_set, n_dims)                   #./dXX/filmsXX.projected and ./dXX/projectionsXX.data
     assert all(any(np.allclose(i, proj) for i in cluster_directions.values()) for proj in proj1)
     #proj1: 40*20 (same as cluster_directions), proj2: 15000*40
+    #proj2 are the distances to the origins of the respective dimensions (induced by the clusters), what induces the respective rankings! (see DESC15 p.24u)
     mds_dict = dict(zip(names, list(mds)))
     assert mds_dict.keys() == classes.keys()
-    #soo let's use all data. For every movie, there's a something in `names`, `mds`, `classes` and `proj2` (whatever that is) => `mds_class_dict`
+    #soo let's use all data. For every movie, there's a something in `names`, `mds`, `classes` and `proj2` => `mds_class_dict`
     #`canditerms` uses the `clusters`, `proj1` is the same as `cluster_directions`
     #missing: `feat_vecs` (idk how to map these to names), `all_terms` (extracted phrases are ngrams),
     mds_class_dict = dict(zip(mds_dict.keys(), list(zip(mds_dict.values(), classes.values(), proj2))))
+    mds_class_dict = {k: (v[0], v[1], dict(zip(cluster_directions.keys(), v[2]))) for k,v in mds_class_dict.items()}
     return canditerms, cluster_directions, mds_class_dict
-
+    #ok, in spirit of DESC15 I want a class that can find min and max and compare entities w.r.t. different dimensions
 
 
 def load_projections(data_base, data_set, n_dims):

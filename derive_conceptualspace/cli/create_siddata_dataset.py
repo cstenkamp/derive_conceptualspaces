@@ -313,29 +313,8 @@ def rank_courses_saldirs(ctx):
     ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, "clusters")
     for desc, embedding in zip(ctx.obj["pp_descriptions"]["descriptions"], list(ctx.obj["mds"].embedding_)):
         desc.embedding = embedding
+    print()
 
-# def rank_courses_saldirs(ctx, pp_descriptions_filename, mds_filename, dcm_filename, clusteredcands_filename):
-#     from derive_conceptualspace.util.base_changer import NDPlane
-#     import numpy as np
-#     ctx.obj["pp_descriptions_filename"] = pp_descriptions_filename
-#     ctx.obj["vocab"], ctx.obj["descriptions"], ctx.obj["pp_components"] = load_preprocessed_descriptions(join(ctx.obj["base_dir"], pp_descriptions_filename))
-#     ctx.obj["mds_filename"] = mds_filename
-#     tmp = json_load(join(ctx.obj["base_dir"], mds_filename))
-#     assert tmp["pp_components"] == ctx.obj["pp_components"]
-#     print(f"Using the MDS which had {tmp['quant_measure']} as quantification measure!")
-#     mds = tmp["mds"]
-#     dcm = DocTermMatrix(json_load(join(ctx.obj["base_dir"], dcm_filename), assert_meta=("CANDIDATE_MIN_TERM_COUNT", "STANFORDNLP_VERSION")))
-#     descriptions = ctx.obj["descriptions"]
-#     assert len(dcm.dtm) == len(descriptions), f"The Doc-Candidate-Matrix contains {len(dcm.dtm)} items and you have {len(descriptions)} descriptions!"
-#     for desc, embedding in zip(descriptions, list(mds.embedding_)):
-#         desc.embedding = embedding
-#     tmp = json_load(join(ctx.obj["base_dir"], clusteredcands_filename))
-#     clusters, cluster_directions, kappa_scores, decision_planes = tmp["clusters"], tmp["cluster_directions"], tmp["kappa_scores"], tmp["decision_planes"]
-#     clusters = {k: {"components": [k]+v, "direction": cluster_directions[k], "kappa_scores": {i: kappa_scores[i] for i in [k]+v}, "decision_planes": {i: NDPlane(np.array(decision_planes[i][1]), decision_planes[i][0]) for i in [k]+v}} for k,v in clusters.items()}
-#
-#
-
-#
 #
 # @prepare_candidateterms.command()
 # @click.pass_context
