@@ -139,29 +139,29 @@ rule preprocess_descriptions:
         translations = "translated_descriptions.json",
         languages = "languages.json"
     output:
-        "{n_samples}_samples/{pp_components}_{translate_policy}/preprocessed_descriptions.json"
+        "{n_samples}_samples/{pp_components}_{translate_policy}/pp_descriptions.json"
     threads: 1
     run:
         autoload_context_inputs(ctx, input, wildcards)
         vocab, descriptions = preprocess_descriptions_base(ctx.obj["raw_descriptions"], wildcards.pp_components, wildcards.translate_policy, ctx.obj["languages"], ctx.obj["translations"])
-        json_persister.save("preprocessed_descriptions.json", vocab=vocab, descriptions=descriptions, relevant_metainf={"n_samples": len(descriptions)})
+        json_persister.save("pp_descriptions.json", vocab=vocab, descriptions=descriptions, relevant_metainf={"n_samples": len(descriptions)})
 
 
 rule create_dissim_mat:
     input:
-        pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/preprocessed_descriptions.json"
+        pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/pp_descriptions.json"
     output:
-        "{n_samples}_samples/{pp_components}_{translate_policy}/dissim_matrix_{quantification_measure}.json"
+        "{n_samples}_samples/{pp_components}_{translate_policy}/dissim_mat_{quantification_measure}.json"
     threads: 1
     run:
         autoload_context_inputs(ctx, input, wildcards)
         quant_dtm, dissim_mat = create_dissim_mat_base(ctx.obj["pp_descriptions"], ctx.obj["quantification_measure"])
-        json_persister.save("dissim_matrix.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat)
+        json_persister.save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat)
 
 
 rule create_mds:
     input:
-        dissim_mat = "{n_samples}_samples/{pp_components}_{translate_policy}/dissim_matrix_{quantification_measure}.json",
+        dissim_mat = "{n_samples}_samples/{pp_components}_{translate_policy}/dissim_mat_{quantification_measure}.json",
     output:
         "{n_samples}_samples/{pp_components}_{translate_policy}/{quantification_measure}_{mds_dimensions}d/mds.json"
     threads: 1
@@ -174,7 +174,7 @@ rule create_mds:
 
 rule extract_candidate_terms:
     input:
-        pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/preprocessed_descriptions.json"
+        pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/pp_descriptions.json"
     output:
         "{n_samples}_samples/{pp_components}_{translate_policy}/candidate_terms_{extraction_method}.json"
     threads: 1
@@ -189,7 +189,7 @@ rule extract_candidate_terms:
 
 rule postprocess_candidateterms:
     input:
-        pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/preprocessed_descriptions.json",
+        pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/pp_descriptions.json",
         candidate_terms = "{n_samples}_samples/{pp_components}_{translate_policy}/candidate_terms_{extraction_method}.json"
     output:
         "{n_samples}_samples/{pp_components}_{translate_policy}/postprocessed_candidates_{extraction_method}.json"
@@ -202,7 +202,7 @@ rule postprocess_candidateterms:
 
 rule create_doc_cand_matrix:
     input:
-        pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/preprocessed_descriptions.json",
+        pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/pp_descriptions.json",
         postprocessed_candidates = "{n_samples}_samples/{pp_components}_{translate_policy}/postprocessed_candidates_{extraction_method}.json"
     output:
         "{n_samples}_samples/{pp_components}_{translate_policy}/doc_cand_matrix_{extraction_method}.json"
@@ -215,7 +215,7 @@ rule create_doc_cand_matrix:
 
 rule filter_keyphrases:
     input:
-        pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/preprocessed_descriptions.json",
+        pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/pp_descriptions.json",
         doc_cand_matrix = "{n_samples}_samples/{pp_components}_{translate_policy}/doc_cand_matrix_{extraction_method}.json"
     output:
         "{n_samples}_samples/{pp_components}_{translate_policy}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json"
@@ -231,7 +231,7 @@ rule filter_keyphrases:
 
 rule create_candidate_svm:
     input:
-        pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/preprocessed_descriptions.json",
+        pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/pp_descriptions.json",
         filtered_dcm = "{n_samples}_samples/{pp_components}_{translate_policy}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json",
         mds = "{n_samples}_samples/{pp_components}_{translate_policy}/{quantification_measure}_{mds_dimensions}d/mds.json"
     output:

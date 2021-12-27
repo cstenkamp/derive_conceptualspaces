@@ -241,12 +241,20 @@ class JsonPersister():
             obj_info = {}
         elif splitext(filename)[1] == ".json":
             tmp = json_load(join(self.in_dir, subdir, filename))
+            # " ".join([tmp["basename"], "loaded", "(", *list(tmp["loaded_files"].keys()), ")"])
+            # 'filtered_dcm loaded ( raw_descriptions translations languages pp_descriptions candidate_terms postprocessed_candidates doc_cand_matrix )'
+            # 'mds loaded ( raw_descriptions translations languages pp_descriptions dissim_mat )'
             for k, v in tmp.get("loaded_files", {}).items():
+                # if k == "pp_descriptions":
+                #     print(f"Loading {tmp['basename']}: {self.loaded_objects[k][2]}")
                 if k not in self.loaded_objects: self.loaded_objects[k] = v
                 elif tmp["basename"] in v[2]:
                     assert str(self.loaded_objects[k][3]) == str(v[3])
                     self.loaded_objects[k][2].extend(v[2])
-                    #the pp_descriptions are used in candidate_terms AND in postprocess_candidates. So when pp_cands loads stuff, it needs to note that pp_descriptions were used in boht.
+                    # the pp_descriptions are used in candidate_terms AND in postprocess_candidates. So when pp_cands loads stuff, it needs to note that pp_descriptions were used in boht.
+                elif k in self.loaded_objects:
+                    self.loaded_objects[k][2].extend(v[2])
+
             for k, v in tmp.get("relevant_params", {}).items():
                 if k in self.loaded_relevant_params: assert self.loaded_relevant_params[k] == v
                 else: self.loaded_relevant_params[k] = v

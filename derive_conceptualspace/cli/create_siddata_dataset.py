@@ -177,7 +177,7 @@ def preprocess_descriptions(ctx, raw_descriptions_file, languages_file, translat
     languages = ctx.obj["json_persister"].load(languages_file, "languages", ignore_params=["pp_components", "translate_policy"])
     translations = ctx.obj["json_persister"].load(translations_file, "translations", ignore_params=["pp_components", "translate_policy"])
     vocab, descriptions = preprocess_descriptions_base(raw_descriptions, ctx.obj["pp_components"], ctx.obj["translate_policy"], languages, translations)
-    ctx.obj["json_persister"].save("preprocessed_descriptions.json", vocab=vocab, descriptions=descriptions, relevant_metainf={"n_samples": len(descriptions)})
+    ctx.obj["json_persister"].save("pp_descriptions.json", vocab=vocab, descriptions=descriptions, relevant_metainf={"n_samples": len(descriptions)})
 
 
 ########################################################################################################################
@@ -198,16 +198,16 @@ def create_spaces(ctx):
 @create_spaces.command()
 @click_pass_add_context
 def create_dissim_mat(ctx):
-    pp_descriptions = ctx.obj["json_persister"].load(None, "preprocessed_descriptions", ignore_params=["quantification_measure"], loader=pp_descriptions_loader)
+    pp_descriptions = ctx.obj["json_persister"].load(None, "pp_descriptions", ignore_params=["quantification_measure"], loader=pp_descriptions_loader)
     quant_dtm, dissim_mat = create_dissim_mat_base(pp_descriptions, ctx.obj["quantification_measure"])
-    ctx.obj["json_persister"].save("dissim_matrix.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat)
+    ctx.obj["json_persister"].save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat)
 
 
 @create_spaces.command()
 @click.option("--mds-dimensions", type=int, default=lambda: get_setting("MDS_DIMENSIONS"))
 @click_pass_add_context
 def create_mds_json(ctx):
-    dissim_mat = ctx.obj["json_persister"].load(None, "dissim_matrix", ignore_params=["mds_dimensions"], loader=dtm_dissimmat_loader)
+    dissim_mat = ctx.obj["json_persister"].load(None, "dissim_mat", ignore_params=["mds_dimensions"], loader=dtm_dissimmat_loader)
     mds = create_mds_json_base(dissim_mat, ctx.obj["mds_dimensions"])
     ctx.obj["json_persister"].save("mds.json", mds=mds)
 
@@ -223,7 +223,7 @@ def create_mds_json(ctx):
 @click_pass_add_context
 def prepare_candidateterms(ctx):
     """[group] CLI base to extract candidate-terms from texts"""
-    ctx.obj["pp_descriptions"] = ctx.obj["json_persister"].load(None, "preprocessed_descriptions", loader=pp_descriptions_loader)
+    ctx.obj["pp_descriptions"] = ctx.obj["json_persister"].load(None, "pp_descriptions", loader=pp_descriptions_loader)
 
 
 @prepare_candidateterms.command()
@@ -292,7 +292,7 @@ def filter_keyphrases(ctx, candidate_min_term_count):
 @click_pass_add_context
 def generate_conceptualspace(ctx):
     """[group] CLI base to create the actual conceptual spaces"""
-    ctx.obj["pp_descriptions"] = ctx.obj["json_persister"].load(None, "preprocessed_descriptions", loader=pp_descriptions_loader, ignore_params=["quantification_measure", "mds_dimensions"])
+    ctx.obj["pp_descriptions"] = ctx.obj["json_persister"].load(None, "pp_descriptions", loader=pp_descriptions_loader, ignore_params=["quantification_measure", "mds_dimensions"])
     ctx.obj["filtered_dcm"] = ctx.obj["json_persister"].load(None, "filtered_dcm", loader=dtm_loader, ignore_params=["quantification_measure", "mds_dimensions"])
     ctx.obj["mds"] = ctx.obj["json_persister"].load(None, "mds", ignore_params=["extraction_method", "dcm_quant_measure"], loader=lambda **args: args["mds"])
     assert ctx.obj["mds"].embedding_.shape[0] == len(ctx.obj["filtered_dcm"].dtm), f'The Doc-Candidate-Matrix contains {len(ctx.obj["filtered_dcm"].dtm)} items But your MDS has {ctx.obj["mds"].embedding_.shape[0] } descriptions!'
@@ -306,6 +306,42 @@ def create_candidate_svm(ctx):
     #TODO hier war dcm = DocTermMatrix(json_load(join(ctx.obj["base_dir"], dcm_filename), assert_meta=("CANDIDATE_MIN_TERM_COUNT", "STANFORDNLP_VERSION"))), krieg ich das wieder hin?
 
 #TODO I can do something like autodetect_relevant_params und metainf im json_persister
+
+
+@generate_conceptualspace.command()
+@click_pass_add_context
+def show_data_info(ctx):
+    from graphviz import Digraph
+    import git
+    if get_setting("DEBUG"):
+        print(f"Looking at data generated in Debug-Mode for {get_setting('DEBUG_N_ITEMS')} items!")
+    ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, "clusters")
+    print(f"Data lies at *b*{ctx.obj['json_persister'].in_dir}*b*")
+    print("Settings:", ", ".join([f"{k}: *b*{v}*b*" for k, v in ctx.obj["json_persister"].loaded_relevant_params.items()]))
+    print("Relevant Metainfo:", ", ".join([f"{k}: *b*{v}*b*" for k, v in ctx.obj["json_persister"].loaded_relevant_metainf.items()]))
+    data_dirs = {k: v[1].replace(ctx.obj["json_persister"].in_dir, "data_dir") for k, v in ctx.obj["json_persister"].loaded_objects.items()}
+    print("Directories:\n ", "\n  ".join(f"{k.rjust(max(len(i) for i in data_dirs))}: {v}" for k,v in data_dirs.items()))
+    dependencies = {k.replace("preprocessed_descriptions","pp_descriptions"): set([i.replace("preprocessed_descriptions","pp_descriptions") for i in v[2] if i != "this"]) for k,v in ctx.obj["json_persister"].loaded_objects.items()}
+    dot = Digraph()
+    for key in dependencies:
+        dot.node(key, key)
+    dot.edges([[k, e] for k, v in dependencies.items() for e in v])
+    # print(dot.source) #TODO save to file
+    if ctx.obj["verbose"]:
+        dot.render(view=True)
+    commits = {k2:v2 for k2,v2 in {k: v[3]["git_hash"]["inner_commit"] if isinstance(v[3], dict) and "git_hash" in v[3] else None for k,v in ctx.obj["json_persister"].loaded_objects.items()}.items() if v2 is not None}
+    if len(set(commits.values())) == 1:
+        print(f"All Parts from commit {list(commits.values())[0]}")
+    #ob alle vom gleichem commit, wenn ja welcher, und die letzten 2-3 commit-messages davor
+    git_hist = list(git.Repo(".", search_parent_directories=True).iter_commits("main", max_count=20))
+    commit_num = [ind for ind, i in enumerate(git_hist) if i.hexsha == list(commits.values())[0]][0]
+    messages = [i.message.strip() for i in git_hist[commit_num:commit_num+5]]
+    tmp = []
+    for msg in messages:
+        if msg not in tmp: tmp.append(msg)
+    print("Latest commit messages:\n  ", "\n   ".join(tmp))
+    dates = {k2:v2 for k2,v2 in {k: v[3]["date"] if isinstance(v[3], dict) and "date" in v[3] else None for k,v in ctx.obj["json_persister"].loaded_objects.items()}.items() if v2 is not None}
+    print("Dates:\n ", "\n  ".join(f"{k.rjust(max(len(i) for i in dates))}: {v}" for k,v in dates.items()))
 
 @generate_conceptualspace.command()
 @click_pass_add_context
