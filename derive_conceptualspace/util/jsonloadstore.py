@@ -9,7 +9,7 @@ from os.path import isfile, splitext, dirname, join, isdir
 
 import numpy as np
 import pandas as pd
-from sklearn.manifold._mds import MDS
+from sklearn.manifold import MDS, TSNE
 
 from derive_conceptualspace import settings
 
@@ -38,7 +38,7 @@ class NumpyEncoder(json.JSONEncoder):
             return ["np.ndarray", obj.tolist()]
         elif hasattr(obj, "json_serialize"):
             return [obj.__class__.__name__, obj.json_serialize()]
-        elif isinstance(obj, MDS):
+        elif isinstance(obj, (MDS, TSNE)):
             return Struct(**obj.__dict__) #let's return the dict of the MDS such that we can load it from json and its equal
         return json.JSONEncoder.default(self, obj)
 
