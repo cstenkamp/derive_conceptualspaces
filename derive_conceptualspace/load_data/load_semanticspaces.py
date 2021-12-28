@@ -182,7 +182,7 @@ def get_clusters(data_base, data_set, n_dims):
     return clusters
 
 
-def get_grouped_candidates(data_base, data_set, mds_dimensions, clusters=None, canditerms=None):
+def get_grouped_candidates(data_base, data_set, embed_dimensions, clusters=None, canditerms=None):
     """
     returns a list of all those candidates that ARE in a cluster, and for each of those a list [words, parts-of-speech, vector, orig(words+POSs), clustername].
     And a list of all cluster-vectors
@@ -194,8 +194,8 @@ def get_grouped_candidates(data_base, data_set, mds_dimensions, clusters=None, c
                 return origname
             if origname in clustercont:
                 return clustername
-    canditerms = canditerms or get_candidateterms(data_base, data_set, mds_dimensions)
-    clusters = clusters or get_clusters(data_base, data_set, mds_dimensions)
+    canditerms = canditerms or get_candidateterms(data_base, data_set, embed_dimensions)
+    clusters = clusters or get_clusters(data_base, data_set, embed_dimensions)
     alls = set(flatten(list(clusters.values()))) | set(clusters.keys())
     assert not alls-set(canditerms[3])
     canditerm_clusters = []

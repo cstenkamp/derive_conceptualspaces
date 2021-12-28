@@ -1,3 +1,4 @@
+test_env.env
 .snakemake/
 data_dump
 sacred_data

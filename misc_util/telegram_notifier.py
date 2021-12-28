@@ -2,8 +2,8 @@ import urllib, requests
 from functools import wraps
 import os, traceback, time
 
-MY_CHAT_ID = 163601520
-TGRAM_TOKEN = "491105485:AAFrSueGnkjLee79ne9MhvBSLrpB2VHEnec"
+MY_CHAT_ID = os.environ["TELEGRAM_MY_CHAT_ID"]
+TGRAM_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 
 def send_message(text, chat_id, file=None, filename="", reply_markup=None, parse_markdown=False):
     text = text.replace("_", "-")

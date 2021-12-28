@@ -6,12 +6,16 @@ from dotenv import load_dotenv
 
 ################ new stuff #################
 
+#!! use singular for these (bzw the form you'd use if there wasn't the "ALL_" before)
 ALL_PP_COMPONENTS = ["tcsldp"] #, "tcsdp"
 ALL_TRANSLATE_POLICY = ["translate"] #, "onlyeng", "origlan"
 ALL_EXTRACTION_METHOD = ["pp_keybert", "keybert"]
 ALL_QUANTIFICATION_MEASURE = ["ppmi", "tf-idf"]
-ALL_MDS_DIMENSIONS = [3, 100]
+ALL_EMBED_ALGO = ["t-SNE", "MDS"]
+ALL_EMBED_DIMENSIONS = [3, 100]
 ALL_DCM_QUANT_MEASURE = ["tf-idf", "count", "binary"] #TODO check if these and the quantification_measure are interchangeable!! (also: tag-share is missing)
+#TODO: try isomap & tf-idf in place of MDS
+
 
 #set default-values for the ALL_... variables
 for k, v in {k[4:]: v[0] for k,v in dict(locals()).items() if isinstance(v, list) and k.startswith("ALL_")}.items():
@@ -58,7 +62,7 @@ GOOGLE_CREDENTIALS_FILE = join(DATA_BASE, "gcloud_tools_key.json")
 #
 # OVEWRITE_SETTINGS_PREFIX="MA2"
 # DATA_SET = "movies" # "movies", "places", "wines", "courses"
-# # DEFAULT_MDS_DIMENSIONS = 20 #20,50,100,200
+# # DEFAULT_EMBED_DIMENSIONS = 20 #20,50,100,200
 # DEFAULT_VERBOSE = True
 # DEFAULT_RANDOM_SEED = 1
 # MONGO_URI = f"mongodb://{os.environ['MONGO_INITDB_ROOT_USERNAME']}:{os.environ['MONGO_INITDB_ROOT_PASSWORD']}@127.0.0.1/?authMechanism=SCRAM-SHA-1"

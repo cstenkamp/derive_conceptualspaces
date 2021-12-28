@@ -34,7 +34,7 @@ from derive_conceptualspace.create_spaces.spaces_main import (
     create_dissim_mat as create_dissim_mat_base,
 )
 from derive_conceptualspace.create_spaces.create_mds import (
-    create_mds as create_mds_json_base,
+    create_embedding as create_embedding_base,
 )
 from derive_conceptualspace.semantic_directions.create_candidate_svm import (
     create_candidate_svms as create_candidate_svms_base
@@ -48,10 +48,11 @@ from derive_conceptualspace.settings import (
     ALL_QUANTIFICATION_MEASURE,
     ALL_DCM_QUANT_MEASURE,
     ALL_EXTRACTION_METHOD,
-    ALL_MDS_DIMENSIONS,
+    ALL_EMBED_DIMENSIONS,
+    ALL_EMBED_ALGO,
 )
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
-from derive_conceptualspace.cli.create_siddata_dataset import setup_json_persister, set_debug
+from derive_conceptualspace.cli.create_siddata_dataset import setup_json_persister, set_debug, get_jsonpersister_args
 from derive_conceptualspace.util.desc_object import pp_descriptions_loader
 
 ########################################################################################################################
@@ -87,7 +88,6 @@ def add_to_ctx(wildcards, ctx):
         else:
             ctx.obj[k] = v
 
-
 autoloader_di = dict(
     pp_descriptions=pp_descriptions_loader,
     dissim_mat=dtm_dissimmat_loader,
@@ -95,8 +95,6 @@ autoloader_di = dict(
     filtered_dcm=dtm_loader,
     mds=lambda **args: args["mds"],
 )
-
-
 
 def autoload_context_inputs(ctx, inputs, wildcards, params=None, input_kwargs=None):
     """
@@ -115,22 +113,22 @@ def autoload_context_inputs(ctx, inputs, wildcards, params=None, input_kwargs=No
 ########################################################################################################################
 
 n_samples = 7588 if not get_setting("DEBUG") else get_setting("DEBUG_N_ITEMS")
+dir_struct = get_jsonpersister_args()[2]
+
 
 rule all:
     input:
-        expand("{n_samples}_samples/{pp_components}_{translate_policy}/{quantification_measure}_{mds_dimensions}d/{extraction_method}_{dcm_quant_measure}/clusters.json",
+        expand(os.sep.join(dir_struct+["clusters.json"]),
                 pp_components=ALL_PP_COMPONENTS, translate_policy=ALL_TRANSLATE_POLICY, quantification_measure=ALL_QUANTIFICATION_MEASURE,
-                mds_dimensions=ALL_MDS_DIMENSIONS, extraction_method=ALL_EXTRACTION_METHOD, dcm_quant_measure=ALL_DCM_QUANT_MEASURE,
-                n_samples=n_samples)
+                embed_dimensions=ALL_EMBED_DIMENSIONS, extraction_method=ALL_EXTRACTION_METHOD, dcm_quant_measure=ALL_DCM_QUANT_MEASURE,
+                embed_algo=ALL_EMBED_ALGO, n_samples=n_samples)
 
 rule default:
     input:
-        expand("{n_samples}_samples/{pp_components}_{translate_policy}/{quantification_measure}_{mds_dimensions}d/{extraction_method}_{dcm_quant_measure}/clusters.json",
+        expand(os.sep.join(dir_struct+["clusters.json"]),
                 pp_components=ALL_PP_COMPONENTS[0], translate_policy=ALL_TRANSLATE_POLICY[0], quantification_measure=ALL_QUANTIFICATION_MEASURE[0],
-                mds_dimensions=ALL_MDS_DIMENSIONS[0], extraction_method=ALL_EXTRACTION_METHOD[0], dcm_quant_measure=ALL_DCM_QUANT_MEASURE[0],
-                n_samples=n_samples)
-
-
+                embed_dimensions=ALL_EMBED_DIMENSIONS[0], extraction_method=ALL_EXTRACTION_METHOD[0], dcm_quant_measure=ALL_DCM_QUANT_MEASURE[0],
+                embed_algo=ALL_EMBED_ALGO, n_samples=n_samples)
 
 
 rule preprocess_descriptions:
@@ -159,16 +157,16 @@ rule create_dissim_mat:
         json_persister.save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat)
 
 
-rule create_mds:
+rule create_embedding:
     input:
         dissim_mat = "{n_samples}_samples/{pp_components}_{translate_policy}/dissim_mat_{quantification_measure}.json",
     output:
-        "{n_samples}_samples/{pp_components}_{translate_policy}/{quantification_measure}_{mds_dimensions}d/mds.json"
+        "{n_samples}_samples/{pp_components}_{translate_policy}/{quantification_measure}_{embed_algo}_{embed_dimensions}d/embedding.json"
     threads: 1
     run:
         autoload_context_inputs(ctx, input, wildcards)
-        mds = create_mds_json_base(ctx.obj["dissim_mat"], ctx.obj["mds_dimensions"])
-        json_persister.save("mds.json", mds=mds)
+        embedding = create_embedding_base(ctx.obj["dissim_mat"], ctx.obj["embed_dimensions"], ctx.obj["embed_algo"])
+        json_persister.save("embedding.json", embedding=embedding)
 
 
 
@@ -233,11 +231,11 @@ rule create_candidate_svm:
     input:
         pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/pp_descriptions.json",
         filtered_dcm = "{n_samples}_samples/{pp_components}_{translate_policy}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json",
-        mds = "{n_samples}_samples/{pp_components}_{translate_policy}/{quantification_measure}_{mds_dimensions}d/mds.json"
+        embedding = "{n_samples}_samples/{pp_components}_{translate_policy}/{quantification_measure}_{embed_algo}_{embed_dimensions}d/embedding.json"
     output:
-        "{n_samples}_samples/{pp_components}_{translate_policy}/{quantification_measure}_{mds_dimensions}d/{extraction_method}_{dcm_quant_measure}/clusters.json"
+        "{n_samples}_samples/{pp_components}_{translate_policy}/{quantification_measure}_{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}/clusters.json"
     threads: 1
     run:
         autoload_context_inputs(ctx, input, wildcards)
-        clusters, cluster_directions, kappa_scores, decision_planes = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["mds"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"])
+        clusters, cluster_directions, kappa_scores, decision_planes = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"])
         json_persister.save("clusters.json", clusters=clusters, cluster_directions=cluster_directions, kappa_scores=kappa_scores, decision_planes=decision_planes)

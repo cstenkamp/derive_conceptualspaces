@@ -167,13 +167,6 @@ class format_dict(dict):
 
 
 class JsonPersister():
-    FORWARD_PARAMS = ["pp_components", "translate_policy", "extraction_method", "quantification_measure", "mds_dimensions", "dcm_quant_measure"]
-    FORWARD_META_INF = ["n_samples", "faster_keybert", "candidate_min_term_count"]
-    DIR_STRUCT = ["{n_samples}_samples", "{pp_components}_{translate_policy}","{quantification_measure}_{mds_dimensions}d", "{extraction_method}_{dcm_quant_measure}"]
-                 #["{n_samples}_samples", "preproc-{pp_components}_{translate_policy}", "{quantification_measure}_{mds_dimensions}dim",]
-    #TODO the FORWARD_META_INF here is not used - I can use it to automatically add this in the save-method if the respective keys are in the ctx.obj, such that I don't need to
-    # explitly specify them when saving!
-
     #TODO a very important thing this should do is not done yet: Er soll von der kompletten historie an required files auch die kompletten meta-infos speichern,
     # also das was json_store mitspeichert! Das muss alles an loaded_objects hängen! Ich möchte wissen was der git-commit der jeweiligen benötigten files war!
     # - dementsprechend muss es auch klappen, dass wenn ich in extract_candidates als relevant_metainfo das model anhänge, ich auch in den postprocessed_descriptions
@@ -184,7 +177,12 @@ class JsonPersister():
     #     candidate_terms["candidate_terms"] = postprocess_candidates(candidate_terms, descriptions)
     #     return model, candidate_terms
 
-    def __init__(self, in_dir, out_dir, ctx, add_relevantparams_to_filename=True):
+    def __init__(self, in_dir, out_dir, ctx, forward_params, forward_meta_inf, dir_struct=None, add_relevantparams_to_filename=True):
+        self.forward_params = forward_params
+        self.forward_meta_inf = forward_meta_inf
+        #TODO the FORWARD_META_INF here is not used - I can use it to automatically add this in the save-method if the respective keys are in the ctx.obj, such that I don't need to
+        # explitly specify them when saving!
+        self.dir_struct = dir_struct or []
         self.in_dir = in_dir
         self.out_dir = out_dir
         self.ctx = ctx
@@ -196,12 +194,12 @@ class JsonPersister():
 
 
     def get_subdir(self, relevant_metainf, ignore_params=None):
-        if not (self.DIR_STRUCT and all(i for i in self.DIR_STRUCT)):
+        if not (self.dir_struct and all(i for i in self.dir_struct)):
             return "", []
         di = format_dict({**{k:v for k,v in self.ctx.obj.items() if k not in (ignore_params or [])}, **relevant_metainf})
-        dirstruct = [d.format_map(di) for d in self.DIR_STRUCT]
+        dirstruct = [d.format_map(di) for d in self.dir_struct]
         fulfilled_dirs = len(dirstruct) if not (tmp := [i for i, el in enumerate(dirstruct) if "UNDEFINED" in el]) else tmp[0]
-        used_params = [k for k in di.keys() if "{"+k+"}" in "".join(self.DIR_STRUCT[:fulfilled_dirs])] #"verbrauchte", damit die nicht mehr zum filename hinzugefügt werden müssen
+        used_params = [k for k in di.keys() if "{"+k+"}" in "".join(self.dir_struct[:fulfilled_dirs])] #"verbrauchte", damit die nicht mehr zum filename hinzugefügt werden müssen
         return os.sep.join(dirstruct[:fulfilled_dirs]), used_params
 
 
@@ -221,7 +219,7 @@ class JsonPersister():
                             all(tmp.get("relevant_params", {}).get(k) == v for k, v in
                                 self.loaded_relevant_params.items()) and \
                             all(self.ctx.obj.get(k) == tmp["relevant_params"][k] for k in
-                                set(self.FORWARD_PARAMS) & set(tmp.get("relevant_params", {}).keys())):
+                                set(self.forward_params) & set(tmp.get("relevant_params", {}).keys())):
                         correct_cands.append(cand)
                 return correct_cands
 
@@ -274,6 +272,7 @@ class JsonPersister():
         self.loaded_objects[save_basename] = (obj, join(self.in_dir, subdir, filename), ["this"], obj_info)
         return obj
 
+
     def save(self, basename, /, relevant_params=None, relevant_metainf=None, **kwargs):
         basename, ext = splitext(basename)
         filename = basename
@@ -281,7 +280,7 @@ class JsonPersister():
             relevant_params += self.loaded_relevant_params
             assert len(set(relevant_params)) == len(relevant_params)
         else:
-            relevant_params = [i for i in self.FORWARD_PARAMS if i in self.ctx.obj]
+            relevant_params = [i for i in self.forward_params if i in self.ctx.obj]
         relevant_metainf = {**self.loaded_relevant_metainf, **(relevant_metainf or {})}
         subdir, used_args = self.get_subdir(relevant_metainf)
         if self.add_relevantparams_to_filename and [i for i in relevant_params if i not in used_args]:

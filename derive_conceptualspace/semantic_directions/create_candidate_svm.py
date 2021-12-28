@@ -35,7 +35,7 @@ def create_candidate_svms(dcm, mds, pp_descriptions, verbose):
     sorted_kappa = [(i[0], i[1]["kappa"]) for i in sorted(metrics.items(), key=lambda x:x[1]["kappa"], reverse=True)]
     if verbose and mds.embedding_.shape[1] == 3:
         create_candidate_svm(mds, sorted_kappa[0][0], dcm.term_existinds(use_index=False)[sorted_kappa[0][0]], descriptions, plot_svm=True)
-        while (another := input("Another one to display: ").strip()) != "":
+        while (another := input("Another one to display: ").strip()) != "" or another not in dcm.term_existinds(use_index=False):
             create_candidate_svm(mds, another, dcm.term_existinds(use_index=False)[another], descriptions, plot_svm=True)
     clusters, cluster_directions = select_salient_terms(sorted_kappa, decision_planes)
     return clusters, cluster_directions, dict(sorted_kappa), {k: (v.intercept, list(v.normal)) for k,v in decision_planes.items()}

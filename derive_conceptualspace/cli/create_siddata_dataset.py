@@ -39,7 +39,7 @@ from derive_conceptualspace.create_spaces.spaces_main import (
     create_dissim_mat as create_dissim_mat_base,
 )
 from derive_conceptualspace.create_spaces.create_mds import (
-    create_mds as create_mds_json_base,
+    create_embedding as create_embedding_base,
 )
 from derive_conceptualspace.semantic_directions.create_candidate_svm import (
     create_candidate_svms as create_candidate_svms_base
@@ -70,9 +70,21 @@ def loadstore_settings_envvars(ctx, use_auto_envvar_prefix=False):
         else:
             set_envvar(envvarname, ctx.obj[param])
 
+def get_jsonpersister_args():
+    import derive_conceptualspace.settings
+    all_params = [k[4:].lower() for k in derive_conceptualspace.settings.__dict__ if k.startswith("ALL_")]
+    forward_meta_inf = ["n_samples", "faster_keybert", "candidate_min_term_count"]
+    dir_struct = ["{n_samples}_samples", "{pp_components}_{translate_policy}","{quantification_measure}_{embed_algo}_{embed_dimensions}d", "{extraction_method}_{dcm_quant_measure}"]
+               # ["{n_samples}_samples", "preproc-{pp_components}_{translate_policy}", "{quantification_measure}_{embed_dimensions}dim",]
+    return all_params, forward_meta_inf, dir_struct
+
 
 def setup_json_persister(ctx, ignore_nsamples=False):
-    json_persister = JsonPersister(ctx.obj["base_dir"], ctx.obj["base_dir"], ctx, ctx.obj.get("add_relevantparams_to_filename", True))
+    all_params, forward_meta_inf, dir_struct = get_jsonpersister_args()
+    json_persister = JsonPersister(ctx.obj["base_dir"], ctx.obj["base_dir"], ctx,
+                                   forward_params = all_params, forward_meta_inf = forward_meta_inf, dir_struct = dir_struct,
+                                   add_relevantparams_to_filename=ctx.obj.get("add_relevantparams_to_filename", True),
+                                  )
     if ignore_nsamples:
         n_samples_getter = lambda: "ANY"
         cand_ntc_getter = lambda: "ANY"
@@ -204,12 +216,13 @@ def create_dissim_mat(ctx):
 
 
 @create_spaces.command()
-@click.option("--mds-dimensions", type=int, default=lambda: get_setting("MDS_DIMENSIONS"))
+@click.option("--embed-dimensions", type=int, default=lambda: get_setting("EMBED_DIMENSIONS"))
+@click.option("--embed-algo", type=str, default=lambda: get_setting("EMBED_ALGO"))
 @click_pass_add_context
-def create_mds_json(ctx):
-    dissim_mat = ctx.obj["json_persister"].load(None, "dissim_mat", ignore_params=["mds_dimensions"], loader=dtm_dissimmat_loader)
-    mds = create_mds_json_base(dissim_mat, ctx.obj["mds_dimensions"])
-    ctx.obj["json_persister"].save("mds.json", mds=mds)
+def create_embedding(ctx):
+    dissim_mat = ctx.obj["json_persister"].load(None, "dissim_mat", ignore_params=["embed_dimensions"], loader=dtm_dissimmat_loader)
+    embedding = create_embedding_base(dissim_mat, ctx.obj["embed_dimensions"], ctx.obj["embed_algo"])
+    ctx.obj["json_persister"].save("embedding.json", embedding=embedding)
 
 ########################################################################################################################
 ########################################################################################################################
@@ -286,22 +299,23 @@ def filter_keyphrases(ctx, candidate_min_term_count):
 @click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS"))
 @click.option("--translate-policy", type=str, default=lambda: get_setting("TRANSLATE_POLICY"))
 @click.option("--quantification-measure", type=str, default=lambda: get_setting("QUANTIFICATION_MEASURE"))
-@click.option("--mds-dimensions", type=int, default=lambda: get_setting("MDS_DIMENSIONS"))
+@click.option("--embed-dimensions", type=int, default=lambda: get_setting("EMBED_DIMENSIONS"))
+@click.option("--embed-algo", type=str, default=lambda: get_setting("EMBED_ALGO"))
 @click.option("--extraction-method", type=str, default=lambda: get_setting("EXTRACTION_METHOD"))
 @click.option("--dcm-quant-measure", type=click.Choice(ALL_DCM_QUANT_MEASURE, case_sensitive=False), default=lambda: get_setting("DCM_QUANT_MEASURE"))
 @click_pass_add_context
 def generate_conceptualspace(ctx):
     """[group] CLI base to create the actual conceptual spaces"""
-    ctx.obj["pp_descriptions"] = ctx.obj["json_persister"].load(None, "pp_descriptions", loader=pp_descriptions_loader, ignore_params=["quantification_measure", "mds_dimensions"])
-    ctx.obj["filtered_dcm"] = ctx.obj["json_persister"].load(None, "filtered_dcm", loader=dtm_loader, ignore_params=["quantification_measure", "mds_dimensions"])
-    ctx.obj["mds"] = ctx.obj["json_persister"].load(None, "mds", ignore_params=["extraction_method", "dcm_quant_measure"], loader=lambda **args: args["mds"])
-    assert ctx.obj["mds"].embedding_.shape[0] == len(ctx.obj["filtered_dcm"].dtm), f'The Doc-Candidate-Matrix contains {len(ctx.obj["filtered_dcm"].dtm)} items But your MDS has {ctx.obj["mds"].embedding_.shape[0] } descriptions!'
+    ctx.obj["pp_descriptions"] = ctx.obj["json_persister"].load(None, "pp_descriptions", loader=pp_descriptions_loader, ignore_params=["quantification_measure", "embed_dimensions"])
+    ctx.obj["filtered_dcm"] = ctx.obj["json_persister"].load(None, "filtered_dcm", loader=dtm_loader, ignore_params=["quantification_measure", "embed_dimensions"])
+    ctx.obj["embedding"] = ctx.obj["json_persister"].load(None, "embedding", ignore_params=["extraction_method", "dcm_quant_measure"], loader=lambda **args: args["mds"])
+    assert ctx.obj["embedding"].embedding_.shape[0] == len(ctx.obj["filtered_dcm"].dtm), f'The Doc-Candidate-Matrix contains {len(ctx.obj["filtered_dcm"].dtm)} items But your embedding has {ctx.obj["embedding"].embedding_.shape[0] } descriptions!'
 
 
 @generate_conceptualspace.command()
 @click_pass_add_context
 def create_candidate_svm(ctx):
-    clusters, cluster_directions, kappa_scores, decision_planes = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["mds"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"])
+    clusters, cluster_directions, kappa_scores, decision_planes = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"])
     ctx.obj["json_persister"].save("clusters.json", clusters=clusters, cluster_directions=cluster_directions, kappa_scores=kappa_scores, decision_planes=decision_planes)
     #TODO hier war dcm = DocTermMatrix(json_load(join(ctx.obj["base_dir"], dcm_filename), assert_meta=("CANDIDATE_MIN_TERM_COUNT", "STANFORDNLP_VERSION"))), krieg ich das wieder hin?
 
@@ -319,7 +333,7 @@ def show_data_info(ctx):
     print(f"Data lies at *b*{ctx.obj['json_persister'].in_dir}*b*")
     print("Settings:", ", ".join([f"{k}: *b*{v}*b*" for k, v in ctx.obj["json_persister"].loaded_relevant_params.items()]))
     print("Relevant Metainfo:", ", ".join([f"{k}: *b*{v}*b*" for k, v in ctx.obj["json_persister"].loaded_relevant_metainf.items()]))
-    data_dirs = {k: v[1].replace(ctx.obj["json_persister"].in_dir, "data_dir") for k, v in ctx.obj["json_persister"].loaded_objects.items()}
+    data_dirs = {k: v[1].replace(ctx.obj["json_persister"].in_dir, "data_dir/") for k, v in ctx.obj["json_persister"].loaded_objects.items()}
     print("Directories:\n ", "\n  ".join(f"{k.rjust(max(len(i) for i in data_dirs))}: {v}" for k,v in data_dirs.items()))
     dependencies = {k.replace("preprocessed_descriptions","pp_descriptions"): set([i.replace("preprocessed_descriptions","pp_descriptions") for i in v[2] if i != "this"]) for k,v in ctx.obj["json_persister"].loaded_objects.items()}
     dot = Digraph()
@@ -347,7 +361,7 @@ def show_data_info(ctx):
 @click_pass_add_context
 def rank_courses_saldirs(ctx):
     ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, "clusters")
-    for desc, embedding in zip(ctx.obj["pp_descriptions"]["descriptions"], list(ctx.obj["mds"].embedding_)):
+    for desc, embedding in zip(ctx.obj["pp_descriptions"]["descriptions"], list(ctx.obj["embedding"].embedding_)):
         desc.embedding = embedding
     print()
 
