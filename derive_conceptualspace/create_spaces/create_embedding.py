@@ -66,7 +66,8 @@ def create_embedding(dissim_mat, embed_dimensions, embed_algo):
         return create_mds(dissim_mat, embed_dimensions)
     elif embed_algo == "tsne":
         return create_tsne(dissim_mat, embed_dimensions)
-
+    else:
+        raise NotImplementedError(f"Algorithm {embed_algo} is not implemented!")
 
 def create_mds(dissim_mat, embed_dimensions):
     dtm, dissim_mat = dissim_mat
@@ -79,8 +80,6 @@ def create_mds(dissim_mat, embed_dimensions):
 
 def create_tsne(dissim_mat, embed_dimensions):
     dtm, dissim_mat = dissim_mat
-    #TODO - isn't isomap better suited than MDS? https://scikit-learn.org/stable/modules/manifold.html#multidimensional-scaling
-    # !! [DESC15] say they compared it and it's worse ([15] of [DESC15])!!!
-    embedding = MDS(n_components=embed_dimensions, random_state=get_setting("RANDOM_SEED", default_none=True), dissimilarity="precomputed")
-    mds = embedding.fit(dissim_mat)
-    return mds
+    embedding = TSNE(n_components=embed_dimensions, random_state=get_setting("RANDOM_SEED", default_none=True), metric="precomputed")
+    tsne = embedding.fit(dissim_mat)
+    return tsne

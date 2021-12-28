@@ -1,7 +1,7 @@
 from os.path import basename
 import logging
 
-from .create_mds import create_dissimilarity_matrix
+from .create_embedding import create_dissimilarity_matrix
 
 from derive_conceptualspace.settings import get_setting
 from derive_conceptualspace.util.text_tools import tf_idf, ppmi

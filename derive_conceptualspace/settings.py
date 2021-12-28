@@ -11,7 +11,7 @@ ALL_PP_COMPONENTS = ["tcsldp"] #, "tcsdp"
 ALL_TRANSLATE_POLICY = ["translate"] #, "onlyeng", "origlan"
 ALL_EXTRACTION_METHOD = ["pp_keybert", "keybert"]
 ALL_QUANTIFICATION_MEASURE = ["ppmi", "tf-idf"]
-ALL_EMBED_ALGO = ["t-SNE", "MDS"]
+ALL_EMBED_ALGO = ["tsne", "mds"]
 ALL_EMBED_DIMENSIONS = [3, 100]
 ALL_DCM_QUANT_MEASURE = ["tf-idf", "count", "binary"] #TODO check if these and the quantification_measure are interchangeable!! (also: tag-share is missing)
 #TODO: try isomap & tf-idf in place of MDS

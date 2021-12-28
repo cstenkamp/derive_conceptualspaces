@@ -38,7 +38,7 @@ from derive_conceptualspace.create_spaces.preprocess_descriptions import (
 from derive_conceptualspace.create_spaces.spaces_main import (
     create_dissim_mat as create_dissim_mat_base,
 )
-from derive_conceptualspace.create_spaces.create_mds import (
+from derive_conceptualspace.create_spaces.create_embedding import (
     create_embedding as create_embedding_base,
 )
 from derive_conceptualspace.semantic_directions.create_candidate_svm import (
@@ -308,7 +308,7 @@ def generate_conceptualspace(ctx):
     """[group] CLI base to create the actual conceptual spaces"""
     ctx.obj["pp_descriptions"] = ctx.obj["json_persister"].load(None, "pp_descriptions", loader=pp_descriptions_loader, ignore_params=["quantification_measure", "embed_dimensions"])
     ctx.obj["filtered_dcm"] = ctx.obj["json_persister"].load(None, "filtered_dcm", loader=dtm_loader, ignore_params=["quantification_measure", "embed_dimensions"])
-    ctx.obj["embedding"] = ctx.obj["json_persister"].load(None, "embedding", ignore_params=["extraction_method", "dcm_quant_measure"], loader=lambda **args: args["mds"])
+    ctx.obj["embedding"] = ctx.obj["json_persister"].load(None, "embedding", ignore_params=["extraction_method", "dcm_quant_measure"], loader=lambda **args: args["embedding"])
     assert ctx.obj["embedding"].embedding_.shape[0] == len(ctx.obj["filtered_dcm"].dtm), f'The Doc-Candidate-Matrix contains {len(ctx.obj["filtered_dcm"].dtm)} items But your embedding has {ctx.obj["embedding"].embedding_.shape[0] } descriptions!'
 
 
