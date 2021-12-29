@@ -1,29 +1,29 @@
-numpy
-jupyter
-jupyterlab
-matplotlib
-scipy
-pandas
-nltk
-HanTa #Lemmatizer for german
-tqdm
-sklearn
-seaborn
-ipyparams
-langdetect
+numpy==1.20.3
+jupyter==1.0.0
+jupyterlab==3.0.14
+matplotlib==3.4.1
+scipy==1.7.1
+pandas==1.2.4
+nltk==3.6.2
+HanTa==0.2.0 #Lemmatizer for german
+tqdm==4.60.0
+scikit-learn==1.0
+seaborn==0.11.1
+ipyparams==0.2.1
+langdetect==1.0.9
 google-cloud-translate==2.0.1
-click
-stanfordcorenlp
-keybert
-unidecode
+click==7.1.2
+stanfordcorenlp==3.9.1.1
+keybert==0.4.0
+unidecode==1.3.2
 
-python-Levenshtein #für data_exploration.ipynb in data
-python-dotenv
+python-Levenshtein==0.12.2 #für data_exploration.ipynb in data
+python-dotenv==0.17.1
 
 #sacred
-sacred
-pymongo
-incense
+sacred==0.8.2
+pymongo==3.11.4
+incense==0.0.11
 
 
 #model-downloader
@@ -33,5 +33,5 @@ git+https://github.com/cstenkamp/python-seafile.git@v0.1.2#egg=python_seafile #o
 plotly==4.14.3
 #to render in jupyterlab install jupyterlab extension: conda run -n Derive_Conceptualspace python -m jupyter labextension uninstall jupyterlab-plotly@5.3.1
 
-snakemake
-gensim
+snakemake==6.9.1
+gensim==4.1.2

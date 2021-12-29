@@ -1,13 +1,14 @@
 """
-How to plot DAG as graph:
-`PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -np --directory $MA_DATA_DIR --dag | grep -A99999 "digraph" | dot -Tsvg > dag.svg`
-How to run for 1 MDS:
-`MA_DEBUG=1 PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR default`
-or `MA_DEBUG=1 PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR tcsldp_translate/ppmi_3d/pp_keybert_count/clusters.json`
-you can also: `(export $(cat $MA_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR default)`
-If run on server:
-`rsync -az --progress $MA_DATA_DIR etlpipelines:~/data --exclude .snakemake`
+Plot DAG:      `PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -np --directory $MA_DATA_DIR --dag | grep -A99999 "digraph" | dot -Tsvg > dag.svg`
+Run default:   `MA_DEBUG=1 PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR default`
+or             `MA_DEBUG=1 PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR tcsldp_translate/ppmi_3d/pp_keybert_count/clusters.json`
+or:            `(export $(cat $MA_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR default)`
+ALL Combis:    `ma_cont snakemake --cores 1 -p  --directory /opt/data all --keep-going`
+Get results:   `rsync -az --progress $MA_DATA_DIR etlpipelines:~/data --exclude .snakemake`
 """
+
+#TODO before writing about it: have a way of not having to set the PYTHONPATH as cmd-arg
+
 import os
 
 from snakemake.io import expand
@@ -67,7 +68,7 @@ class Context():
 
 
 def initialize_snakemake():
-    if int(os.getenv(f"{ENV_PREFIX}_SNAKEMAKE_TELEGRAM")):
+    if int(os.getenv(f"{ENV_PREFIX}_SNAKEMAKE_TELEGRAM", 0)):
         if not os.getenv(f"{ENV_PREFIX}_SMK_INITIALIZED"):
             print("Telegaram-Notifications ON.")
         for k, v in dict(globals()).items():

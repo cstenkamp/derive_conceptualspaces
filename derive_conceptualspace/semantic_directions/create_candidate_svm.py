@@ -41,7 +41,9 @@ def create_candidate_svms(dcm, mds, pp_descriptions, verbose):
     return clusters, cluster_directions, dict(sorted_kappa), {k: (v.intercept, list(v.normal)) for k,v in decision_planes.items()}
 
 
-def select_salient_terms(sorted_kappa, decision_planes, prim_lambda=0.24, sec_lambda=0.18):
+def select_salient_terms(sorted_kappa, decision_planes, prim_lambda=None, sec_lambda=None):
+    prim_lambda = prim_lambda or get_setting("PRIM_LAMBDA")
+    sec_lambda = sec_lambda or get_setting("SEC_LAMBDA")
     #TODO waitwaitwait. Am I 100% sure that the intercepts of the decision_planes are irrelevant?!
     get_tlambda = lambda sorted_kappa, lamb: [i[0] for i in sorted_kappa if i[1] > lamb]
     get_tlambda2 = lambda sorted_kappa, primlamb, seclamb: list(set(get_tlambda(sorted_kappa, seclamb))-set(get_tlambda(sorted_kappa, primlamb)))

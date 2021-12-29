@@ -11,10 +11,10 @@ ALL_PP_COMPONENTS = ["tcsldp"] #, "tcsdp"
 ALL_TRANSLATE_POLICY = ["translate"] #, "onlyeng", "origlan"
 ALL_EXTRACTION_METHOD = ["pp_keybert", "keybert"]
 ALL_QUANTIFICATION_MEASURE = ["ppmi", "tf-idf"]
-ALL_EMBED_ALGO = ["tsne", "mds"]
-ALL_EMBED_DIMENSIONS = [3, 100]
-ALL_DCM_QUANT_MEASURE = ["tf-idf", "count", "binary"] #TODO check if these and the quantification_measure are interchangeable!! (also: tag-share is missing)
-#TODO: try isomap & tf-idf in place of MDS
+ALL_EMBED_ALGO = ["mds", "tsne"]
+ALL_EMBED_DIMENSIONS = [100, 50]#, 200, 3]
+ALL_DCM_QUANT_MEASURE = ["tf-idf", "count"]#, "binary"] #TODO check if these and the quantification_measure are interchangeable!! (also: tag-share is missing)
+#TODO: try isomap & tsne in place of MDS
 
 
 #set default-values for the ALL_... variables
@@ -27,6 +27,9 @@ DEFAULT_DEBUG = False
 DEFAULT_DEBUG_N_ITEMS = 100
 DEFAULT_CANDIDATE_MIN_TERM_COUNT = 25
 DEFAULT_FASTER_KEYBERT = False
+
+DEFAULT_PRIM_LAMBDA = 0.45
+DEFAULT_SEC_LAMBDA = 0.3
 ################ /new stuff #################
 
 DEFAULT_STANFORDNLP_VERSION = "4.2.2" #whatever's newest at https://stanfordnlp.github.io/CoreNLP/history.html
@@ -100,12 +103,14 @@ def get_envvar(envvarname):
     return None
 
 
-def get_setting(name, default_none=False, silent=False, set_env_from_default=False):
+def get_setting(name, default_none=False, silent=False, set_env_from_default=False, stay_silent=False):
+    suppress_further = True if not silent else True if stay_silent else False
     if get_envvar(ENV_PREFIX+"_"+name) is not None:
         return get_envvar(ENV_PREFIX+"_"+name) if get_envvar(ENV_PREFIX+"_"+name) != "none" else None
     if "DEFAULT_"+name in globals():
         if not silent and not get_envvar(ENV_PREFIX+"_"+name+"_shutup"):
             print(f"returning setting for {name} from default value: {globals()['DEFAULT_'+name]}")
+        if suppress_further and not get_envvar(ENV_PREFIX + "_" + name + "_shutup"):
             set_envvar(ENV_PREFIX+"_"+name+"_shutup", True)
         if set_env_from_default:
             set_envvar(ENV_PREFIX+"_"+name, globals()['DEFAULT_'+name])

@@ -47,6 +47,7 @@ from derive_conceptualspace.semantic_directions.create_candidate_svm import (
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
 
 logger = logging.getLogger(basename(__file__))
+flatten = lambda l: [item for sublist in l for item in sublist]
 
 ########################################################################################################################
 ########################################################################################################################
@@ -142,7 +143,11 @@ def click_pass_add_context(fn):
 @click.option("--notify-telegram/--no-notify-telegram", default=False, help="If you want to get telegram-notified of start & end of the command")
 @click_pass_add_context
 def cli(ctx):
+    import derive_conceptualspace.settings
     print("Starting up at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
+    all_params = {i: get_setting(i.upper(), stay_silent=True, silent=True) for i in get_jsonpersister_args()[0]}
+    default_params = {k[len("DEFAULT_"):].lower():v for k,v in derive_conceptualspace.settings.__dict__.items() if k in ["DEFAULT_"+i.upper() for i in all_params.keys()]}
+    print("Running with the following settings:", ", ".join([f"{k}: *{'b' if v==default_params[k] else 'r'}*{v}*{'b' if v==default_params[k] else 'r'}*" for k, v in all_params.items()]))
     setup_logging(ctx.obj["log"], ctx.obj["logfile"])
     set_debug(ctx)
     ctx.obj["json_persister"] = setup_json_persister(ctx)
@@ -335,10 +340,19 @@ def show_data_info(ctx):
     print("Relevant Metainfo:", ", ".join([f"{k}: *b*{v}*b*" for k, v in ctx.obj["json_persister"].loaded_relevant_metainf.items()]))
     data_dirs = {k: v[1].replace(ctx.obj["json_persister"].in_dir, "data_dir/") for k, v in ctx.obj["json_persister"].loaded_objects.items()}
     print("Directories:\n ", "\n  ".join(f"{k.rjust(max(len(i) for i in data_dirs))}: {v}" for k,v in data_dirs.items()))
-    dependencies = {k.replace("preprocessed_descriptions","pp_descriptions"): set([i.replace("preprocessed_descriptions","pp_descriptions") for i in v[2] if i != "this"]) for k,v in ctx.obj["json_persister"].loaded_objects.items()}
+    dependencies = {k: set([i for i in v[2] if i != "this"]) for k,v in ctx.obj["json_persister"].loaded_objects.items()}
+    #figuring out when a new param was first necessary
+    param_intro = {k: v[3].get("relevant_params") if v[3] else None for k, v in ctx.obj["json_persister"].loaded_objects.items()}
+    newparam = {}
+    for key, val in {k: list(v.keys()) for k, v in param_intro.items() if v}.items():
+        for elem in val:
+            if elem not in flatten(newparam.values()):
+                newparam.setdefault(key, []).append(elem)
+    #/figuring out when a new param was first necessary
     dot = Digraph()
     for key in dependencies:
-        dot.node(key, key)
+        add_txt = "\n  ".join([f"{el}: {ctx.obj['json_persister'].loaded_relevant_params[el]}" for el in newparam.get(key, [])])
+        dot.node(key, key+("\n\n  "+add_txt if add_txt else ""))
     dot.edges([[k, e] for k, v in dependencies.items() for e in v])
     # print(dot.source) #TODO save to file
     if ctx.obj["verbose"]:
@@ -357,6 +371,7 @@ def show_data_info(ctx):
     dates = {k2:v2 for k2,v2 in {k: v[3]["date"] if isinstance(v[3], dict) and "date" in v[3] else None for k,v in ctx.obj["json_persister"].loaded_objects.items()}.items() if v2 is not None}
     print("Dates:\n ", "\n  ".join(f"{k.rjust(max(len(i) for i in dates))}: {v}" for k,v in dates.items()))
 
+
 @generate_conceptualspace.command()
 @click_pass_add_context
 def rank_courses_saldirs(ctx):
@@ -365,16 +380,14 @@ def rank_courses_saldirs(ctx):
         desc.embedding = embedding
     print()
 
-#
+
 # @prepare_candidateterms.command()
-# @click.pass_context
-# @click.argument("dtm-filename", type=str)
-# @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
+# @click_pass_add_context
+# # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
 # def run_lsi(ctx, dtm_filename):
 #     """as in [VISR12: 4.2.1]"""
 #     # TODO options here:
 #     # * if it should filter AFTER the LSI
-#     from derive_conceptualspace.util.jsonloadstore import json_load
 #     import numpy as np
 #     from derive_conceptualspace.util.dtm_object import DocTermMatrix
 #     from os.path import splitext

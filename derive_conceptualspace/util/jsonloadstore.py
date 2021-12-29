@@ -247,7 +247,7 @@ class JsonPersister():
                 #     print(f"Loading {tmp['basename']}: {self.loaded_objects[k][2]}")
                 if k not in self.loaded_objects: self.loaded_objects[k] = v
                 elif tmp["basename"] in v[2]:
-                    assert str(self.loaded_objects[k][3]) == str(v[3])
+                    assert str({k:v for k,v in self.loaded_objects[k][3].items() if k not in ["relevant_params", "relevant_metainf"]}) == str(v[3])
                     self.loaded_objects[k][2].extend(v[2])
                     # the pp_descriptions are used in candidate_terms AND in postprocess_candidates. So when pp_cands loads stuff, it needs to note that pp_descriptions were used in boht.
                 elif k in self.loaded_objects:
@@ -262,7 +262,7 @@ class JsonPersister():
                 assert k in complete_metainf, f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}`, but you don't have a value for this!"
                 assert complete_metainf[k] in [v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
             obj = tmp["object"] if "object" in tmp else tmp
-            obj_info = tmp.get("obj_info")
+            obj_info = {**tmp.get("obj_info"), "relevant_params": tmp.get("relevant_params", {}), "relevant_metainf": tmp.get("relevant_metainf", {})}
         if loader is not None:
             obj = loader(**obj)
         for k, v in self.loaded_relevant_params.items():

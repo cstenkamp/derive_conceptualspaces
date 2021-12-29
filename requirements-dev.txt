@@ -1,4 +1,4 @@
-pytest
-nbstripout
+pytest==6.2.3
+nbstripout==0.3.9
 # nbstripout --install --attributes .gitattributes
-nbdime
+nbdime==3.1.0
