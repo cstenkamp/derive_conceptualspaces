@@ -14,7 +14,7 @@ if abspath(join(dirname(__file__), "../..")) not in sys.path:
 import click
 
 from misc_util.telegram_notifier import telegram_notify
-from misc_util.logutils import setup_logging
+from misc_util.logutils import setup_logging, CustomIO
 from misc_util.pretty_print import pretty_print as print
 
 from derive_conceptualspace.settings import ALL_DCM_QUANT_MEASURE, ENV_PREFIX, get_setting, set_envvar, get_envvar
@@ -94,7 +94,9 @@ def setup_json_persister(ctx, ignore_nsamples=False):
         cand_ntc_getter = lambda: get_setting("CANDIDATE_MIN_TERM_COUNT", silent=True)
     json_persister.default_metainf_getters = {"n_samples": n_samples_getter,
                                               "faster_keybert": lambda: get_setting("FASTER_KEYBERT", silent=True),
-                                              "candidate_min_term_count": cand_ntc_getter}
+                                              "candidate_min_term_count": cand_ntc_getter,
+                                              "prim_lambda": lambda: "ANY",
+                                              "sec_lambda": lambda: "ANY"}
     return json_persister
 
 
@@ -144,6 +146,7 @@ def click_pass_add_context(fn):
 @click_pass_add_context
 def cli(ctx):
     import derive_conceptualspace.settings
+    CustomIO.init()
     print("Starting up at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
     all_params = {i: get_setting(i.upper(), stay_silent=True, silent=True) for i in get_jsonpersister_args()[0]}
     default_params = {k[len("DEFAULT_"):].lower():v for k,v in derive_conceptualspace.settings.__dict__.items() if k in ["DEFAULT_"+i.upper() for i in all_params.keys()]}
@@ -318,10 +321,14 @@ def generate_conceptualspace(ctx):
 
 
 @generate_conceptualspace.command()
+@click.option("--prim-lambda", type=float, default=lambda: get_setting("PRIM_LAMBDA"))
+@click.option("--sec-lambda", type=float, default=lambda: get_setting("SEC_LAMBDA"))
 @click_pass_add_context
 def create_candidate_svm(ctx):
-    clusters, cluster_directions, kappa_scores, decision_planes = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"])
-    ctx.obj["json_persister"].save("clusters.json", clusters=clusters, cluster_directions=cluster_directions, kappa_scores=kappa_scores, decision_planes=decision_planes)
+    clusters, cluster_directions, kappa_scores, decision_planes = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"],
+                                                                                             prim_lambda=ctx.obj["prim_lambda"], sec_lambda=ctx.obj["sec_lambda"])
+    ctx.obj["json_persister"].save("clusters.json", clusters=clusters, cluster_directions=cluster_directions, kappa_scores=kappa_scores, decision_planes=decision_planes,
+                                   relevant_metainf={"prim_lambda": ctx.obj["prim_lambda"], "sec_lambda": ctx.obj["sec_lambda"]})
     #TODO hier war dcm = DocTermMatrix(json_load(join(ctx.obj["base_dir"], dcm_filename), assert_meta=("CANDIDATE_MIN_TERM_COUNT", "STANFORDNLP_VERSION"))), krieg ich das wieder hin?
 
 #TODO I can do something like autodetect_relevant_params und metainf im json_persister
@@ -370,7 +377,22 @@ def show_data_info(ctx):
     print("Latest commit messages:\n  ", "\n   ".join(tmp))
     dates = {k2:v2 for k2,v2 in {k: v[3]["date"] if isinstance(v[3], dict) and "date" in v[3] else None for k,v in ctx.obj["json_persister"].loaded_objects.items()}.items() if v2 is not None}
     print("Dates:\n ", "\n  ".join(f"{k.rjust(max(len(i) for i in dates))}: {v}" for k,v in dates.items()))
+    output = {k: merge_streams(v[3].get("stdout", ""), v[3].get("stderr", ""), k) for k, v in ctx.obj["json_persister"].loaded_objects.items()}
+    print()
 
+def merge_streams(s1, s2, for_):
+    format = sys.stdout.date_format if isinstance(sys.stdout, CustomIO) else CustomIO.DEFAULT_DATE_FORMAT
+    if not s1 and not s2:
+        return ""
+    def make_list(val):
+        res = []
+        for i in val.split("\n"):
+            try: res.append([datetime.strptime(i[:len(datetime.now().strftime(format))], format), i[len(datetime.now().strftime(format))+1:]])
+            except ValueError: res[-1][1] += "\n"+i
+        return res
+    s1 = make_list(s1) if s1 else []
+    s2 = make_list(s2) if s2 else []
+    return "\n".join([i[1] for i in sorted(s1+s2, key=lambda x:x[0])])
 
 @generate_conceptualspace.command()
 @click_pass_add_context

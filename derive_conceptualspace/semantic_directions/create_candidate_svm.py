@@ -13,7 +13,7 @@ norm = lambda vec: vec/np.linalg.norm(vec)
 vec_cos = lambda v1, v2: np.arccos(np.clip(np.dot(norm(v1), norm(v2)), -1.0, 1.0))  #https://stackoverflow.com/a/13849249/5122790
 
 
-def create_candidate_svms(dcm, mds, pp_descriptions, verbose):
+def create_candidate_svms(dcm, mds, pp_descriptions, prim_lambda, sec_lambda, verbose):
     _, descriptions = pp_descriptions.values()
     metrics = {}
     decision_planes = {}
@@ -37,13 +37,11 @@ def create_candidate_svms(dcm, mds, pp_descriptions, verbose):
         create_candidate_svm(mds, sorted_kappa[0][0], dcm.term_existinds(use_index=False)[sorted_kappa[0][0]], descriptions, plot_svm=True)
         while (another := input("Another one to display: ").strip()) != "" or another not in dcm.term_existinds(use_index=False):
             create_candidate_svm(mds, another, dcm.term_existinds(use_index=False)[another], descriptions, plot_svm=True)
-    clusters, cluster_directions = select_salient_terms(sorted_kappa, decision_planes)
+    clusters, cluster_directions = select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda)
     return clusters, cluster_directions, dict(sorted_kappa), {k: (v.intercept, list(v.normal)) for k,v in decision_planes.items()}
 
 
-def select_salient_terms(sorted_kappa, decision_planes, prim_lambda=None, sec_lambda=None):
-    prim_lambda = prim_lambda or get_setting("PRIM_LAMBDA")
-    sec_lambda = sec_lambda or get_setting("SEC_LAMBDA")
+def select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda):
     #TODO waitwaitwait. Am I 100% sure that the intercepts of the decision_planes are irrelevant?!
     get_tlambda = lambda sorted_kappa, lamb: [i[0] for i in sorted_kappa if i[1] > lamb]
     get_tlambda2 = lambda sorted_kappa, primlamb, seclamb: list(set(get_tlambda(sorted_kappa, seclamb))-set(get_tlambda(sorted_kappa, primlamb)))

@@ -55,6 +55,7 @@ from derive_conceptualspace.settings import (
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
 from derive_conceptualspace.cli.create_siddata_dataset import setup_json_persister, set_debug, get_jsonpersister_args
 from derive_conceptualspace.util.desc_object import pp_descriptions_loader
+from misc_util.logutils import CustomIO
 
 ########################################################################################################################
 ########################################################################################################################
@@ -75,6 +76,7 @@ def initialize_snakemake():
             if k.endswith("_base") and callable(v):
                 globals()[k] =  telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(globals()[k])
     ctx = Context()
+    CustomIO.init()
     json_persister = setup_json_persister(ctx, ignore_nsamples=True)
     set_debug(ctx)
     os.environ[f"{ENV_PREFIX}_SMK_INITIALIZED"] = "1"
@@ -236,7 +238,12 @@ rule create_candidate_svm:
     output:
         "{n_samples}_samples/{pp_components}_{translate_policy}/{quantification_measure}_{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}/clusters.json"
     threads: 1
+    params:
+        prim_lambda = get_setting("PRIM_LAMBDA"),
+        sec_lambda = get_setting("SEC_LAMBDA")
     run:
-        autoload_context_inputs(ctx, input, wildcards)
-        clusters, cluster_directions, kappa_scores, decision_planes = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"])
-        json_persister.save("clusters.json", clusters=clusters, cluster_directions=cluster_directions, kappa_scores=kappa_scores, decision_planes=decision_planes)
+        autoload_context_inputs(ctx, input, wildcards, params=params)
+        clusters, cluster_directions, kappa_scores, decision_planes = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"],
+                                                                        prim_lambda=ctx.obj["prim_lambda"], sec_lambda=ctx.obj["sec_lambda"], verbose=ctx.obj["verbose"])
+        json_persister.save("clusters.json", clusters=clusters, cluster_directions=cluster_directions, kappa_scores=kappa_scores, decision_planes=decision_planes,
+                            relevant_metainf={"prim_lambda": params.prim_lambda, "sec_lambda": params.sec_lambda})

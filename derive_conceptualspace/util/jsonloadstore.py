@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import subprocess
+import warnings
 from datetime import datetime
 from os.path import isfile, splitext, dirname, join, isdir
 
@@ -12,6 +13,7 @@ import pandas as pd
 from sklearn.manifold import MDS, TSNE
 
 from derive_conceptualspace import settings
+from misc_util.logutils import CustomIO
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
@@ -75,13 +77,18 @@ def npify_rek(di):
 # stuff to get meta-info
 
 def get_all_info():
-    return {"git_hash": get_commithash(),
+    info = {"git_hash": get_commithash(),
             "settings": get_settings(),
             "date": str(datetime.now()),
             "env_vars": get_envvars(),
             "startup_env_vars": settings.STARTUP_ENVVARS,
             "cmdargs": sys.argv
             }
+    if isinstance(sys.stdout, CustomIO) and isinstance(sys.stderr, CustomIO):
+        info["stdout"], info["stderr"] = sys.stdout.getvalue(), sys.stderr.getvalue()
+    else:
+        warnings.warn("Couldn't capture stdout and/or stderr as you didn't init CustomIO!")
+    return info
 
 def get_envvars():
     return {k:v for k,v in os.environ.items() if k.startswith(settings.ENV_PREFIX+"_")}
@@ -117,7 +124,7 @@ def prepare_dump(*args, write_meta=True, **kwargs):
     if write_meta:
         content = {"git_hash": get_commithash(), "settings": get_settings(), "date": str(datetime.now()),
                    "env_vars": {k:v for k,v in os.environ.items() if k.startswith(settings.ENV_PREFIX+"_") or k.startswith(settings.OVEWRITE_SETTINGS_PREFIX+"_")}, "cmdargs": sys.argv, "content": args[0]}
-        #TODO: also captured std-out, stored plots, ...
+        #TODO: also stored plots, ...
     else:
         content = args[0]
     return content
@@ -214,9 +221,9 @@ class JsonPersister():
                 correct_cands = []
                 for cand in candidates:
                     tmp = json_load(join(self.in_dir, subdir, cand))
-                    if all(tmp.get("relevant_metainf", {}).get(k) == v for k, v in
+                    if all(tmp.get("relevant_metainf", {}).get(k, v) == v or v == "ANY" for k, v in
                            {**self.loaded_relevant_metainf, **relevant_metainf}.items()) and \
-                            all(tmp.get("relevant_params", {}).get(k) == v for k, v in
+                            all(tmp.get("relevant_params", {}).get(k) for k, v in
                                 self.loaded_relevant_params.items()) and \
                             all(self.ctx.obj.get(k) == tmp["relevant_params"][k] for k in
                                 set(self.forward_params) & set(tmp.get("relevant_params", {}).keys())):
@@ -247,7 +254,7 @@ class JsonPersister():
                 #     print(f"Loading {tmp['basename']}: {self.loaded_objects[k][2]}")
                 if k not in self.loaded_objects: self.loaded_objects[k] = v
                 elif tmp["basename"] in v[2]:
-                    assert str({k:v for k,v in self.loaded_objects[k][3].items() if k not in ["relevant_params", "relevant_metainf"]}) == str(v[3])
+                    assert {k:v for k,v in self.loaded_objects[k][3].items()} == v[3]
                     self.loaded_objects[k][2].extend(v[2])
                     # the pp_descriptions are used in candidate_terms AND in postprocess_candidates. So when pp_cands loads stuff, it needs to note that pp_descriptions were used in boht.
                 elif k in self.loaded_objects:
@@ -262,7 +269,7 @@ class JsonPersister():
                 assert k in complete_metainf, f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}`, but you don't have a value for this!"
                 assert complete_metainf[k] in [v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
             obj = tmp["object"] if "object" in tmp else tmp
-            obj_info = {**tmp.get("obj_info"), "relevant_params": tmp.get("relevant_params", {}), "relevant_metainf": tmp.get("relevant_metainf", {})}
+            obj_info = {**tmp.get("obj_info", {}), "relevant_params": tmp.get("relevant_params", {}), "relevant_metainf": tmp.get("relevant_metainf", {})}
         if loader is not None:
             obj = loader(**obj)
         for k, v in self.loaded_relevant_params.items():
