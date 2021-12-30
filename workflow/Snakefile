@@ -51,6 +51,7 @@ from derive_conceptualspace.settings import (
     ALL_EXTRACTION_METHOD,
     ALL_EMBED_DIMENSIONS,
     ALL_EMBED_ALGO,
+    FORBIDDEN_COMBIS, set_envvar
 )
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
 from derive_conceptualspace.cli.create_siddata_dataset import setup_json_persister, set_debug, get_jsonpersister_args
@@ -90,6 +91,7 @@ def add_to_ctx(wildcards, ctx):
             ctx.obj[k] = int(v)
         else:
             ctx.obj[k] = v
+        set_envvar(ENV_PREFIX+"_"+k.upper().replace("-","_"), ctx.obj[k])
 
 autoloader_di = dict(
     pp_descriptions=pp_descriptions_loader,
@@ -121,10 +123,13 @@ dir_struct = get_jsonpersister_args()[2]
 
 rule all:
     input:
-        expand(os.sep.join(dir_struct+["clusters.json"]),
-                pp_components=ALL_PP_COMPONENTS, translate_policy=ALL_TRANSLATE_POLICY, quantification_measure=ALL_QUANTIFICATION_MEASURE,
-                embed_dimensions=ALL_EMBED_DIMENSIONS, extraction_method=ALL_EXTRACTION_METHOD, dcm_quant_measure=ALL_DCM_QUANT_MEASURE,
-                embed_algo=ALL_EMBED_ALGO, n_samples=n_samples)
+        [i for i in
+            expand(os.sep.join(dir_struct+["clusters.json"]),
+                    pp_components=ALL_PP_COMPONENTS, translate_policy=ALL_TRANSLATE_POLICY, quantification_measure=ALL_QUANTIFICATION_MEASURE,
+                    embed_dimensions=ALL_EMBED_DIMENSIONS, extraction_method=ALL_EXTRACTION_METHOD, dcm_quant_measure=ALL_DCM_QUANT_MEASURE,
+                    embed_algo=ALL_EMBED_ALGO, n_samples=n_samples)
+            if not any(j in i for j in FORBIDDEN_COMBIS)
+        ]
 
 rule default:
     input:
@@ -165,7 +170,7 @@ rule create_embedding:
         dissim_mat = "{n_samples}_samples/{pp_components}_{translate_policy}/dissim_mat_{quantification_measure}.json",
     output:
         "{n_samples}_samples/{pp_components}_{translate_policy}/{quantification_measure}_{embed_algo}_{embed_dimensions}d/embedding.json"
-    threads: 1
+    threads: 3
     run:
         autoload_context_inputs(ctx, input, wildcards)
         embedding = create_embedding_base(ctx.obj["dissim_mat"], ctx.obj["embed_dimensions"], ctx.obj["embed_algo"])
@@ -237,7 +242,7 @@ rule create_candidate_svm:
         embedding = "{n_samples}_samples/{pp_components}_{translate_policy}/{quantification_measure}_{embed_algo}_{embed_dimensions}d/embedding.json"
     output:
         "{n_samples}_samples/{pp_components}_{translate_policy}/{quantification_measure}_{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}/clusters.json"
-    threads: 1
+    threads: 3
     params:
         prim_lambda = get_setting("PRIM_LAMBDA"),
         sec_lambda = get_setting("SEC_LAMBDA")

@@ -81,7 +81,6 @@ def extract_candidateterms_keybert_preprocessed(pp_descriptions, faster_keybert=
 ########################################################################################################################
 #TODO kann ich diese gesamte methode mit create_dissim_mat vermischen?!
 def filter_keyphrases(doc_cand_matrix, pp_descriptions, min_term_count, dcm_quant_measure, verbose=False, use_n_docs_count=True):
-    assert dcm_quant_measure in ["count", "tf-idf", "binary"]
     _, descriptions = pp_descriptions.values()
     assert len(doc_cand_matrix.dtm) == len(descriptions)
     assert all(cand in desc for ndesc, desc in enumerate(descriptions) for cand in doc_cand_matrix.terms_per_doc()[ndesc])
@@ -112,7 +111,13 @@ def filter_keyphrases(doc_cand_matrix, pp_descriptions, min_term_count, dcm_quan
     if dcm_quant_measure == "binary":
         filtered_dcm = DocTermMatrix(dict(doc_term_matrix=[[[ind, 1 if count >= 1 else 0] for ind, count in doc] for doc in filtered_dcm.dtm], all_terms=all_terms))
     elif dcm_quant_measure == "tf-idf":
-        filtered_dcm = tf_idf(filtered_dcm, verbose=verbose, descriptions=descriptions)
+        filtered_dcm = DocTermMatrix(dict(doc_term_matrix=tf_idf(filtered_dcm, verbose=verbose, descriptions=descriptions), all_terms=all_terms))
+    elif dcm_quant_measure == "count":
+        pass
+    elif dcm_quant_measure == "ppmi":
+        raise NotImplementedError()
+    else:
+        assert False
     return filtered_dcm
 
 

@@ -7,15 +7,16 @@ from dotenv import load_dotenv
 ################ new stuff #################
 
 #!! use singular for these (bzw the form you'd use if there wasn't the "ALL_" before)
-ALL_PP_COMPONENTS = ["tcsldp"] #, "tcsdp"
-ALL_TRANSLATE_POLICY = ["translate"] #, "onlyeng", "origlan"
-ALL_EXTRACTION_METHOD = ["pp_keybert", "keybert"]
-ALL_QUANTIFICATION_MEASURE = ["ppmi", "tf-idf"]
-ALL_EMBED_ALGO = ["mds", "tsne"]
-ALL_EMBED_DIMENSIONS = [100, 50]#, 200, 3]
-ALL_DCM_QUANT_MEASURE = ["tf-idf", "count"]#, "binary"] #TODO check if these and the quantification_measure are interchangeable!! (also: tag-share is missing)
+ALL_PP_COMPONENTS = ["tcsldp"] #,"tcsdp"
+ALL_TRANSLATE_POLICY = ["translate"] #, "origlan"   #, "onlyeng"
+ALL_EXTRACTION_METHOD = ["pp_keybert"]#, "keybert"  #, "tf-idf", "ppmi"
+ALL_QUANTIFICATION_MEASURE = ["ppmi", "tf-idf"]     #, "count", "binary"
+ALL_EMBED_ALGO = ["mds", "tsne"]                    #, "isomap"
+ALL_EMBED_DIMENSIONS = [100, 50, 3]                 #, 200
+ALL_DCM_QUANT_MEASURE = ["tf-idf", "count"]#, "ppmi"         #, "binary" #TODO check if these and the quantification_measure are interchangeable!! (also: tag-share is missing)
 #TODO: try isomap & tsne in place of MDS
 
+FORBIDDEN_COMBIS = ["tsne_50d", "tsne_100d"]
 
 #set default-values for the ALL_... variables
 for k, v in {k[4:]: v[0] for k,v in dict(locals()).items() if isinstance(v, list) and k.startswith("ALL_")}.items():

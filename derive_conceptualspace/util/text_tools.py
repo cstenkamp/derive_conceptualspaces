@@ -98,7 +98,8 @@ def word_tokenize_all(descriptions, word_tokenizer=None, remove_stopwords=False)
                 desc.process(word_tokenizer(desc.processed_text), tokenizer_fn_name)
     return descriptions
 
-def lemmatize_all(descriptions, use_better_german_tagger=True):
+#TODO use_better_german_tagger should be True!!
+def lemmatize_all(descriptions, use_better_german_tagger=False):
     # see https://textmining.wp.hs-hannover.de/Preprocessing.html#Lemmatisierung
     print("Start lemmatizing")
     german_tagger = ht.HanoverTagger('morphmodel_ger.pgz')
@@ -245,7 +246,6 @@ def tf_idf(doc_term_matrix, verbose=False, mds_obj=None, descriptions=None):
     if verbose:
         print("Running TF-IDF on the corpus...")
         print_quantification(doc_term_matrix, quantifications, mds_obj, descriptions)
-    quantifications = DocTermMatrix(dict(doc_term_matrix=quantifications, all_terms=doc_term_matrix.all_terms))
     return quantifications
 
 
