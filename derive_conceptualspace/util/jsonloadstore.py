@@ -10,7 +10,7 @@ from os.path import isfile, splitext, dirname, join, isdir
 
 import numpy as np
 import pandas as pd
-from sklearn.manifold import MDS, TSNE
+from sklearn.manifold import MDS, TSNE, Isomap
 
 from derive_conceptualspace import settings
 from misc_util.logutils import CustomIO
@@ -42,6 +42,12 @@ class NumpyEncoder(json.JSONEncoder):
             return [obj.__class__.__name__, obj.json_serialize()]
         elif isinstance(obj, (MDS, TSNE)):
             return Struct(**obj.__dict__) #let's return the dict of the MDS such that we can load it from json and its equal
+        elif isinstance(obj, Isomap):
+            tmp = Struct(**obj.__dict__)
+            tmp.kernel_pca_ = Struct(**tmp.kernel_pca_.__dict__)
+            tmp.nbrs_ = Struct(**tmp.nbrs_.__dict__)
+            tmp.kernel_pca_._centerer = Struct(**tmp.kernel_pca_._centerer.__dict__)
+            return tmp
         return json.JSONEncoder.default(self, obj)
 
 
@@ -184,7 +190,7 @@ class JsonPersister():
     #     candidate_terms["candidate_terms"] = postprocess_candidates(candidate_terms, descriptions)
     #     return model, candidate_terms
 
-    def __init__(self, in_dir, out_dir, ctx, forward_params, forward_meta_inf, dir_struct=None, add_relevantparams_to_filename=True):
+    def __init__(self, in_dir, out_dir, ctx, forward_params, forward_meta_inf, dir_struct=None, add_relevantparams_to_filename=True, strict_metainf_checking=True):
         self.forward_params = forward_params
         self.forward_meta_inf = forward_meta_inf
         #TODO the FORWARD_META_INF here is not used - I can use it to automatically add this in the save-method if the respective keys are in the ctx.obj, such that I don't need to
@@ -198,6 +204,7 @@ class JsonPersister():
         self.loaded_relevant_metainf = {}
         self.add_relevantparams_to_filename = add_relevantparams_to_filename
         self.default_metainf_getters = {}
+        self.strict_metainf_checking = strict_metainf_checking
 
 
     def get_subdir(self, relevant_metainf, ignore_params=None):
@@ -248,7 +255,7 @@ class JsonPersister():
             tmp = json_load(join(self.in_dir, subdir, filename))
             # " ".join([tmp["basename"], "loaded", "(", *list(tmp["loaded_files"].keys()), ")"])
             # 'filtered_dcm loaded ( raw_descriptions translations languages pp_descriptions candidate_terms postprocessed_candidates doc_cand_matrix )'
-            # 'mds loaded ( raw_descriptions translations languages pp_descriptions dissim_mat )'
+            # 'embedding loaded ( raw_descriptions translations languages pp_descriptions dissim_mat )'
             for k, v in tmp.get("loaded_files", {}).items():
                 # if k == "pp_descriptions":
                 #     print(f"Loading {tmp['basename']}: {self.loaded_objects[k][2]}")
@@ -266,8 +273,11 @@ class JsonPersister():
             for k, v in tmp.get("relevant_metainf", {}).items():
                 if k in self.loaded_relevant_metainf: assert self.loaded_relevant_metainf[k] == v
                 else: self.loaded_relevant_metainf[k] = v
-                assert k in complete_metainf, f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}`, but you don't have a value for this!"
-                assert complete_metainf[k] in [v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
+                if self.ctx.obj["strict_metainf_checking"]:
+                    assert k in complete_metainf, f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}`, but you don't have a value for this!"
+                    assert complete_metainf[k] in [v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
+                else:
+                    assert complete_metainf.get(k) in [None, v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
             obj = tmp["object"] if "object" in tmp else tmp
             obj_info = {**tmp.get("obj_info", {}), "relevant_params": tmp.get("relevant_params", {}), "relevant_metainf": tmp.get("relevant_metainf", {})}
         if loader is not None:

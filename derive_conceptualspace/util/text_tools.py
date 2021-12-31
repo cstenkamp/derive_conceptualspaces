@@ -239,7 +239,6 @@ ppmi = partial(pmi, positive=True)
 
 #TODO use tf-idf as alternative keyword-detection! (erst mit gensim.dictionary alle Wörter holen, dann tf-idf drauffwerfen)
 def tf_idf(doc_term_matrix, verbose=False, mds_obj=None, descriptions=None):
-    #TODO make this and ppmi equal!
     """see https://towardsdatascience.com/3-basic-approaches-in-bag-of-words-which-are-better-than-word-embeddings-c2cbc7398016"""
     n_docs = len(doc_term_matrix.dtm)
     quantifications = [[[term, count * log(n_docs/doc_term_matrix.doc_freqs[term])] for term, count in doc] for doc in doc_term_matrix.dtm]

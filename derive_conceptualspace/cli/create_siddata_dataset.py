@@ -28,7 +28,7 @@ from derive_conceptualspace.extract_keywords.postprocess_candidates import (
     postprocess_candidateterms as postprocess_candidateterms_base,
 )
 from derive_conceptualspace.extract_keywords.keywords_main import (
-    extract_candidateterms_keybert as extract_candidateterms_keybert_base,
+    extract_candidateterms as extract_candidateterms_base,
     create_doc_cand_matrix as create_doc_cand_matrix_base,
     filter_keyphrases as filter_keyphrases_base,
 )
@@ -85,6 +85,7 @@ def setup_json_persister(ctx, ignore_nsamples=False):
     json_persister = JsonPersister(ctx.obj["base_dir"], ctx.obj["base_dir"], ctx,
                                    forward_params = all_params, forward_meta_inf = forward_meta_inf, dir_struct = dir_struct,
                                    add_relevantparams_to_filename=ctx.obj.get("add_relevantparams_to_filename", True),
+                                   strict_metainf_checking=ctx.obj["strict_metainf_checking"],
                                   )
     if ignore_nsamples:
         n_samples_getter = lambda: "ANY"
@@ -93,7 +94,6 @@ def setup_json_persister(ctx, ignore_nsamples=False):
         n_samples_getter = lambda: get_setting("DEBUG_N_ITEMS", silent=True) if get_setting("DEBUG", silent=True) else 7588 #TODO don't hard-code this!
         cand_ntc_getter = lambda: get_setting("CANDIDATE_MIN_TERM_COUNT", silent=True)
     json_persister.default_metainf_getters = {"n_samples": n_samples_getter,
-                                              "faster_keybert": lambda: get_setting("FASTER_KEYBERT", silent=True),
                                               "candidate_min_term_count": cand_ntc_getter,
                                               "prim_lambda": lambda: "ANY",
                                               "sec_lambda": lambda: "ANY"}
@@ -139,18 +139,21 @@ def click_pass_add_context(fn):
 @click.group()
 @click.argument("base-dir", type=str)
 @click.option("--verbose/--no-verbose", default=True, help="default: True")
-@click.option("--debug/--no-debug", default=get_setting("DEBUG"), help=f"If True, many functions will only run on a few samples, such that everything should run really quickly. Default: {get_setting('DEBUG')}")
+@click.option("--debug/--no-debug", default=lambda: get_setting("DEBUG"), help=f"If True, many functions will only run on a few samples, such that everything should run really quickly. Default: {get_setting('DEBUG')}")
 @click.option("--log", type=str, default="INFO", help="log-level for logging-module. one of [DEBUG, INFO, WARNING, ERROR, CRITICAL]")
 @click.option("--logfile", type=str, default="", help="logfile to log to. If not set, it will be logged to standard stdout/stderr")
 @click.option("--notify-telegram/--no-notify-telegram", default=False, help="If you want to get telegram-notified of start & end of the command")
+@click.option("--strict-metainf-checking/--strict-metainf-checking", default=lambda: get_setting("STRICT_METAINF_CHECKING"), help=f"If True, all subsequent steps of the pipeline must excplitly state which meta-info of the previous steps they demand")
 @click_pass_add_context
 def cli(ctx):
-    import derive_conceptualspace.settings
     CustomIO.init()
     print("Starting up at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
+    #print settings
+    import derive_conceptualspace.settings
     all_params = {i: get_setting(i.upper(), stay_silent=True, silent=True) for i in get_jsonpersister_args()[0]}
     default_params = {k[len("DEFAULT_"):].lower():v for k,v in derive_conceptualspace.settings.__dict__.items() if k in ["DEFAULT_"+i.upper() for i in all_params.keys()]}
     print("Running with the following settings:", ", ".join([f"{k}: *{'b' if v==default_params[k] else 'r'}*{v}*{'b' if v==default_params[k] else 'r'}*" for k, v in all_params.items()]))
+    #/print settings
     setup_logging(ctx.obj["log"], ctx.obj["logfile"])
     set_debug(ctx)
     ctx.obj["json_persister"] = setup_json_persister(ctx)
@@ -171,14 +174,14 @@ def process_result(*args, **kwargs):
 # derive_conceptualspace.create_spaces.translate_descriptions.create_load_languages_file
 
 # @cli.command()
-# @click.option("--mds-basename", type=str, default=MDS_DEFAULT_BASENAME)
+# @click.option("--embedding-basename", type=str, default=MDS_DEFAULT_BASENAME)
 # @click.pass_context
 # def translate_descriptions(ctx, mds_basename=MDS_DEFAULT_BASENAME):
 #     return translate_descriptions_base(ctx.obj["base_dir"], ctx.obj["mds_basename"])
 #
 #
 # @cli.command()
-# @click.option("--mds-basename", type=str, default=None)
+# @click.option("--embedding-basename", type=str, default=None)
 # @click.option("--descriptions-basename", type=str, default=None)
 # @click.pass_context
 # def count_translations(ctx, mds_basename=None, descriptions_basename=None):
@@ -260,9 +263,9 @@ def extract_candidateterms_stanfordlp(ctx):
 @click.option("--faster-keybert/--no-faster-keybert", default=lambda: get_setting("FASTER_KEYBERT"))
 @click_pass_add_context
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
-def extract_candidateterms_keybert(ctx):
-    candidateterms = extract_candidateterms_keybert_base(ctx.obj["pp_descriptions"], ctx.obj["extraction_method"], ctx.obj["faster_keybert"], verbose=ctx.obj["verbose"])
-    ctx.obj["json_persister"].save("candidate_terms.json", candidateterms=candidateterms, relevant_metainf={"faster_keybert": ctx.obj["faster_keybert"]})
+def extract_candidateterms(ctx):
+    candidateterms, relevant_metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.obj["extraction_method"], ctx.obj["faster_keybert"], verbose=ctx.obj["verbose"])
+    ctx.obj["json_persister"].save("candidate_terms.json", candidateterms=candidateterms, relevant_metainf=relevant_metainf)
 
 
 @prepare_candidateterms.command()
@@ -325,9 +328,9 @@ def generate_conceptualspace(ctx):
 @click.option("--sec-lambda", type=float, default=lambda: get_setting("SEC_LAMBDA"))
 @click_pass_add_context
 def create_candidate_svm(ctx):
-    clusters, cluster_directions, kappa_scores, decision_planes = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"],
-                                                                                             prim_lambda=ctx.obj["prim_lambda"], sec_lambda=ctx.obj["sec_lambda"])
-    ctx.obj["json_persister"].save("clusters.json", clusters=clusters, cluster_directions=cluster_directions, kappa_scores=kappa_scores, decision_planes=decision_planes,
+    clusters, cluster_directions, decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"],
+                                                                                        prim_lambda=ctx.obj["prim_lambda"], sec_lambda=ctx.obj["sec_lambda"])
+    ctx.obj["json_persister"].save("clusters.json", clusters=clusters, cluster_directions=cluster_directions, decision_planes=decision_planes, metrics=metrics,
                                    relevant_metainf={"prim_lambda": ctx.obj["prim_lambda"], "sec_lambda": ctx.obj["sec_lambda"]})
     #TODO hier war dcm = DocTermMatrix(json_load(join(ctx.obj["base_dir"], dcm_filename), assert_meta=("CANDIDATE_MIN_TERM_COUNT", "STANFORDNLP_VERSION"))), krieg ich das wieder hin?
 
@@ -397,9 +400,38 @@ def merge_streams(s1, s2, for_):
 @generate_conceptualspace.command()
 @click_pass_add_context
 def rank_courses_saldirs(ctx):
-    ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, "clusters")
+    from derive_conceptualspace.util.base_changer import NDPlane
+    import numpy as np
+    from itertools import combinations
+    cluster_loader = lambda **di: dict(clusters=di["clusters"], cluster_directions=di["cluster_directions"],
+                                       decision_planes={k: NDPlane(np.array(v[1][0]),v[1][1]) for k, v in di["decision_planes"].items()}, metrics=di["metrics"])
+    ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, "clusters", loader=cluster_loader)
     for desc, embedding in zip(ctx.obj["pp_descriptions"]["descriptions"], list(ctx.obj["embedding"].embedding_)):
         desc.embedding = embedding
+    _, _, decision_planes, metrics = ctx.obj["clusters"].values()
+    existinds = {k: set(v) for k, v in ctx.obj["filtered_dcm"].term_existinds(use_index=False).items()}
+    for k, v in metrics.items():
+        metrics[k]["existinds"] = existinds[k]
+        metrics[k]["decision_plane"] = decision_planes[k]
+    good_candidates = dict([i for i in sorted(metrics.items(), key=lambda x:x[1]["accuracy"], reverse=True) if i[1]["accuracy"] > 0.9 and i[1]["precision"] > 0.2])
+    semi_candidates = dict([i for i in sorted(metrics.items(), key=lambda x:x[1]["accuracy"], reverse=True) if i[1]["accuracy"] > 0.6 and i[1]["precision"] > 0.1 and i[1]["recall"] > 0.6 and i[0] not in good_candidates])
+
+    #jetzt will ich: Die Candidates gruppieren, die einen hohen overlap haben in welchen Texten sie vorkommen.
+    # Also, wenn "a1" und "a2" in den beschreibungen von mostly den selben Kursen vorkommen, werden sie germergt.
+    #TODO: was AUCH GEHT: Statt die Liste der Kurse pro Keyword anzugucken kann ich auch die Liste der Keywords pro Kurs angucken
+    # und wenn da ein (dann muss es aber extremer sein) overlap ist alle keywords von kurs1 zu kurs2 hinzufügen und vice versa,
+    # das wäre im Grunde die explizite version von den latent methoden LSI etc
+
+    # combs = list(combinations(existinds.keys(), 2))
+    all_overlaps = {}
+    for nkey1, (key1, inds1) in enumerate(existinds.items()):
+        n1 = len(inds1)
+        for key2, inds2 in list(existinds.items())[nkey1+1:]:
+            overlap_percentages = (n12 := len(inds1 & inds2)) / n1, n12 / len(inds2), n12 / (n1+len(inds2))
+            all_overlaps[(key1, key2)] = overlap_percentages
+    for val in range(3):
+        ar = np.array([i[val] for i in all_overlaps.values()])
+        print(f"[{val}]: Mean Overlap of respective exist-indices: {ar[ar>0].mean()*100:.2f}% for those with any overlap, {ar.mean()*100:.2f}% overall")
     print()
 
 

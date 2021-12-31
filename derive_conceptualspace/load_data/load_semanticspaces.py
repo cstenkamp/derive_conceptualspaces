@@ -42,7 +42,7 @@ def get_all():
     #TODO why is feat_vecs more than twice #elems than names?! Can I link BoW and names/MDS?!
     #TODO also, no term of the BoW contains a space, so I don't think I can match this with the keyphrases, wtf!
     all_terms = sorted(list(set(flatten([list(v.keys()) for v in feat_vecs.values()]))))
-    mds = load_mds_representation(data_base, data_set, n_dims, return_array=True)  #./dXX/filmsXX.mds
+    mds = load_mds_representation(data_base, data_set, n_dims, return_array=True)  #./dXX/filmsXX.embedding
     # np.array 15000*n_dims
     names = get_names(data_base, data_set)                                         #./filmNames.txt
     #list 15000 long
@@ -59,7 +59,7 @@ def get_all():
     #proj2 are the distances to the origins of the respective dimensions (induced by the clusters), what induces the respective rankings! (see DESC15 p.24u)
     mds_dict = dict(zip(names, list(mds)))
     assert mds_dict.keys() == classes.keys()
-    #soo let's use all data. For every movie, there's a something in `names`, `mds`, `classes` and `proj2` => `mds_class_dict`
+    #soo let's use all data. For every movie, there's a something in `names`, `embedding`, `classes` and `proj2` => `mds_class_dict`
     #`canditerms` uses the `clusters`, `proj1` is the same as `cluster_directions`
     #missing: `feat_vecs` (idk how to map these to names), `all_terms` (extracted phrases are ngrams),
     mds_class_dict = dict(zip(mds_dict.keys(), list(zip(mds_dict.values(), classes.values(), proj2))))
@@ -119,7 +119,7 @@ def load_mds_representation(data_base, data_set, n_dims, return_array=True, fnam
     """
     fname_out = fname_out or []
     assert str(n_dims) in ["3", "20", "50", "100", "200"]
-    fname = join(data_base, data_set, f"d{n_dims}", f"{TRANSLATE_FNAME.get(data_set, data_set)}{n_dims}.mds")
+    fname = join(data_base, data_set, f"d{n_dims}", f"{TRANSLATE_FNAME.get(data_set, data_set)}{n_dims}.embedding")
     fname_out.append(fname)
     res = []
     with open(fname, "r") as rfile:

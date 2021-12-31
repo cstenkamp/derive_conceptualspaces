@@ -5,7 +5,7 @@ from os.path import basename
 import numpy as np
 import scipy.sparse.csr
 from scipy.spatial.distance import squareform, cdist
-from sklearn.manifold import MDS, TSNE
+from sklearn.manifold import MDS, TSNE, Isomap
 from tqdm import tqdm
 
 from derive_conceptualspace.settings import get_setting
@@ -66,12 +66,15 @@ def create_embedding(dissim_mat, embed_dimensions, embed_algo):
         return create_mds(dissim_mat, embed_dimensions)
     elif embed_algo == "tsne":
         return create_tsne(dissim_mat, embed_dimensions)
+    elif embed_algo == "isomap":
+        return create_isomap(dissim_mat, embed_dimensions)
     else:
         raise NotImplementedError(f"Algorithm {embed_algo} is not implemented!")
 
+
 def create_mds(dissim_mat, embed_dimensions):
     dtm, dissim_mat = dissim_mat
-    #TODO - isn't isomap better suited than MDS? https://scikit-learn.org/stable/modules/manifold.html#multidimensional-scaling
+        #TODO - isn't isomap better suited than MDS? https://scikit-learn.org/stable/modules/manifold.html#multidimensional-scaling
     # !! [DESC15] say they compared it and it's worse ([15] of [DESC15])!!!
     embedding = MDS(n_components=embed_dimensions, random_state=get_setting("RANDOM_SEED", default_none=True), dissimilarity="precomputed")
     mds = embedding.fit(dissim_mat)
@@ -83,3 +86,10 @@ def create_tsne(dissim_mat, embed_dimensions):
     embedding = TSNE(n_components=embed_dimensions, random_state=get_setting("RANDOM_SEED", default_none=True), metric="precomputed")
     tsne = embedding.fit(dissim_mat)
     return tsne
+
+
+def create_isomap(dissim_mat, embed_dimensions):
+    dtm, dissim_mat = dissim_mat
+    embedding = Isomap(n_neighbors=min(5, dissim_mat.shape[0]-1), n_components=embed_dimensions, metric="precomputed")
+    isomap = embedding.fit(dissim_mat)
+    return isomap

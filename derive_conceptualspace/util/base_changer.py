@@ -2,6 +2,8 @@ import numpy as np
 
 #all thanks to https://stackoverflow.com/a/69407977
 #see also https://stackoverflow.com/questions/9605556/how-to-project-a-point-onto-a-plane-in-3d
+from derive_conceptualspace.util.jsonloadstore import Struct
+
 
 class NDPlane:
     def __init__(self, coef, intercept):
@@ -9,6 +11,9 @@ class NDPlane:
         assert isinstance(intercept, (int, float))
         self.coef = np.array(coef)
         self.intercept = intercept
+
+    def json_serialize(self):
+        return (list(self.coef), self.intercept)
 
     @property
     def normal(self):
@@ -25,6 +30,7 @@ class NDPlane:
     def z(self, point: np.array):
         assert point.shape[0] == self.coef.shape[0]-1
         return (- self.intercept -np.sum(self.coef[:-1]*point)) / self.coef[-1]
+
 
 class ThreeDPlane(NDPlane):
     a = property(lambda self: self.coef[0])

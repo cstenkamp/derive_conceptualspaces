@@ -83,7 +83,7 @@ def count_translations(base_dir, mds_basename=None, descriptions_basename=None):
         raise NotImplementedError("Using `load_translate_mds` would be a circular import!")
         # ndm_file = next(i for i in os.listdir(base_dir) if i.startswith(mds_basename) and i.endswith(".json"))
         # mds_obj = load_translate_mds(base_dir, ndm_file, translate_policy=ORIGLAN)
-        # names, descriptions, mds, languages = mds_obj.names, mds_obj.descriptions, mds_obj.mds, mds_obj.languages
+        # names, descriptions, embedding, languages = mds_obj.names, mds_obj.descriptions, mds_obj.embedding, mds_obj.languages
     else:
         descriptions = [Description.fromstruct(i[1]) for i in json_load(join(base_dir, descriptions_basename))["descriptions"]]
         names = [desc.for_name for desc in descriptions]

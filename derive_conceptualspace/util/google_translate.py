@@ -7,7 +7,6 @@ import html
 import nltk
 from itertools import accumulate
 
-from derive_conceptualspace.settings import GOOGLE_CREDENTIALS_FILE
 
 def translate_text(text, target="en", charlim=4900, origlans=None):
     # and I can still use the data from THIS call!!
@@ -15,6 +14,7 @@ def translate_text(text, target="en", charlim=4900, origlans=None):
     See https://g.co/cloud/translate/v2/translate-reference#supported_languages
     Text can also be a sequence of strings, in which case this method will return a sequence of results for each text.
     """
+    from derive_conceptualspace.settings import GOOGLE_CREDENTIALS_FILE
     print(f"Translate-Charlim set to {charlim}")
     BYTELIM = int(204800*0.9) #if a request is bigger than google API will raise an Error!
     SEGLIM = 128 #https://github.com/googleapis/google-cloud-python/issues/5425#issuecomment-562745220

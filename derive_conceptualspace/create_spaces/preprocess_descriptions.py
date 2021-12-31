@@ -17,8 +17,9 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 
 
 class PPComponents():
-    def __init__(self, sent_tokenize=True, convert_lower=True, remove_stopwords=True, lemmatize=True, remove_diacritics=True, remove_punctuation=True):
-        self.di = dict(sent_tokenize=sent_tokenize, convert_lower=convert_lower, remove_stopwords=remove_stopwords,
+    def __init__(self, add_coursetitle=True, sent_tokenize=True, convert_lower=True, remove_stopwords=True, lemmatize=True,
+                 remove_diacritics=True, remove_punctuation=True):
+        self.di = dict(add_coursetitle=add_coursetitle, sent_tokenize=sent_tokenize, convert_lower=convert_lower, remove_stopwords=remove_stopwords,
                        lemmatize=lemmatize, remove_diacritics=remove_diacritics, remove_punctuation=remove_punctuation)
 
     def __getattr__(self, item):
@@ -29,6 +30,7 @@ class PPComponents():
 
     def __repr__(self):
         return (
+            "a" if self["add_coursetitle"] else "" +
             "t" if self["sent_tokenize"] else "" + "c" if self["convert_lower"] else "" +
             "s" if self["remove_stopwords"] else "" + "l" if self["lemmatize"] else "" +
             "d" if self["remove_diacritics"] else "" + "p" if self["remove_punctuation"] else ""
@@ -36,7 +38,7 @@ class PPComponents():
 
     @staticmethod
     def from_str(string):
-        return PPComponents(sent_tokenize="t" in string, convert_lower="c" in string, remove_stopwords="s" in string,
+        return PPComponents(add_coursetitle="a" in string, sent_tokenize="t" in string, convert_lower="c" in string, remove_stopwords="s" in string,
                             lemmatize="l" in string, remove_diacritics="d" in string, remove_punctuation="p" in string)
 
 

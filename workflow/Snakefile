@@ -24,7 +24,7 @@ from derive_conceptualspace.extract_keywords.postprocess_candidates import (
     postprocess_candidateterms as postprocess_candidateterms_base,
 )
 from derive_conceptualspace.extract_keywords.keywords_main import (
-    extract_candidateterms_keybert as extract_candidateterms_keybert_base,
+    extract_candidateterms as extract_candidateterms_base,
     create_doc_cand_matrix as create_doc_cand_matrix_base,
     filter_keyphrases as filter_keyphrases_base,
 )
@@ -65,7 +65,7 @@ from misc_util.logutils import CustomIO
 ########################################################################################################################
 
 class Context():
-    obj = {"base_dir": os.getcwd(), "add_relevantparams_to_filename": True, "verbose": False}
+    obj = {"base_dir": os.getcwd(), "add_relevantparams_to_filename": True, "verbose": get_setting("VERBOSE"), "strict_metainf_checking": get_setting("STRICT_METAINF_CHECKING")}
     auto_envvar_prefix = ENV_PREFIX
 
 
@@ -188,9 +188,8 @@ rule extract_candidate_terms:
         faster_keybert=get_setting("FASTER_KEYBERT")
     run:
         autoload_context_inputs(ctx, input, wildcards, params)
-        candidateterms = extract_candidateterms_keybert_base(ctx.obj["pp_descriptions"], ctx.obj["extraction_method"], params.faster_keybert, verbose=ctx.obj["verbose"])
-        json_persister.save("candidate_terms.json", candidateterms=candidateterms, relevant_metainf={"faster_keybert": params.faster_keybert})
-
+        candidateterms, relevant_metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.obj["extraction_method"], ctx.obj["faster_keybert"], verbose=ctx.obj["verbose"])
+        json_persister.save("candidate_terms.json", candidateterms=candidateterms, relevant_metainf=relevant_metainf)
 
 
 rule postprocess_candidateterms:

@@ -1,15 +1,15 @@
 
 #
-# def display_mds(mds, names, max_elems=30):
+# def display_mds(embedding, names, max_elems=30):
 #     """
 #     Args:
-#          mds: np.array or data_prep.jsonloadstore.Struct created from sklearn.manifold.MDS or sklearn.manifold.MSD
+#          embedding: np.array or data_prep.jsonloadstore.Struct created from sklearn.manifold.MDS or sklearn.manifold.MSD
 #          name: list of names
 #          max_elems (int): how many to display
 #     """
-#     if hasattr(mds, "embedding_"):
-#         mds = mds.embedding_
-#     mins = np.argmin(np.ma.masked_equal(mds, 0.0, copy=False), axis=0)
+#     if hasattr(embedding, "embedding_"):
+#         embedding = embedding.embedding_
+#     mins = np.argmin(np.ma.masked_equal(embedding, 0.0, copy=False), axis=0)
 #     for cmp1, cmp2 in enumerate(mins):
 #         print(f"*b*{names[cmp1]}*b* is most similar to *b*{names[cmp2]}*b*")
 #         if max_elems and cmp1 >= max_elems-1:
@@ -17,11 +17,11 @@
 #
 #
 # def create_descstyle_dataset(n_dims, dsetname, from_path=SID_DATA_BASE, from_name_base="siddata_names_descriptions_mds_{n_dims}.json", to_path=SPACES_DATA_BASE, translate_policy=ORIGLAN):
-#     names, descriptions, mds, languages = load_translate_mds(from_path, from_name_base.format(n_dims=n_dims), translate_policy)
-#     display_mds(mds, names)
-#     fname = join(to_path, dsetname, f"d{n_dims}", f"{dsetname}{n_dims}.mds")
+#     names, descriptions, embedding, languages = load_translate_mds(from_path, from_name_base.format(n_dims=n_dims), translate_policy)
+#     display_mds(embedding, names)
+#     fname = join(to_path, dsetname, f"d{n_dims}", f"{dsetname}{n_dims}.embedding")
 #     os.makedirs(dirname(fname), exist_ok=True)
-#     embedding = list(mds.embedding_)
+#     embedding = list(embedding.embedding_)
 #     indices = np.argsort(np.array(names))
 #     names, descriptions, embedding = [names[i] for i in indices], [descriptions[i] for i in indices], np.array([embedding[i] for i in indices])
 #     if isfile(namesfile := join(dirname(fname), "../main", "courseNames.txt")):
@@ -43,9 +43,9 @@
 #     print("DEPRECATED!!!")
 #     print(f"Working with file *b*{file_name}*b* in *b*{file_path}*b*!")
 #     loaded = json_load(join(file_path, file_name), assert_meta=assert_meta)
-#     names, descriptions, mds = loaded["names"], loaded["descriptions"], loaded["mds"]
+#     names, descriptions, embedding = loaded["names"], loaded["descriptions"], loaded["embedding"]
 #     if assert_allexistent:
-#         assert len(names) == len(descriptions) == mds.embedding_.shape[0]
+#         assert len(names) == len(descriptions) == embedding.embedding_.shape[0]
 #     languages = create_load_languages_file(file_path, names, descriptions)
 #     orig_n_samples = len(names)
 #     additional_kwargs = {}
@@ -55,8 +55,8 @@
 #         indices = [ind for ind, elem in enumerate(languages) if elem == "en"]
 #         print(f"Dropped {len(names)-len(indices)} out of {len(names)} descriptions because I will take only the english ones")
 #         names, descriptions, languages = [names[i] for i in indices], [descriptions[i] for i in indices], [languages[i] for i in indices]
-#         mds.embedding_ = np.array([mds.embedding_[i] for i in indices])
-#         mds.dissimilarity_matrix_ = np.array([mds.dissimilarity_matrix_[i] for i in indices])
+#         embedding.embedding_ = np.array([embedding.embedding_[i] for i in indices])
+#         embedding.dissimilarity_matrix_ = np.array([embedding.dissimilarity_matrix_[i] for i in indices])
 #     elif translate_policy == TRANSL:
 #         additional_kwargs["original_descriptions"] = descriptions
 #         with open(join(file_path, translations_filename), "r") as rfile:
@@ -74,10 +74,10 @@
 #             print(f"Dropped {len(names) - len(new_indices)} out of {len(names)} descriptions because I will take english ones and ones with a translation")
 #         descriptions = new_descriptions
 #         names, languages = [names[i] for i in new_indices], [list(languages.values())[i] for i in new_indices]
-#         mds.embedding_ = np.array([mds.embedding_[i] for i in new_indices])
-#         mds.dissimilarity_matrix_ = np.array([mds.dissimilarity_matrix_[i] for i in new_indices])
+#         embedding.embedding_ = np.array([embedding.embedding_[i] for i in new_indices])
+#         embedding.dissimilarity_matrix_ = np.array([embedding.dissimilarity_matrix_[i] for i in new_indices])
 #     descriptions = [html.unescape(i).replace("  ", " ") for i in descriptions]
 #     if assert_allexistent:
-#         assert len(names) == len(descriptions) == mds.embedding_.shape[0] == orig_n_samples
-#     return MDSObject(names, descriptions, mds, languages, translate_policy, orig_n_samples, **additional_kwargs)
+#         assert len(names) == len(descriptions) == embedding.embedding_.shape[0] == orig_n_samples
+#     return MDSObject(names, descriptions, embedding, languages, translate_policy, orig_n_samples, **additional_kwargs)
 

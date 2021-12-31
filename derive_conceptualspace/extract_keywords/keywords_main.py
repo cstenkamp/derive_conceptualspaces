@@ -4,15 +4,17 @@ import logging
 
 from tqdm import tqdm
 from gensim import corpora
+import numpy as np
 
 from .get_candidates_keybert import KeyBertExtractor
 from .get_candidates_rules import extract_coursetype
 
-from derive_conceptualspace.util.text_tools import tf_idf, get_stopwords
+from derive_conceptualspace.util.text_tools import tf_idf, get_stopwords, ppmi
 from derive_conceptualspace.util.mpl_tools import show_hist
 
 
 from misc_util.pretty_print import pretty_print as print
+from ..settings import get_setting
 from ..util.dtm_object import DocTermMatrix
 
 logger = logging.getLogger(basename(__file__))
@@ -23,14 +25,18 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 ########################################################################################################################
 ########################################################################################################################
 
-def extract_candidateterms_keybert(pp_descriptions, extraction_method, faster_keybert=False, verbose=False):
-    if extraction_method == "keybert":
-        candidateterms, model_name = extract_candidateterms_keybert_nopp(pp_descriptions, faster_keybert, verbose=verbose)
-    elif extraction_method == "pp_keybert":
-        candidateterms, model_name = extract_candidateterms_keybert_preprocessed(pp_descriptions, faster_keybert)
+def extract_candidateterms(pp_descriptions, extraction_method, faster_keybert=False, verbose=False):
+    if extraction_method.lower() == "keybert":
+        candidateterms, metainf = extract_candidateterms_keybert_nopp(pp_descriptions, faster_keybert, verbose=verbose)
+    elif extraction_method.lower() == "pp_keybert":
+        candidateterms, metainf = extract_candidateterms_keybert_preprocessed(pp_descriptions, faster_keybert, verbose=verbose)
+    elif "".join([i for i in extraction_method.lower() if i.isalpha()]) == "tfidf":
+        candidateterms, metainf = extract_candidateterms_quantific(pp_descriptions, quantific="tfidf", verbose=verbose)
+    elif extraction_method.lower() == "ppmi":
+        candidateterms, metainf = extract_candidateterms_quantific(pp_descriptions, quantific="ppmi", verbose=verbose)
     else:
         raise NotImplementedError()
-    return candidateterms
+    return candidateterms, metainf
 
 def extract_candidateterms_keybert_nopp(pp_descriptions, faster_keybert=False, verbose=False):
     vocab, descriptions = pp_descriptions.values()
@@ -51,10 +57,10 @@ def extract_candidateterms_keybert_nopp(pp_descriptions, faster_keybert=False, v
         print(f"Immediately working: {n_immediateworking_ges}")
         print(f"Fixed: {n_fixed_ges}")
         print(f"Errors: {n_errs_ges}")
-    return candidateterms, extractor.model_name
+    return candidateterms, {"keybertextractor_modelname": extractor.model_name}
 
 
-def extract_candidateterms_keybert_preprocessed(pp_descriptions, faster_keybert=False):
+def extract_candidateterms_keybert_preprocessed(pp_descriptions, faster_keybert=False, verbose=False):
     vocab, descriptions = pp_descriptions.values()
     from keybert import KeyBERT  # lazily loaded as it needs tensorflow which takes some time to init
     model_name = "paraphrase-MiniLM-L6-v2" if faster_keybert else "paraphrase-mpnet-base-v2"
@@ -72,8 +78,32 @@ def extract_candidateterms_keybert_preprocessed(pp_descriptions, faster_keybert=
         if (ct := extract_coursetype(desc)) and ct not in candidates:
             candidates += [ct]
         candidateterms.append(candidates)
-    return candidateterms, model_name
+    return candidateterms, {"keybertextractor_modelname": model_name}
 
+#TODO put the parameters here in settings.py
+#TODO play around with the parameters here!
+def extract_candidateterms_quantific(pp_descriptions, quantific, max_per_doc_abs = 10, max_per_doc_rel = 0.1, min_val = None, min_val_percentile = 0.8, min_per_doc = 2, forcetake_percentile = 0.98, verbose=False):
+    assert not (min_val and min_val_percentile)
+    vocab, descriptions = pp_descriptions.values()
+    dtm = DocTermMatrix(all_terms=vocab, descriptions=descriptions)
+    if quantific == "tfidf":
+        quant = tf_idf(dtm, verbose=verbose, descriptions=descriptions)
+    elif quantific == "ppmi":
+        quant = ppmi(dtm, verbose=verbose, descriptions=descriptions)
+    else:
+        raise NotImplementedError()
+    if min_val_percentile:
+        min_val = np.percentile(np.array(flatten([[j[1] for j in i] for i in quant])), min_val_percentile * 100)
+        metainf = dict(kw_max_per_doc_abs=max_per_doc_abs, kw_max_per_doc_rel=max_per_doc_rel, kw_min_val_percentile=min_val_percentile, kw_min_per_doc=min_per_doc, kw_forcetake_percentile=forcetake_percentile)
+    else:
+        metainf = dict(kw_max_per_doc_abs=max_per_doc_abs, kw_max_per_doc_rel=max_per_doc_rel, kw_min_val=min_val, kw_min_per_doc=min_per_doc, kw_forcetake_percentile=forcetake_percentile)
+    forcetake_val = np.percentile(np.array(flatten([[j[1] for j in i] for i in quant])), forcetake_percentile * 100)
+    candidates = [ [ sorted(i, key=lambda x:x[1], reverse=True),
+                     min(round(len(i)*max_per_doc_rel), max_per_doc_abs),
+                     set(j[0] for j in i if j[1] >= forcetake_val)]
+                 for i in quant]
+    all_candidates = [set([k[0] for k in i[0][:min_per_doc]])|set([j[0] for j in i[0] if j[1] >= min_val][:i[1]])|i[2] for i in candidates]
+    return [[dtm.all_terms[j] for j in i] for i in all_candidates], metainf
 
 
 ########################################################################################################################
@@ -81,6 +111,7 @@ def extract_candidateterms_keybert_preprocessed(pp_descriptions, faster_keybert=
 ########################################################################################################################
 #TODO kann ich diese gesamte methode mit create_dissim_mat vermischen?!
 def filter_keyphrases(doc_cand_matrix, pp_descriptions, min_term_count, dcm_quant_measure, verbose=False, use_n_docs_count=True):
+    """name is a bit wrong, this first filters the doc-keyphrase-matrix and afterwards applies a quantification-measure on the dcm"""
     _, descriptions = pp_descriptions.values()
     assert len(doc_cand_matrix.dtm) == len(descriptions)
     assert all(cand in desc for ndesc, desc in enumerate(descriptions) for cand in doc_cand_matrix.terms_per_doc()[ndesc])
@@ -115,7 +146,7 @@ def filter_keyphrases(doc_cand_matrix, pp_descriptions, min_term_count, dcm_quan
     elif dcm_quant_measure == "count":
         pass
     elif dcm_quant_measure == "ppmi":
-        raise NotImplementedError()
+        DocTermMatrix(dict(doc_term_matrix=ppmi(filtered_dcm, verbose=verbose, descriptions=descriptions), all_terms=all_terms))
     else:
         assert False
     return filtered_dcm

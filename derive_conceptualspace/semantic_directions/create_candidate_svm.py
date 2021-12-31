@@ -38,7 +38,7 @@ def create_candidate_svms(dcm, mds, pp_descriptions, prim_lambda, sec_lambda, ve
         while (another := input("Another one to display: ").strip()) != "" or another not in dcm.term_existinds(use_index=False):
             create_candidate_svm(mds, another, dcm.term_existinds(use_index=False)[another], descriptions, plot_svm=True)
     clusters, cluster_directions = select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda)
-    return clusters, cluster_directions, dict(sorted_kappa), {k: (v.intercept, list(v.normal)) for k,v in decision_planes.items()}
+    return clusters, cluster_directions, decision_planes, metrics
 
 
 def select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda):
@@ -68,15 +68,15 @@ def select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda)
     return clusters, cluster_directions
 
 
-def create_candidate_svm(mds, term, exist_indices, descriptions, plot_svm=False):
+def create_candidate_svm(embedding, term, exist_indices, descriptions, plot_svm=False):
     #TODO [DESC15]: "we adapted the costs of the training instances to deal with class imbalance (using the ratio between entities with/without the term as cost)"
     # TODO figure out if there's a reason to choose LinearSVC over SVC(kernel=linear) or vice versa!
-    labels = [False] * mds.embedding_.shape[0]
+    labels = [False] * embedding.embedding_.shape[0]
     for i in exist_indices:
         labels[i] = True
     svm = sklearn.svm.LinearSVC(dual=False, class_weight="balanced")
-    svm.fit(mds.embedding_, np.array(labels, dtype=int))
-    svm_results = svm.decision_function(mds.embedding_)
+    svm.fit(embedding.embedding_, np.array(labels, dtype=int))
+    svm_results = svm.decision_function(embedding.embedding_)
     tn, fp, fn, tp = confusion_matrix(labels, [i > 0 for i in svm_results]).ravel()
     precision = tp / (tp + fp); recall = tp / (tp + fn); accuracy = (tp + tn) / len(labels)
     # print(f"accuracy: {accuracy:.2f} | precision: {precision:.2f} | recall: {recall:.2f}")
@@ -85,14 +85,14 @@ def create_candidate_svm(mds, term, exist_indices, descriptions, plot_svm=False)
     #see notebooks/proof_of_concept/get_svm_decisionboundary.ipynb#Checking-projection-methods-&-distance-measures-from-point-to-projection for the ranking
     decision_plane = NDPlane(svm.coef_[0], svm.intercept_[0])
     dist = lambda x, plane: np.dot(plane.normal, x) + plane.intercept #TODO don't even need plane for this, just svm's stuff
-    distances = [dist(point, decision_plane) for point in mds.embedding_]
+    distances = [dist(point, decision_plane) for point in embedding.embedding_]
     argsort = sorted(enumerate(distances), key=lambda x:x[1])
     pos_rank = {item: rank for rank, item in enumerate([i[0] for i in argsort if i[1] > 0])}
     # compared = [(elem, pos_rank.get(ind)) for ind, elem in enumerate(num_occurances)]
     kappa = cohen_kappa_score(num_occurances, [pos_rank.get(ind, 0) for ind in range(len(num_occurances))])
     # print(f"Kappa-Score: {kappa}")
     if plot_svm:
-        display_svm(mds.embedding_, np.array(labels, dtype=int), svm, term=term, descriptions=descriptions, name=f"{term}: accuracy: {accuracy:.2f} | precision: {precision:.2f} | recall: {recall:.2f} | kappa: {kappa:.4f}")
+        display_svm(embedding.embedding_, np.array(labels, dtype=int), svm, term=term, descriptions=descriptions, name=f"{term}: accuracy: {accuracy:.2f} | precision: {precision:.2f} | recall: {recall:.2f} | kappa: {kappa:.4f}")
     return {"accuracy": accuracy, "precision": precision, "recall": recall, "kappa": kappa}, decision_plane
 
 

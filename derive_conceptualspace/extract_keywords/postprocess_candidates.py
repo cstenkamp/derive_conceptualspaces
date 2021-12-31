@@ -21,7 +21,6 @@ def fix_cand(cand, text):
 
 
 def postprocess_candidateterms(candidate_terms, descriptions, extraction_method):
-    assert extraction_method in ["pp_keybert", "keybert"]
     candidate_terms, = candidate_terms.values()
     _, descriptions = descriptions.values()
     assert len(candidate_terms) == len(descriptions), f"Candidate Terms: {len(candidate_terms)}, Descriptions: {len(descriptions)}"
