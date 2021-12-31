@@ -129,7 +129,7 @@ def prepare_dump(*args, write_meta=True, **kwargs):
     assert "cls" not in kwargs
     if write_meta:
         content = {"git_hash": get_commithash(), "settings": get_settings(), "date": str(datetime.now()),
-                   "env_vars": {k:v for k,v in os.environ.items() if k.startswith(settings.ENV_PREFIX+"_") or k.startswith(settings.OVEWRITE_SETTINGS_PREFIX+"_")}, "cmdargs": sys.argv, "content": args[0]}
+                   "env_vars": {k:v for k,v in os.environ.items() if k.startswith(settings.ENV_PREFIX+"_")}, "cmdargs": sys.argv, "content": args[0]}
         #TODO: also stored plots, ...
     else:
         content = args[0]
@@ -238,7 +238,7 @@ class JsonPersister():
                 return correct_cands
 
 
-    def load(self, filename, save_basename, relevant_metainf=None, ignore_params=None, loader=None):
+    def load(self, filename, save_basename, relevant_metainf=None, ignore_params=None, loader=None, force_overwrite=False):
         complete_metainf = {**{k: v() for k, v in self.default_metainf_getters.items()}, **(relevant_metainf or {})}
         ignore_params = ignore_params or []
         subdir = ""
@@ -285,15 +285,16 @@ class JsonPersister():
         for k, v in self.loaded_relevant_params.items():
             if k in self.ctx.obj: assert self.ctx.obj[k] == v
             else: self.ctx.obj[k] = v
-        assert save_basename not in self.loaded_objects
+        if not force_overwrite:
+            assert save_basename not in self.loaded_objects
         self.loaded_objects[save_basename] = (obj, join(self.in_dir, subdir, filename), ["this"], obj_info)
         return obj
 
 
-    def save(self, basename, /, relevant_params=None, relevant_metainf=None, **kwargs):
+    def save(self, basename, /, relevant_params=None, relevant_metainf=None, force_overwrite=False, **kwargs):
         basename, ext = splitext(basename)
         filename = basename
-        if relevant_params:
+        if relevant_params is not None:
             relevant_params += self.loaded_relevant_params
             assert len(set(relevant_params)) == len(relevant_params)
         else:
@@ -307,6 +308,6 @@ class JsonPersister():
         os.makedirs(join(self.out_dir, subdir), exist_ok=True)
         obj = {"loaded_files": loaded_files, "relevant_params": {i: self.ctx.obj[i] for i in relevant_params},
                "relevant_metainf": relevant_metainf, "basename": basename, "obj_info": get_all_info(), "object": kwargs}
-        name = json_dump(obj, join(self.out_dir, subdir, filename+ext), write_meta=False)
+        name = json_dump(obj, join(self.out_dir, subdir, filename+ext), write_meta=False, forbid_overwrite=not force_overwrite)
         print(f"Saved under {name}. Relevant Params: {relevant_params}. Relevant Meta-Inf: {relevant_metainf}")
         return name

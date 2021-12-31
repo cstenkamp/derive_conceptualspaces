@@ -21,8 +21,9 @@ from derive_conceptualspace.settings import ALL_DCM_QUANT_MEASURE, ENV_PREFIX, g
 from derive_conceptualspace.util.desc_object import pp_descriptions_loader
 from derive_conceptualspace.util.jsonloadstore import JsonPersister
 from derive_conceptualspace.create_spaces.translate_descriptions import (
-    translate_descriptions as translate_descriptions_base,
-    count_translations as count_translations_base
+    full_translate_titles as translate_titles_base,
+    full_translate_descriptions as translate_descriptions_base,
+    # count_translations as count_translations_base
 )
 from derive_conceptualspace.extract_keywords.postprocess_candidates import (
     postprocess_candidateterms as postprocess_candidateterms_base,
@@ -186,6 +187,30 @@ def process_result(*args, **kwargs):
 # @click.pass_context
 # def count_translations(ctx, mds_basename=None, descriptions_basename=None):
 #     return count_translations_base(ctx.obj["base_dir"], mds_basename=mds_basename, descriptions_basename=descriptions_basename)
+
+@cli.command()
+@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS"))
+@click.option("--translate-policy", type=str, default=lambda: get_setting("TRANSLATE_POLICY"))
+@click.option("--raw-descriptions-file", type=str, default="kurse-beschreibungen.csv")
+@click.option("--title-languages-file", type=str, default="title_languages.json")
+@click.option("--title-translations-file", type=str, default="translated_titles.json")
+@click_pass_add_context
+def translate_titles(ctx, pp_components, translate_policy, raw_descriptions_file, languages_file, title_languages_file, title_translations_file):
+    raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
+    translate_titles_base(raw_descriptions, pp_components, translate_policy, title_languages_file, title_translations_file, ctx.obj["json_persister"])
+    #no need to save, that's done inside the function.
+
+
+@cli.command()
+@click.option("--translate-policy", type=str, default=lambda: get_setting("TRANSLATE_POLICY"))
+@click.option("--raw-descriptions-file", type=str, default="kurse-beschreibungen.csv")
+@click.option("--languages-file", type=str, default="languages.json")
+@click.option("--translations-file", type=str, default="translated_descriptions.json")
+@click_pass_add_context
+def translate_descriptions(ctx, translate_policy, raw_descriptions_file, languages_file, translations_file):
+    raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
+    translate_descriptions_base(raw_descriptions, translate_policy, languages_file, translations_file, ctx.obj["json_persister"])
+    #no need to save, that's done inside the function.
 
 
 @cli.command()

@@ -1,4 +1,4 @@
-from os.path import basename
+from os.path import basename, isfile
 import re
 import logging
 import random
@@ -17,39 +17,45 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 
 
 class PPComponents():
-    def __init__(self, add_coursetitle=True, sent_tokenize=True, convert_lower=True, remove_stopwords=True, lemmatize=True,
-                 remove_diacritics=True, remove_punctuation=True):
-        self.di = dict(add_coursetitle=add_coursetitle, sent_tokenize=sent_tokenize, convert_lower=convert_lower, remove_stopwords=remove_stopwords,
-                       lemmatize=lemmatize, remove_diacritics=remove_diacritics, remove_punctuation=remove_punctuation)
-
-    def __getattr__(self, item):
-        return self.di.get(item, False)
+    def __init__(self, add_coursetitle=True, add_subtitle=True, sent_tokenize=True, convert_lower=True,
+                 remove_stopwords=True, lemmatize=True, remove_diacritics=True, remove_punctuation=True):
+        self.di = dict(add_coursetitle=add_coursetitle, add_subtitle=add_subtitle, sent_tokenize=sent_tokenize, convert_lower=convert_lower,
+                       remove_stopwords=remove_stopwords, lemmatize=lemmatize, remove_diacritics=remove_diacritics, remove_punctuation=remove_punctuation)
 
     def get(self, item, default=None):
         return self.di.get(item, default)
 
+    def __getattr__(self, item):
+        assert item in self.di
+        return self.get(item, False)
+
+    def __getitem__(self, item):
+        return self.__getattr__(item)
+
+
     def __repr__(self):
         return (
-            "a" if self["add_coursetitle"] else "" +
-            "t" if self["sent_tokenize"] else "" + "c" if self["convert_lower"] else "" +
-            "s" if self["remove_stopwords"] else "" + "l" if self["lemmatize"] else "" +
-            "d" if self["remove_diacritics"] else "" + "p" if self["remove_punctuation"] else ""
+            ("a" if self["add_coursetitle"] else "") + ("u" if self["add_subtitle"] else "") +
+            ("t" if self["sent_tokenize"] else "") + ("c" if self["convert_lower"] else "") +
+            ("s" if self["remove_stopwords"] else "") + ("l" if self["lemmatize"] else "") +
+            ("d" if self["remove_diacritics"] else "") + ("p" if self["remove_punctuation"] else "")
         )
 
     @staticmethod
     def from_str(string):
-        return PPComponents(add_coursetitle="a" in string, sent_tokenize="t" in string, convert_lower="c" in string, remove_stopwords="s" in string,
-                            lemmatize="l" in string, remove_diacritics="d" in string, remove_punctuation="p" in string)
+        return PPComponents(add_coursetitle="a" in string, add_subtitle="u" in string, sent_tokenize="t" in string, convert_lower="c" in string,
+                            remove_stopwords="s" in string, lemmatize="l" in string, remove_diacritics="d" in string, remove_punctuation="p" in string)
 
 
 
 def preprocess_descriptions_full(raw_descriptions, pp_components, translate_policy, languages, translations):
     #TODO options to consider language, fachbereich, and to add [translated] title to description
+    pp_components = PPComponents.from_str(pp_components)
     descriptions = preprocess_raw_course_file(raw_descriptions)
     if get_setting("DEBUG"):
         descriptions = pd.DataFrame([descriptions.iloc[key] for key in random.sample(range(len(descriptions)), k=get_setting("DEBUG_N_ITEMS"))])
-    descriptions = handle_translations(languages, translations, list(descriptions["Name"]), list(descriptions["Beschreibung"]), translate_policy)
-    vocab, descriptions = preprocess_descriptions(descriptions, PPComponents.from_str(pp_components))
+    descriptions = handle_translations(languages, translations, list(descriptions["Name"]), list(descriptions["Beschreibung"]), translate_policy, add_coursetitle=pp_components["add_coursetitle"])
+    vocab, descriptions = preprocess_descriptions(descriptions, pp_components)
     return vocab, descriptions
 
 
@@ -68,11 +74,17 @@ def preprocess_raw_course_file(df, min_desc_len=10):
     df = df.drop(columns=['desc_len','NameNoParanth'])
     #remove those with equal Veranstaltungsnummer...
     df = df.drop_duplicates(subset='VeranstaltungsNummer')
-    df["Name"] = df["Name"].str.strip()
+    #TODO instead of dropping, I could append descriptions or smth!!
+    for column in ["Name", "Beschreibung", "Untertitel"]:
+        df[column] = df[column].str.strip()
+    if len((dups := df[df["Name"].duplicated(keep=False)])) > 0:
+        print("There are courses with different VeranstaltungsNummer but equal Name!")
+        for n, cont in dups.iterrows():
+            df.loc[n]["Name"] = f"{cont['Name']} ({cont['VeranstaltungsNummer']})"
     return df
 
 
-def handle_translations(languages, translations, names, descriptions, translate_policy, assert_all_translated=True):
+def handle_translations(languages, translations, names, descriptions, translate_policy, assert_all_translated=True, add_coursetitle=False):
     orig_lans = [languages[i] for i in names]
     if translate_policy == "origlan":
         result = [Description(text=descriptions[i], lang=orig_lans[i], for_name=names[i], orig_lang=orig_lans[i]) for i in range(len(descriptions))]
@@ -82,6 +94,8 @@ def handle_translations(languages, translations, names, descriptions, translate_
         names, descriptions = [names[i] for i in indices], [descriptions[i] for i in indices]
         result = [Description(text=descriptions[i], lang="en", for_name=names[i], orig_lang="en") for i in range(len(descriptions))]
     elif translate_policy == "translate":
+        if add_coursetitle:
+            print()
         result = []
         missing_names = set()
         for desc, name in zip(descriptions, names):

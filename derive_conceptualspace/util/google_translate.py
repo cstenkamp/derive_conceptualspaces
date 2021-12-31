@@ -7,20 +7,22 @@ import html
 import nltk
 from itertools import accumulate
 
+from derive_conceptualspace.settings import get_setting
 
-def translate_text(text, target="en", charlim=4900, origlans=None):
+
+def translate_text(text, target="en", charlim=24000, origlans=None):
     # and I can still use the data from THIS call!!
     """Translates text into the target language. Target must be an ISO 639-1 language code.
     See https://g.co/cloud/translate/v2/translate-reference#supported_languages
     Text can also be a sequence of strings, in which case this method will return a sequence of results for each text.
     """
-    from derive_conceptualspace.settings import GOOGLE_CREDENTIALS_FILE
+    if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = get_setting("GOOGLE_CREDENTIALS_FILE")
     print(f"Translate-Charlim set to {charlim}")
     BYTELIM = int(204800*0.9) #if a request is bigger than google API will raise an Error!
     SEGLIM = 128 #https://github.com/googleapis/google-cloud-python/issues/5425#issuecomment-562745220
     TEXT_LEN_LIM = 2800 #google, this is getting ridiculus.
     SUMMED_TEXT_LEN_LIM = 100000 #102423 was too long...
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = GOOGLE_CREDENTIALS_FILE
     if isinstance(text, six.binary_type):
         text = text.decode("utf-8")
     translate_client = translate.Client()
