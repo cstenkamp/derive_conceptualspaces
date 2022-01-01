@@ -17,8 +17,9 @@ from misc_util.pretty_print import pretty_print as print
 from misc_util.telegram_notifier import telegram_notify
 
 from derive_conceptualspace.create_spaces.translate_descriptions import (
-    translate_descriptions as translate_descriptions_base,
-    count_translations as count_translations_base
+    full_translate_titles as translate_titles_base,
+    full_translate_descriptions as translate_descriptions_base,
+    # count_translations as count_translations_base
 )
 from derive_conceptualspace.extract_keywords.postprocess_candidates import (
     postprocess_candidateterms as postprocess_candidateterms_base,
