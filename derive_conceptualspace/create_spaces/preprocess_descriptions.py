@@ -48,13 +48,15 @@ class PPComponents():
 
 
 
-def preprocess_descriptions_full(raw_descriptions, pp_components, translate_policy, languages, translations):
+def preprocess_descriptions_full(raw_descriptions, pp_components, translate_policy, languages, translations, title_languages, title_translations):
     #TODO options to consider language, fachbereich, and to add [translated] title to description
     pp_components = PPComponents.from_str(pp_components)
     descriptions = preprocess_raw_course_file(raw_descriptions)
     if get_setting("DEBUG"):
         descriptions = pd.DataFrame([descriptions.iloc[key] for key in random.sample(range(len(descriptions)), k=get_setting("DEBUG_N_ITEMS"))])
-    descriptions = handle_translations(languages, translations, list(descriptions["Name"]), list(descriptions["Beschreibung"]), translate_policy, add_coursetitle=pp_components["add_coursetitle"])
+    descriptions = handle_translations(languages, translations, list(descriptions["Name"]), list(descriptions["Beschreibung"]),
+                                       [i if str(i) != "nan" else None for i in descriptions["Untertitel"]], translate_policy, title_languages, title_translations,
+                                       add_coursetitle=pp_components["add_coursetitle"], add_subtitle=pp_components["add_subtitle"], assert_all_translated=True) #TODO only if translate?!
     vocab, descriptions = preprocess_descriptions(descriptions, pp_components)
     return vocab, descriptions
 
@@ -84,34 +86,47 @@ def preprocess_raw_course_file(df, min_desc_len=10):
     return df
 
 
-def handle_translations(languages, translations, names, descriptions, translate_policy, assert_all_translated=True, add_coursetitle=False):
+def handle_translations(languages, translations, names, descriptions, subtitles, translate_policy, title_languages, title_translations,
+                        assert_all_translated=True, add_coursetitle=False, add_subtitle=False):
     orig_lans = [languages[i] for i in names]
     if translate_policy == "origlan":
-        result = [Description(text=descriptions[i], lang=orig_lans[i], for_name=names[i], orig_lang=orig_lans[i]) for i in range(len(descriptions))]
+        result = [Description(add_title=add_coursetitle, add_subtitle=add_subtitle, lang=orig_lans[i], text=descriptions[i],
+                              title=names[i], subtitle=subtitles[i], orig_textlang=orig_lans[i], orig_titlelang=title_languages[names[i]],
+                             ) for i in range(len(descriptions))]
     elif translate_policy == "onlyeng":
-        indices = [ind for ind, elem in enumerate(orig_lans) if elem == "en"]
-        print(f"Dropped {len(names)-len(indices)} out of {len(names)} descriptions because I will take only the english ones")
-        names, descriptions = [names[i] for i in indices], [descriptions[i] for i in indices]
-        result = [Description(text=descriptions[i], lang="en", for_name=names[i], orig_lang="en") for i in range(len(descriptions))]
+        raise NotImplementedError("TODO: add_coursetitle und add_subtitle for this")
+        # indices = [ind for ind, elem in enumerate(orig_lans) if elem == "en"]
+        # print(f"Dropped {len(names)-len(indices)} out of {len(names)} descriptions because I will take only the english ones")
+        # names, descriptions = [names[i] for i in indices], [descriptions[i] for i in indices]
+        # result = [Description(text=descriptions[i], lang="en", for_name=names[i], orig_lang="en") for i in range(len(descriptions))]
     elif translate_policy == "translate":
-        if add_coursetitle:
-            print()
         result = []
-        missing_names = set()
-        for desc, name in zip(descriptions, names):
-            if languages[name] == "en":
-                result.append(Description(text=desc, lang="en", for_name=name, orig_lang="en", orig_text=desc))
-            elif name in translations:
-                result.append(Description(text=translations[name], lang="en", for_name=name, orig_lang=languages[name], orig_text=desc))
-            elif name+" " in translations:
-                result.append(Description(text=translations[name+" "], lang="en", for_name=name, orig_lang=languages[name], orig_text=desc))
-            elif " "+name in translations:
-                result.append(Description(text=translations[" "+name], lang="en", for_name=name, orig_lang=languages[name], orig_text=desc))
+        missing_translations = set()
+        for desc, title, subtitle in zip(descriptions, names, subtitles):
+            kwargs = dict(add_title=add_coursetitle, add_subtitle=add_subtitle, origlang_text=desc, lang="en") # title=title, subtitle=subtitle
+            if languages[title] == "en" or title in translations:
+                if languages[title] == "en":
+                    kwargs.update(dict(text=desc, orig_textlang="en", origlang_text=None))
+                else:
+                    kwargs.update(dict(text=translations[title], orig_textlang=languages[title], origlang_text=desc))
             else:
-                missing_names.add(name)
+                missing_translations.add(title)
+                continue
+            if title_languages[title] == "en" or title in title_translations:
+                if title_languages[title] == "en":
+                    kwargs.update(dict(orig_titlelang="en", title=title, subtitle=subtitle))
+                else:
+                    assert subtitle is None or subtitle in title_translations
+                    kwargs.update(dict(orig_titlelang=title_languages[title], origlang_title=title, title=title_translations[title], subtitle=title_translations.get(subtitle), origlang_subtitle=subtitle))
+            else:
+                missing_translations.add(title)
+                continue
+            # missing: subtitle, orig_titlelang, origlang_title
+            result.append(Description(**kwargs))
         if len(result) < len(names):
             print(f"Dropped {len(names) - len(result)} out of {len(names)} descriptions because I will take english ones and ones with a translation")
-        assert not (len(result) < len(names) and assert_all_translated)
+        assert not (missing_translations and assert_all_translated)
+        assert all((i.is_translated and i.lang == "en" and i.orig_textlang != "en") or (not i.is_translated and i.orig_textlang == i.lang and i.orig_textlang == "en") for i in result)
     else:
         assert False
     return result

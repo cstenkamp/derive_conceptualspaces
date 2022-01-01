@@ -9,8 +9,8 @@ ENV_PREFIX = "MA"
 #!! use singular for these (bzw the form you'd use if there wasn't the "ALL_" before)
 ALL_PP_COMPONENTS = ["autcsldp", "tcsldp"] #,"tcsdp"                 # If in preprocessing it should add coursetitle, lemmatize, etc
 ALL_TRANSLATE_POLICY = ["translate"] #, "origlan", "onlyeng"         # If non-english descriptions should be translated
-ALL_EXTRACTION_METHOD = ["pp_keybert", "tf-idf", "ppmi"]             # How candidate-terms are getting extracted         #TODO keybert
 ALL_QUANTIFICATION_MEASURE = ["ppmi", "tf-idf", "count", "binary"]   # For the dissimiliarity Matrix of the Descripts
+ALL_EXTRACTION_METHOD = ["pp_keybert", "tf-idf", "ppmi"]             # How candidate-terms are getting extracted         #TODO keybert
 ALL_EMBED_ALGO = ["mds", "tsne", "isomap"]                           # Actual Embedding of the Descriptions
 ALL_EMBED_DIMENSIONS = [100, 3] #, 50, 200                           # Actual Embedding of the Descriptions
 ALL_DCM_QUANT_MEASURE = ["tf-idf", "count", "ppmi", "binary"]        # Quantification for the Doc-Keyphrase-Matrix       #TODO tag-share

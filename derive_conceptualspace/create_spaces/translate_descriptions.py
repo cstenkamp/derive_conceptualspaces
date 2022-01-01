@@ -31,12 +31,14 @@ def get_langs(whatever_list, assert_len=True):
 
 
 def translate_elems(whatever_list, languages=None, keys=None, already_translated=None):
-    def val_to_key(val):
+    def val_to_key(val, return_all=False):
         #I need this shit only bc I had the coursetitles be the key for the coursedescription, that was dumb
         if keys is None:
             return val
         cands = [i for i in list(zip(keys, whatever_list)) if i[1] == val]
         assert len(set(i[1] for i in cands)) == 1
+        if return_all:
+            return [i[0] for i in cands]
         return cands[0][0]
 
     already_translated = already_translated or {}
@@ -48,12 +50,23 @@ def translate_elems(whatever_list, languages=None, keys=None, already_translated
     translateds = deepcopy(already_translated)
 
     print(f"There are {len(untranslateds)} items with {sum(len(i) for i in untranslateds)} characters to be translated.")
-    translations = translate_text(untranslateds, origlans=languages)
-    new_ones = {val_to_key(k): v for k, v in zip(untranslateds, translations)}
-    translateds.update(new_ones)
-    print(f"You translated {len('.'.join(untranslateds[:len(new_ones)]))} (becoming {len('.'.join(new_ones.values()))}) Chars from {len(new_ones)} items.")
-    n_untranslated = len(set(untranslateds))-len(set(new_ones.keys()))
-    print(f"Now, {len(translateds)}/{n_untranslated+len(translateds)} ({len(translateds)/(n_untranslated+len(translateds))*100:.1f}%) items are translated")
+    if untranslateds:
+        translations = translate_text(untranslateds, origlans=languages)
+        new_ones = {val_to_key(k): v for k, v in zip(untranslateds, translations)}
+        translateds.update(new_ones)
+        print(f"You translated {len('.'.join(untranslateds[:len(new_ones)]))} (becoming {len('.'.join(new_ones.values()))}) Chars from {len(new_ones)} items.")
+        n_untranslated = len(set(untranslateds))-len(set(new_ones.keys()))
+        print(f"Now, {len(translateds)}/{n_untranslated+len(translateds)} ({len(translateds)/(n_untranslated+len(translateds))*100:.1f}%) items are translated")
+    else:
+        n_untranslated = 0
+    if keys is not None:
+        alternative_keys = {i: tmp for i in whatever_list if len((tmp := val_to_key(i, return_all=True))) > 1}
+        missing_keys = {k: [i for i in v if i not in translateds] for k,v in alternative_keys.items() if not all(i in translateds for i in v)}
+        if missing_keys:
+            other_keys = {k: [i for i in v if i in translateds][0] for k,v in alternative_keys.items() if any(i in translateds for i in v)}
+            stolen_translations = {i: translateds[other_keys[i]] for i in {k:i for k, v in missing_keys.items() for i in v}}
+            stolen_trsl_keys = {i: stolen_translations[k] for k, v in missing_keys.items() for i in v }
+            translateds.update(stolen_trsl_keys)
     return translateds, True, n_untranslated==0  #translateds, did_update, is_complete
 
 
@@ -75,8 +88,11 @@ def full_translate_titles(raw_descriptions, pp_components, translate_policy, tit
         except FileNotFoundError:
             title_translations = dict(title_translations={}, is_complete=False)
         if not title_translations["is_complete"]:
-            to_translate = zip(*[(k, v) for k, v in title_languages.items() if v != "en"])
-            translateds, did_update, is_complete= translate_elems(*to_translate, already_translated=title_translations["title_translations"])
+            descriptions = preprocess_raw_course_file(raw_descriptions)
+            subtitles = [i if str(i) != "nan" else None for i in descriptions["Untertitel"]]
+            to_translate = list(zip(*[(k, v) for k, v in title_languages.items() if v != "en"]))
+            sec_translate = list(zip(*[i for i in zip(subtitles, title_languages.values()) if i[0] and i[1] != "en"]))
+            translateds, did_update, is_complete= translate_elems(to_translate[0]+sec_translate[0], to_translate[1]+sec_translate[1], already_translated=title_translations["title_translations"])
             if did_update:
                 json_persister.save(title_translations_file, title_translations=translateds, is_complete=is_complete, relevant_params=[], force_overwrite=True)
             title_translations = json_persister.load(title_translations_file, "translated_titles", ignore_params=["pp_components", "translate_policy"], force_overwrite=True)
@@ -110,7 +126,7 @@ def full_translate_descriptions(raw_descriptions, translate_policy, languages_fi
         if "is_complete" not in translations: #for backwards compatibility
             json_persister.save(translations_file, translations=translations, is_complete=False, relevant_params=[], force_overwrite=True)
             translations = json_persister.load(translations_file, "translated_descriptions", ignore_params=["translate_policy"], force_overwrite=True)
-        if not translations["is_complete"]:
+        if True: #TODO #PRECOMMIT not translations["is_complete"]:
             descriptions = preprocess_raw_course_file(raw_descriptions)
             assert len(descriptions) == len(languages)
             to_translate = [i for i in zip(descriptions["Beschreibung"], languages.values(), languages.keys()) if i[1] != "en"]
@@ -131,6 +147,12 @@ def full_translate_descriptions(raw_descriptions, translate_policy, languages_fi
 ########################################################################################################################
 ################################################ OLD STUFF #############################################################
 ########################################################################################################################
+
+
+#TODO: create languages-file from titles & descriptions, see
+# create_load_languages_file(from_path, names, descriptions)
+# derive_conceptualspace.create_spaces.translate_descriptions.create_load_languages_file
+
 
 # def create_load_languages_file(file_path, names, descriptions, filename="languages.json"):
 #     if not isfile(join(file_path, filename)):
@@ -198,7 +220,7 @@ def full_translate_descriptions(raw_descriptions, translate_policy, languages_fi
 #         # names, descriptions, embedding, languages = mds_obj.names, mds_obj.descriptions, mds_obj.embedding, mds_obj.languages
 #     else:
 #         descriptions = [Description.fromstruct(i[1]) for i in json_load(join(base_dir, descriptions_basename))["descriptions"]]
-#         names = [desc.for_name for desc in descriptions]
+#         names = [desc.title for desc in descriptions]
 #         descriptions  = [desc.orig_text for desc in descriptions]
 #     assert len(set(names)) == len(names)
 #     name_desc = dict(zip(names, descriptions))

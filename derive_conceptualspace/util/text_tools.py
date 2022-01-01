@@ -252,7 +252,7 @@ def print_quantification(dtm, quantifications, mds_obj=None, descriptions=None):
     if mds_obj:
         getname = lambda id: mds_obj.names[id]
     elif descriptions:
-        getname = lambda id: descriptions[id].for_name
+        getname = lambda id: descriptions[id].title
     else:
         assert False, "if verbose you need to provide either mds_obj or descriptions!"
     distinctive_terms = [max(doc, key=lambda x:x[1]) if doc else [-1, 0] for doc in quantifications]

@@ -6,14 +6,25 @@ from ..settings import get_setting
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
+from misc_util.pretty_print import fmt
 
 class Description():
-    def __init__(self, text: str, lang: str, for_name: str = None, orig_lang: str = None, orig_text: str = None):
+    def __init__(self, text: str, lang: str, title: str, add_title: bool, add_subtitle: bool,
+                 orig_textlang: str = None, origlang_text: str = None, subtitle: str = None,
+                 orig_titlelang: str = None, origlang_title: str = None, origlang_subtitle: str = None):
         self.text = text
         self.lang = lang
-        self.for_name = for_name
-        self._orig_lang = orig_lang
-        self._orig_text = orig_text
+        self.title = title
+        self.subtitle = subtitle
+
+        self._add_title = add_title
+        self._add_subtitle = add_subtitle
+        self._orig_textlang = orig_textlang
+        self._origlang_text = origlang_text
+        self._orig_titlelang = orig_titlelang
+        self._origlang_title = origlang_title
+        self._origlang_subtitle = origlang_subtitle
+
         self.processing_steps = []
 
     def json_serialize(self):
@@ -21,7 +32,7 @@ class Description():
 
     @staticmethod
     def fromstruct(struct):
-        construct_args = ["text", "lang", "for_name", "orig_lang", "orig_text", "_orig_lang", "_orig_text"]
+        construct_args = ["text", "lang", "title", "subtitle", "_add_title", "_add_subtitle", "_orig_textlang", "_origlang_text", "_orig_titlelang", "_origlang_title", "_origlang_subtitle"]
         args = {key if not key.startswith("_") else key[1:]: struct[key] for key in construct_args if key in struct}
         desc = Description(**args)
         for key in struct:
@@ -30,23 +41,28 @@ class Description():
         return desc
 
     @property
-    def orig_lang(self):
-        if hasattr(self, "_orig_lang"):
-            return self._orig_lang
+    def orig_textlang(self):
+        if hasattr(self, "_orig_textlang"):
+            return self._orig_textlang
         return self.lang
 
     @property
     def is_translated(self):
-        return self.lang != self.orig_lang
+        return self.lang != self.orig_textlang
 
     @property
     def orig_text(self):
         if not self.is_translated:
             return self.text
-        return self._orig_text
+        return self._origlang_text
+
+    def __str__(self):
+        return (f"Description({self.orig_textlang}: '{((self.title+'. ') if self._add_title else '')}"
+                f"{((self.subtitle+'. ') if self._add_subtitle and self.subtitle else '')}{textwrap.shorten(self.text, 70)}')")
 
     def __repr__(self):
-        return f"Description({self.orig_lang}: '{textwrap.shorten(self.text, 70)}')"
+        return fmt(f"Description({self.orig_textlang}: '{(('*b*'+self.title+'*b*. ') if self._add_title else '')}"
+                   f"{(('*g*'+self.subtitle+'*g*. ') if self._add_subtitle and self.subtitle else '')}{textwrap.shorten(self.text, 70)}')")
 
 
     def process(self, procresult, procname):
@@ -55,7 +71,9 @@ class Description():
     @property
     def processed_text(self):
         """returns maximally processed text."""
-        return self.processing_steps[-1][0] if len(self.processing_steps) > 0 else self.text
+        if len(self.processing_steps) > 0:
+            return self.processing_steps[-1][0]
+        return ((self.title+". ") if self._add_title else "") + ((self.subtitle+". ") if self._add_subtitle and self.subtitle else "") + self.text
 
     def processed_as_string(self, no_dots=False):
         sent_join = " " if no_dots else ". "

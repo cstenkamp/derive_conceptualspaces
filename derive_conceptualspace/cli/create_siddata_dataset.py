@@ -170,22 +170,9 @@ def process_result(*args, **kwargs):
 ########################################################################################################################
 #prepare descriptions
 
-#TODO: create languages-file from titles & descriptions, see
-# create_load_languages_file(from_path, names, descriptions)
-# derive_conceptualspace.create_spaces.translate_descriptions.create_load_languages_file
-
 # @cli.command()
-# @click.option("--embedding-basename", type=str, default=MDS_DEFAULT_BASENAME)
-# @click.pass_context
-# def translate_descriptions(ctx, mds_basename=MDS_DEFAULT_BASENAME):
-#     return translate_descriptions_base(ctx.obj["base_dir"], ctx.obj["mds_basename"])
-#
-#
-# @cli.command()
-# @click.option("--embedding-basename", type=str, default=None)
-# @click.option("--descriptions-basename", type=str, default=None)
-# @click.pass_context
-# def count_translations(ctx, mds_basename=None, descriptions_basename=None):
+# @click_pass_add_context
+# def count_translations(ctx, ...):
 #     return count_translations_base(ctx.obj["base_dir"], mds_basename=mds_basename, descriptions_basename=descriptions_basename)
 
 @cli.command()
@@ -195,7 +182,7 @@ def process_result(*args, **kwargs):
 @click.option("--title-languages-file", type=str, default="title_languages.json")
 @click.option("--title-translations-file", type=str, default="translated_titles.json")
 @click_pass_add_context
-def translate_titles(ctx, pp_components, translate_policy, raw_descriptions_file, languages_file, title_languages_file, title_translations_file):
+def translate_titles(ctx, pp_components, translate_policy, raw_descriptions_file, title_languages_file, title_translations_file):
     raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
     translate_titles_base(raw_descriptions, pp_components, translate_policy, title_languages_file, title_translations_file, ctx.obj["json_persister"])
     #no need to save, that's done inside the function.
@@ -219,12 +206,20 @@ def translate_descriptions(ctx, translate_policy, raw_descriptions_file, languag
 @click.option("--raw-descriptions-file", type=str, default="kurse-beschreibungen.csv")
 @click.option("--languages-file", type=str, default="languages.json")
 @click.option("--translations-file", type=str, default="translated_descriptions.json")
+@click.option("--title-languages-file", type=str, default="title_languages.json")
+@click.option("--title-translations-file", type=str, default="translated_titles.json")
 @click_pass_add_context
-def preprocess_descriptions(ctx, raw_descriptions_file, languages_file, translations_file):
+def preprocess_descriptions(ctx, raw_descriptions_file, languages_file, translations_file, title_languages_file, title_translations_file):
     raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
-    languages = ctx.obj["json_persister"].load(languages_file, "languages", ignore_params=["pp_components", "translate_policy"])
-    translations = ctx.obj["json_persister"].load(translations_file, "translations", ignore_params=["pp_components", "translate_policy"])
-    vocab, descriptions = preprocess_descriptions_base(raw_descriptions, ctx.obj["pp_components"], ctx.obj["translate_policy"], languages, translations)
+    languages = ctx.obj["json_persister"].load(languages_file, "languages", ignore_params=["pp_components", "translate_policy"], loader=lambda langs: langs)
+    translations = ctx.obj["json_persister"].load(translations_file, "translated_descriptions", ignore_params=["pp_components", "translate_policy"], force_overwrite=True, loader=lambda **kwargs: kwargs["translations"])
+    title_languages = ctx.obj["json_persister"].load(title_languages_file, "title_languages", ignore_params=["pp_components", "translate_policy"], loader=lambda title_langs: title_langs)
+    title_translations = ctx.obj["json_persister"].load(title_translations_file, "translated_titles", ignore_params=["pp_components", "translate_policy"], force_overwrite=True, loader=lambda **kwargs: kwargs["title_translations"])
+    ctx.obj["json_persister"].loaded_objects["languages"] = ((tmp := ctx.obj["json_persister"].loaded_objects["languages"])[0], tmp[1], list({i:None for i in tmp[2]}.keys()), tmp[3])
+    ctx.obj["json_persister"].loaded_objects["title_languages"] = ((tmp := ctx.obj["json_persister"].loaded_objects["title_languages"])[0], tmp[1], list({i:None for i in tmp[2]}.keys()), tmp[3])
+    #TODO[e] do this when saving them instead of when loading^^
+    vocab, descriptions = preprocess_descriptions_base(raw_descriptions, ctx.obj["pp_components"], ctx.obj["translate_policy"], languages, translations, title_languages, title_translations)
+    #TODO[e] depending on translate_policy and pp_compoments, title_languages etc may allowed to be empty
     ctx.obj["json_persister"].save("pp_descriptions.json", vocab=vocab, descriptions=descriptions, relevant_metainf={"n_samples": len(descriptions)})
 
 

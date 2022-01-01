@@ -102,7 +102,7 @@ def display_svm(X, y, svm, term=None, name=None, descriptions=None):
     decision_plane = ThreeDPlane(svm.coef_[0], svm.intercept_[0])
     occurences = [descriptions[i].count_phrase(term) for i in range(len(X))]
     percentile = lambda percentage: np.percentile(np.array([i for i in occurences if i]), percentage)
-    extras = [{"Name": descriptions[i].for_name, "Occurences": occurences[i], "extra": {"Description": shorten(descriptions[i].text, 200)}} for i in range(len(X))]
+    extras = [{"Name": descriptions[i].title, "Occurences": occurences[i], "extra": {"Description": shorten(descriptions[i].text, 200)}} for i in range(len(X))]
     with ThreeDFigure(name=name) as fig:
         fig.add_markers(X[np.where(np.logical_not(y))], color="blue", size=2, custom_data=[extras[i] for i in np.where(np.logical_not(y))[0]], linelen_right=50, name="negative samples")
         fig.add_markers(X[np.where(y)], color="red", size=[9 if occurences[i] > percentile(70) else 4 for i in np.where(y)[0]], custom_data=[extras[i] for i in np.where(y)[0]], linelen_right=50, name="positive samples")
