@@ -7,7 +7,7 @@ ENV_PREFIX = "MA"
 ########################################################################################################################
 
 #!! use singular for these (bzw the form you'd use if there wasn't the "ALL_" before)
-ALL_PP_COMPONENTS = ["autcsldp", "tcsldp"] #,"tcsdp"                 # If in preprocessing it should add coursetitle, lemmatize, etc
+ALL_PP_COMPONENTS = ["autcsldp", "tcsldp", "au2"] #,"tcsdp"          # If in preprocessing it should add coursetitle, lemmatize, etc
 ALL_TRANSLATE_POLICY = ["translate"] #, "origlan", "onlyeng"         # If non-english descriptions should be translated
 ALL_QUANTIFICATION_MEASURE = ["ppmi", "tf-idf", "count", "binary"]   # For the dissimiliarity Matrix of the Descripts
 ALL_EXTRACTION_METHOD = ["pp_keybert", "tf-idf", "ppmi"]             # How candidate-terms are getting extracted         #TODO keybert

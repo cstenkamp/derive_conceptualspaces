@@ -73,6 +73,11 @@ class Description():
         """returns maximally processed text."""
         if len(self.processing_steps) > 0:
             return self.processing_steps[-1][0]
+        return self.unprocessed_text
+
+    @property
+    def unprocessed_text(self):
+        """returns minimally processed text."""
         return ((self.title+". ") if self._add_title else "") + ((self.subtitle+". ") if self._add_subtitle and self.subtitle else "") + self.text
 
     def processed_as_string(self, no_dots=False):
@@ -80,6 +85,8 @@ class Description():
         if isinstance(self.processed_text, list):
             if isinstance(self.processed_text[0], list):
                 return sent_join.join([" ".join(i) for i in self.processed_text])
+            else:
+                return " ".join(self.processed_text)
         raise NotImplementedError()
 
     def __contains__(self, item):
@@ -88,7 +95,7 @@ class Description():
     def count_phrase(self, item):
         if not isinstance(item, str):
             assert False #in the future just return False
-        assert not any(" " in i for i in self.bow.keys())
+        # assert not any(" " in i for i in self.bow.keys()) #TODO add this assertion back once I have a parameter for if I should include n-grams
         if " " in item:
             items = item.split(" ")
             for it in items:

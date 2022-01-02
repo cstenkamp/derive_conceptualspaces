@@ -4,6 +4,7 @@ import logging
 import random
 
 import pandas as pd
+from sklearn.feature_extraction.text import CountVectorizer
 
 from misc_util.pretty_print import pretty_print as print
 
@@ -17,9 +18,12 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 
 
 class PPComponents():
-    def __init__(self, add_coursetitle=True, add_subtitle=True, sent_tokenize=True, convert_lower=True,
-                 remove_stopwords=True, lemmatize=True, remove_diacritics=True, remove_punctuation=True):
-        self.di = dict(add_coursetitle=add_coursetitle, add_subtitle=add_subtitle, sent_tokenize=sent_tokenize, convert_lower=convert_lower,
+    def __init__(self, add_coursetitle=True, add_subtitle=True, count_vec=False,
+                 sent_tokenize=True, convert_lower=True, remove_stopwords=True, lemmatize=True, remove_diacritics=True, remove_punctuation=True):
+        if count_vec:
+            self.di = dict(add_coursetitle=add_coursetitle, add_subtitle=add_subtitle, count_vec=True)
+        else:
+            self.di = dict(add_coursetitle=add_coursetitle, add_subtitle=add_subtitle, sent_tokenize=sent_tokenize, convert_lower=convert_lower,
                        remove_stopwords=remove_stopwords, lemmatize=lemmatize, remove_diacritics=remove_diacritics, remove_punctuation=remove_punctuation)
 
     def get(self, item, default=None):
@@ -36,13 +40,17 @@ class PPComponents():
     def __repr__(self):
         return (
             ("a" if self["add_coursetitle"] else "") + ("u" if self["add_subtitle"] else "") +
-            ("t" if self["sent_tokenize"] else "") + ("c" if self["convert_lower"] else "") +
-            ("s" if self["remove_stopwords"] else "") + ("l" if self["lemmatize"] else "") +
-            ("d" if self["remove_diacritics"] else "") + ("p" if self["remove_punctuation"] else "")
+            ("2" if self["count_vec"] else #yes, this is on purpose, if using cont_vec the rest is not applied! (#TODO parts of this can, see CountVectorizer docs)
+                ("t" if self["sent_tokenize"] else "") + ("c" if self["convert_lower"] else "") +
+                ("s" if self["remove_stopwords"] else "") + ("l" if self["lemmatize"] else "") +
+                ("d" if self["remove_diacritics"] else "") + ("p" if self["remove_punctuation"] else "")
+            )
         )
 
     @staticmethod
     def from_str(string):
+        if "2" in string:
+            return PPComponents(add_coursetitle="a" in string, add_subtitle="u" in string, count_vec=True)
         return PPComponents(add_coursetitle="a" in string, add_subtitle="u" in string, sent_tokenize="t" in string, convert_lower="c" in string,
                             remove_stopwords="s" in string, lemmatize="l" in string, remove_diacritics="d" in string, remove_punctuation="p" in string)
 
@@ -57,8 +65,37 @@ def preprocess_descriptions_full(raw_descriptions, pp_components, translate_poli
     descriptions = handle_translations(languages, translations, list(descriptions["Name"]), list(descriptions["Beschreibung"]),
                                        [i if str(i) != "nan" else None for i in descriptions["Untertitel"]], translate_policy, title_languages, title_translations,
                                        add_coursetitle=pp_components["add_coursetitle"], add_subtitle=pp_components["add_subtitle"], assert_all_translated=True) #TODO only if translate?!
-    vocab, descriptions = preprocess_descriptions(descriptions, pp_components)
+    if pp_components.count_vec:
+        vocab, descriptions = pp_descriptions_countvec(descriptions, pp_components)
+    else:
+        vocab, descriptions = preprocess_descriptions(descriptions, pp_components)
     return vocab, descriptions
+
+
+def pp_descriptions_countvec(descriptions, pp_components):
+    #TODO make stuff like ngram-range parameters, and play around with values for the many options this has!!
+    cnt = CountVectorizer(strip_accents="unicode", ngram_range=(1, 3), max_df=0.9, min_df=10)
+    # TODO when I set preprocessor here I can override the preprocessing (strip_accents and lowercase) stage while preserving tokenizing and n-grams generation steps
+    # TODO gucken wie viele Schritte mir das schon spart - keyword extraction, grundlage für dissim_matrix, ...? (Corollary: gucken was für min_df/max_df-ranges für dissim_matrix sinnvoll sind)
+    # TODO I can merge this and the old one: If the PPComponents-Entry is uppercase, use a subcomponent of the countvectorizer instead of original one
+    #  (it's both tokenization and occurence counting in one class, see https://scikit-learn.org/stable/modules/feature_extraction.html#common-vectorizer-usage)
+    for comp, name in (cnt.build_preprocessor(), "preprocess"), (cnt.build_tokenizer(), "tokenize"), (lambda x: cnt.build_analyzer()(" ".join(x)), "analyze"):
+        for desc in descriptions:
+            desc.process(comp(desc.processed_text), name) #TODO the analyze-step shouldn't find bigrams across sentences...! (resolves when sent_tokenizing)
+    X = cnt.fit_transform([i.unprocessed_text for i in descriptions])
+    aslist = [list(sorted(zip((tmp := X.getrow(nrow).tocoo()).col, tmp.data), key=lambda x:x[0])) for nrow in range(X.shape[0])]
+    all_words = {v: k for k, v in cnt.vocabulary_.items()}
+    if False:
+        #`make_bow` adds the complete counter, including those words which shouldn't be counted due to max_df and min_df values, so we don't do it
+        vocab, descriptions = make_bow(descriptions)
+        for i in random.sample(range(len(descriptions)), 20):
+            assert all(j in descriptions[i] for j in [all_words[w] for w,n in aslist[i]])
+            assert {all_words[j[0]]: j[1] for j in aslist[i]}.items() <= dict(descriptions[i].bow).items()
+    else:
+        for j, desc in enumerate(descriptions):
+            desc.bow = {all_words[i[0]]: i[1] for i in aslist[j]}
+        all_words = list(sorted(cnt.vocabulary_.keys()))
+    return all_words, descriptions
 
 
 

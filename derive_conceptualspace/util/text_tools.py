@@ -174,7 +174,10 @@ def remove_punctuation_all(descriptions):
 def make_bow(descriptions):
     all_words = sorted(set(flatten([flatten(desc.processed_text) for desc in descriptions])))
     for desc in descriptions:
-        desc.bow = Counter(flatten(desc.processed_text))
+        if isinstance(desc.processed_text[0], str):
+            desc.bow = Counter(desc.processed_text)
+        else:
+            desc.bow = Counter(flatten(desc.processed_text))
     return all_words, descriptions
 
 
