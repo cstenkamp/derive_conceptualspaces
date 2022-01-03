@@ -1,8 +1,14 @@
+import warnings
 from datetime import datetime
 import os
+import threading
+import sys
 
 import numpy as np
 import matplotlib.pyplot as plt
+
+
+from derive_conceptualspace.util.jsonloadstore import json_dumps, NumpyEncoder
 
 def show_fig(fig, title):
     #TODO maybe be able to overwrite this with an env-var
@@ -17,6 +23,8 @@ def show_fig(fig, title):
     print(f"Saving figure `{title}` under `{save_path}`")
     fig.savefig(save_path)
 
+
+
 def show_hist(x, title="", xlabel="Data", ylabel="Count", cutoff_percentile=95, **kwargs): # density=False shows counts
     #see https://stackoverflow.com/a/33203848/5122790
     #Freedman–Diaconis number of bins
@@ -25,26 +33,46 @@ def show_hist(x, title="", xlabel="Data", ylabel="Count", cutoff_percentile=95, 
     old_max = x.max()
     x[x >= max_val] = max_val
     q25, q75 = np.percentile(x, [25, 75])
-    fig, ax = plt.subplots()
     if q75 > q25:
         bin_width = 2 * (q75 - q25) * len(x) ** (-1 / 3)
         bins = round((x.max() - x.min()) / bin_width)
         bins = min(bins, (x.max() - x.min()))
-        ax.hist(x, bins=bins, **kwargs)
+        kwargs["bins"] = bins
     elif x.max() - x.min() < 30:
         bins = x.max() - x.min()
-        ax.hist(x, bins=bins, **kwargs)
-    else:
-        ax.hist(x, **kwargs)
-    ax.set_xlim(0, max_val)
+        kwargs["bins"] = bins
+    full_data = dict(type="hist", x=x, kwargs=kwargs, xlim=(0, max_val), cutoff_percentile=cutoff_percentile, xlabel=xlabel, ylabel=ylabel, title=title)
     if cutoff_percentile is not None:
-        ax.set_xticks(list(plt.xticks()[0][:-1]) + [max_val])
-        ax.set_xticklabels([str(round(i)) for i in plt.xticks()[0]][:-1] + [f"{max_val}-{old_max}"], ha="right", rotation=45)
-    ax.set_ylabel(ylabel)
-    ax.set_xlabel(xlabel)
-    if title: plt.title(title)
+        full_data["xticks"] = list(plt.xticks()[0][:-1]) + [max_val]
+        full_data["xticklabels"] = [str(round(i)) for i in plt.xticks()[0]][:-1] + [f"{max_val}-{old_max}"]
+    prepare_fig(full_data, title)
+
+
+def prepare_fig(full_data, title):
+    serialize_plot(title, full_data)
+    if threading.current_thread() is not threading.main_thread():
+        #mpl needs main-thread, snakemake often is not mainthread!
+        warnings.warn("Cannot plot the figure as we are not in the main-thread!")
+        return
+    fig, ax = plt.subplots()
+    if full_data["type"] == "hist":
+        ax.hist(full_data["x"], **full_data["kwargs"])
+        ax.set_xlim(*full_data["xlim"])
+        if full_data.get("xticks") and full_data.get("xticklabels"):
+            ax.set_xticks(full_data["xticks"])
+            ax.set_xticklabels(full_data["xticklabels"], ha="right", rotation=45)
+        ax.set_ylabel(full_data["ylabel"])
+        ax.set_xlabel(full_data["xlabel"])
+    else:
+        raise NotImplementedError(f"Cannot do plot of type {full_data['type']}!")
+    if full_data["title"]: plt.title(full_data["title"])
     plt.tight_layout()
     show_fig(fig, title)
+
+
+def serialize_plot(title, full_data):
+    if hasattr(sys.stdout, "ctx"): #TODO getting the json_serializer this way is dirty as fuck!
+        sys.stdout.ctx.obj["json_persister"].add_data(title, full_data)
 
 
 if __name__ == "__main__":

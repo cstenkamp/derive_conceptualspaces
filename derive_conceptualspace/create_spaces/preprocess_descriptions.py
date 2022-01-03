@@ -10,93 +10,120 @@ from misc_util.pretty_print import pretty_print as print
 
 from derive_conceptualspace.util.desc_object import Description
 from derive_conceptualspace.settings import get_setting
-from derive_conceptualspace.util.text_tools import run_preprocessing_funcs, make_bow, tf_idf
+from derive_conceptualspace.util.text_tools import run_preprocessing_funcs, tf_idf, get_stopwords
 
 logger = logging.getLogger(basename(__file__))
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
 
 class PPComponents():
-    def __init__(self, add_coursetitle=True, add_subtitle=True, count_vec=False,
-                 sent_tokenize=True, convert_lower=True, remove_stopwords=True, lemmatize=True, remove_diacritics=True, remove_punctuation=True):
-        if count_vec:
-            self.di = dict(add_coursetitle=add_coursetitle, add_subtitle=add_subtitle, count_vec=True)
-        else:
-            self.di = dict(add_coursetitle=add_coursetitle, add_subtitle=add_subtitle, sent_tokenize=sent_tokenize, convert_lower=convert_lower,
-                       remove_stopwords=remove_stopwords, lemmatize=lemmatize, remove_diacritics=remove_diacritics, remove_punctuation=remove_punctuation)
+    SKCOUNTVEC_SUPPORTS = ["add_coursetitle", "add_subtitle", "remove_stopwords", "convert_lower", "remove_diacritics"]
+    OPTION_LETTER = dict(
+        add_coursetitle="a",
+        add_subtitle="u",
+        sent_tokenize="t",
+        convert_lower="c",
+        remove_stopwords="s",
+        lemmatize="l",
+        remove_diacritics="d",
+        remove_punctuation="p",
+        use_skcountvec="2",
+    )
 
-    def get(self, item, default=None):
-        return self.di.get(item, default)
+    def __init__(self, **kwargs):
+        assert kwargs.keys() == self.OPTION_LETTER.keys()
+        if kwargs["use_skcountvec"]:
+            must_override = [i for i in kwargs.keys()-self.SKCOUNTVEC_SUPPORTS-{"use_skcountvec"} if kwargs[i]]
+            if must_override:
+                print(f"Must overwrite the following PP-Components to False as SKLearn-CountVectorizer doesn't support it: {', '.join(must_override)}")
+                raise Exception("No can do!")
+                kwargs = {k: False if k in must_override else v for k, v in kwargs.items()}
+        self.di = kwargs
 
     def __getattr__(self, item):
         assert item in self.di
-        return self.get(item, False)
-
-    def __getitem__(self, item):
-        return self.__getattr__(item)
-
+        return self.di[item]
 
     def __repr__(self):
-        return (
-            ("a" if self["add_coursetitle"] else "") + ("u" if self["add_subtitle"] else "") +
-            ("2" if self["count_vec"] else #yes, this is on purpose, if using cont_vec the rest is not applied! (#TODO parts of this can, see CountVectorizer docs)
-                ("t" if self["sent_tokenize"] else "") + ("c" if self["convert_lower"] else "") +
-                ("s" if self["remove_stopwords"] else "") + ("l" if self["lemmatize"] else "") +
-                ("d" if self["remove_diacritics"] else "") + ("p" if self["remove_punctuation"] else "")
-            )
-        )
+        return "".join([v for k, v in self.OPTION_LETTER.items() if self.di[k]])
 
     @staticmethod
     def from_str(string):
-        if "2" in string:
-            return PPComponents(add_coursetitle="a" in string, add_subtitle="u" in string, count_vec=True)
-        return PPComponents(add_coursetitle="a" in string, add_subtitle="u" in string, sent_tokenize="t" in string, convert_lower="c" in string,
-                            remove_stopwords="s" in string, lemmatize="l" in string, remove_diacritics="d" in string, remove_punctuation="p" in string)
+        tmp = PPComponents(**{k: v in string for k, v in PPComponents.OPTION_LETTER.items()})
+        assert str(tmp) == string, f"Is {str(tmp)} but should be {string}!"
+        return tmp
 
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
 
 
 def preprocess_descriptions_full(raw_descriptions, pp_components, translate_policy, languages, translations, title_languages, title_translations):
-    #TODO options to consider language, fachbereich, and to add [translated] title to description
+    #TODO options to consider language and fachbereich
+    max_ngram = get_setting("MAX_NGRAM") if get_setting("NGRAMS_IN_EMBEDDING") else 1
     pp_components = PPComponents.from_str(pp_components)
     descriptions = preprocess_raw_course_file(raw_descriptions)
     if get_setting("DEBUG"):
         descriptions = pd.DataFrame([descriptions.iloc[key] for key in random.sample(range(len(descriptions)), k=get_setting("DEBUG_N_ITEMS"))])
     descriptions = handle_translations(languages, translations, list(descriptions["Name"]), list(descriptions["Beschreibung"]),
                                        [i if str(i) != "nan" else None for i in descriptions["Untertitel"]], translate_policy, title_languages, title_translations,
-                                       add_coursetitle=pp_components["add_coursetitle"], add_subtitle=pp_components["add_subtitle"], assert_all_translated=True) #TODO only if translate?!
-    if pp_components.count_vec:
-        vocab, descriptions = pp_descriptions_countvec(descriptions, pp_components)
+                                       add_coursetitle=pp_components.add_coursetitle, add_subtitle=pp_components.add_subtitle, assert_all_translated=True) #TODO only if translate?!
+    if pp_components.use_skcountvec:
+        vocab, descriptions = pp_descriptions_countvec(descriptions, pp_components, max_ngram)
+        metainf = {"n_samples": len(descriptions), **({"max_ngram": max_ngram, "ngrams_in_embedding": True} if get_setting("NGRAMS_IN_EMBEDDING") else {})}
     else:
+        assert max_ngram == 1, "Cannot deal with n-grams without SKLearn!"
         vocab, descriptions = preprocess_descriptions(descriptions, pp_components)
-    return vocab, descriptions
+        metainf = {"n_samples": len(descriptions)}
+    return vocab, descriptions, metainf
 
 
-def pp_descriptions_countvec(descriptions, pp_components):
-    #TODO make stuff like ngram-range parameters, and play around with values for the many options this has!!
-    cnt = CountVectorizer(strip_accents="unicode", ngram_range=(1, 3), max_df=0.9, min_df=10)
+def get_countvec(pp_components, max_ngram):
+    #TODO play around with values for the many options this has!!
+    if pp_components.remove_stopwords and get_setting("TRANSLATE_POLICY") == "origlang":
+        raise NotImplementedError("Cannot deal with per-language-stopwords in this mode")
+    cnt = CountVectorizer(strip_accents="unicode" if pp_components.remove_diacritics else None,
+                          lowercase = pp_components.convert_lower,
+                          ngram_range=(1, max_ngram),
+                          min_df=2 if get_setting("DISSIM_MAT_ONLY_PARTNERED") else 1, #If 2, every component of a description has a "partner", I THINK that makes the dissimilarity-matrix better
+                          stop_words=get_stopwords("en") if pp_components.remove_stopwords else None, #TODO see https://scikit-learn.org/stable/modules/feature_extraction.html#stop-words
+                          )
+    # I cannot set min_df and max_df, as I need all words for the dissimilarity-matrix!
     # TODO when I set preprocessor here I can override the preprocessing (strip_accents and lowercase) stage while preserving tokenizing and n-grams generation steps
     # TODO gucken wie viele Schritte mir das schon spart - keyword extraction, grundlage für dissim_matrix, ...? (Corollary: gucken was für min_df/max_df-ranges für dissim_matrix sinnvoll sind)
     # TODO I can merge this and the old one: If the PPComponents-Entry is uppercase, use a subcomponent of the countvectorizer instead of original one
     #  (it's both tokenization and occurence counting in one class, see https://scikit-learn.org/stable/modules/feature_extraction.html#common-vectorizer-usage)
-    for comp, name in (cnt.build_preprocessor(), "preprocess"), (cnt.build_tokenizer(), "tokenize"), (lambda x: cnt.build_analyzer()(" ".join(x)), "analyze"):
+    return cnt
+
+
+def pp_descriptions_countvec(descriptions, pp_components, max_ngram):
+    cnt = get_countvec(pp_components, max_ngram)
+    for comp, name in (cnt.build_preprocessor(), "preprocess"), (cnt.build_tokenizer(), "tokenize"):
         for desc in descriptions:
             desc.process(comp(desc.processed_text), name) #TODO the analyze-step shouldn't find bigrams across sentences...! (resolves when sent_tokenizing)
+    analyzer = cnt.build_analyzer()
+    for desc in descriptions:
+        desc.process(analyzer(" ".join(desc.processed_text)), "analyze", adds_ngrams=max_ngram > 1)
     X = cnt.fit_transform([i.unprocessed_text for i in descriptions])
-    aslist = [list(sorted(zip((tmp := X.getrow(nrow).tocoo()).col, tmp.data), key=lambda x:x[0])) for nrow in range(X.shape[0])]
+    # aslist = [list(sorted(zip((tmp := X.getrow(nrow).tocoo()).col, tmp.data), key=lambda x:x[0])) for nrow in range(X.shape[0])]
     all_words = {v: k for k, v in cnt.vocabulary_.items()}
-    if False:
-        #`make_bow` adds the complete counter, including those words which shouldn't be counted due to max_df and min_df values, so we don't do it
-        vocab, descriptions = make_bow(descriptions)
-        for i in random.sample(range(len(descriptions)), 20):
-            assert all(j in descriptions[i] for j in [all_words[w] for w,n in aslist[i]])
-            assert {all_words[j[0]]: j[1] for j in aslist[i]}.items() <= dict(descriptions[i].bow).items()
-    else:
-        for j, desc in enumerate(descriptions):
-            desc.bow = {all_words[i[0]]: i[1] for i in aslist[j]}
-        all_words = list(sorted(cnt.vocabulary_.keys()))
+    # if False:
+    #     #`make_bow` adds the complete counter, including those words which shouldn't be counted due to max_df and min_df values, so we don't do it
+    #     vocab, descriptions = make_bow(descriptions)
+    #     for i in random.sample(range(len(descriptions)), 20):
+    #         assert all(j in descriptions[i] for j in [all_words[w] for w,n in aslist[i]])
+    #         assert {all_words[j[0]]: j[1] for j in aslist[i]}.items() <= dict(descriptions[i].bow).items()
+    # else:
+    #     for j, desc in enumerate(descriptions):
+    #         desc.bow = {all_words[i[0]]: i[1] for i in aslist[j]}
+    #     all_words = list(sorted(cnt.vocabulary_.keys()))
+    # TODO I removed this because it doesn't make sense to set the bag-of-words already here bc this may not contain n-grams, but in the extract-candidates we want to get those.
     return all_words, descriptions
-
+    #TODO the CountVectorizer mixes up steps 1 and 2 - it prepares which n-grams to be able to extract later already here!
 
 
 def preprocess_raw_course_file(df, min_desc_len=10):
@@ -175,5 +202,6 @@ def preprocess_descriptions(descriptions, components):
     # TODO it must save which kind of preprocessing it did (removed stop words, convered lowercase, stemmed, ...)
     descriptions = run_preprocessing_funcs(descriptions, components) #TODO allow the CountVectorizer!
     print("Ran the following preprocessing funcs:", ", ".join([i[1] for i in descriptions[0].processing_steps]))
-    vocab, descriptions = make_bow(descriptions)
+    # vocab, descriptions = make_bow(descriptions)
+    vocab = sorted(set(flatten([flatten(desc.processed_text) for desc in descriptions])))
     return vocab, descriptions

@@ -1,5 +1,6 @@
 import random
 import textwrap
+from collections import Counter
 
 from .jsonloadstore import Struct
 from ..settings import get_setting
@@ -7,6 +8,10 @@ from ..settings import get_setting
 flatten = lambda l: [item for sublist in l for item in sublist]
 
 from misc_util.pretty_print import fmt
+
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
 
 class Description():
     def __init__(self, text: str, lang: str, title: str, add_title: bool, add_subtitle: bool,
@@ -65,8 +70,8 @@ class Description():
                    f"{(('*g*'+self.subtitle+'*g*. ') if self._add_subtitle and self.subtitle else '')}{textwrap.shorten(self.text, 70)}')")
 
 
-    def process(self, procresult, procname):
-        self.processing_steps.append((procresult, procname))
+    def process(self, procresult, procname, adds_ngrams=False):
+        self.processing_steps.append((procresult, procname, adds_ngrams))
 
     @property
     def processed_text(self):
@@ -96,19 +101,40 @@ class Description():
         if not isinstance(item, str):
             assert False #in the future just return False
         # assert not any(" " in i for i in self.bow.keys()) #TODO add this assertion back once I have a parameter for if I should include n-grams
-        if " " in item:
-            items = item.split(" ")
-            for it in items:
-                if it not in self.bow:
-                    return 0
-            if item in self.processed_as_string():
-                return self.processed_as_string().count(item)
-            elif item in self.processed_as_string(no_dots=True):
-                return 0 # this is legit not a candidate, but I want to be able to set breakpoints in cases where this is not the reason
-        else:
-            return self.bow.get(item, 0)
-        return 0 #TODO set breakpoint here for candidate postprocessing! THEN it should NEVER get here!!!
+        # if " " in item: #TODO why did I even need this originally? When did I check for items with spaces?
+        #     items = item.split(" ")
+        #     for it in items:
+        #         if it not in self.bow:
+        #             return 0
+        #     if item in self.processed_as_string():
+        #         return self.processed_as_string().count(item)
+        #     elif item in self.processed_as_string(no_dots=True):
+        #         return 0 # this is legit not a candidate, but I want to be able to set breakpoints in cases where this is not the reason
+        return self.bow.get(item, 0)
 
+    @property
+    def includes_ngrams(self):
+        return any(i[2] for i in self.processing_steps)
+
+    def bow(self):
+        if not hasattr(self, "_bow"):
+            self._bow = Counter(self.processed_text)
+        return self._bow
+
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
+
+class DescriptionList():
+    def __init__(self, descriptions):
+        self.descriptions = descriptions
+
+
+
+
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
 
 def pp_descriptions_loader(vocab, descriptions):
     descriptions = [Description.fromstruct(i[1][1]) for i in descriptions]
@@ -118,5 +144,5 @@ def pp_descriptions_loader(vocab, descriptions):
         n_items = get_setting("DEBUG_N_ITEMS")
         assert n_items <= len(descriptions), f"The Descriptions-Dataset contains {len(descriptions)} samples, but you want to draw {n_items}!"
         descriptions = [descriptions[key] for key in random.sample(range(len(descriptions)), k=n_items)]
-        vocab = sorted(set(flatten([set(i.bow.keys()) for i in descriptions])))
+        # vocab = sorted(set(flatten([set(i.bow.keys()) for i in descriptions])))
     return {"vocab": vocab, "descriptions": descriptions}

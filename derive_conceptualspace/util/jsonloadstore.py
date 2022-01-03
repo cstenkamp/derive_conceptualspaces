@@ -205,7 +205,7 @@ class JsonPersister():
         self.add_relevantparams_to_filename = add_relevantparams_to_filename
         self.default_metainf_getters = {}
         self.strict_metainf_checking = strict_metainf_checking
-
+        self.created_data = {}
 
     def get_subdir(self, relevant_metainf, ignore_params=None):
         if not (self.dir_struct and all(i for i in self.dir_struct)):
@@ -307,7 +307,11 @@ class JsonPersister():
         assert all(self.ctx.obj[v] == k for v, k in self.loaded_relevant_params.items())
         os.makedirs(join(self.out_dir, subdir), exist_ok=True)
         obj = {"loaded_files": loaded_files, "relevant_params": {i: self.ctx.obj[i] for i in relevant_params},
-               "relevant_metainf": relevant_metainf, "basename": basename, "obj_info": get_all_info(), "object": kwargs}
+               "relevant_metainf": relevant_metainf, "basename": basename, "obj_info": get_all_info(), "object": kwargs,
+               "created_data": self.created_data}
         name = json_dump(obj, join(self.out_dir, subdir, filename+ext), write_meta=False, forbid_overwrite=not force_overwrite)
         print(f"Saved under {name}. Relevant Params: {relevant_params}. Relevant Meta-Inf: {relevant_metainf}")
         return name
+
+    def add_data(self, title, data):
+        self.created_data[title] = json.dumps(data, cls=NumpyEncoder)

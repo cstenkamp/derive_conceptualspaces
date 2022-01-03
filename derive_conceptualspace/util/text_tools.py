@@ -49,22 +49,22 @@ def run_preprocessing_funcs(descriptions:List[Description], components: dict, wo
     #components: sent_tokenize=True, lemmatize=True, remove_stopwords=True, convert_lower=True, remove_diacritcs=True, remove_punctuation=True
     # TODO use TreeTagger? https://textmining.wp.hs-hannover.de/Preprocessing.html#Alternative:-Treetagger
     # https://textmining.wp.hs-hannover.de/Preprocessing.html#Satzerkennung-und-Tokenization
-    assert components.get("convert_lower"), "Stopwords are lower-case so not converting is not allowed (bad for german...!)"
-    if components.get("sent_tokenize"):
+    assert components.convert_lower, "Stopwords are lower-case so not converting is not allowed (bad for german...!)"
+    if components.sent_tokenize:
         descriptions = sent_tokenize_all(descriptions)
-    if components.get("convert_lower"):
+    if components.convert_lower:
         descriptions = convert_lower_all(descriptions)
     #tokenization will happen anyway!
-    if not components.get("lemmatize"):
+    if not components.lemmatize:
         descriptions = word_tokenize_all(descriptions, word_tokenizer=word_tokenizer, remove_stopwords=components.get("remove_stopwords", False))
     else:
         descriptions = word_tokenize_all(descriptions, word_tokenizer=word_tokenizer, remove_stopwords=False)
         descriptions = lemmatize_all(descriptions)
         for desc in descriptions:
             desc.process([[lemma for lemma in sent if lemma not in get_stopwords(desc.lang)] for sent in desc.processed_text], "remove_stopwords")
-    if components.get("remove_diacritics"):
+    if components.remove_diacritics:
         descriptions = remove_diacritics_all(descriptions)
-    if components.get("remove_punctuation"):
+    if components.remove_punctuation:
         descriptions = remove_punctuation_all(descriptions)
     return descriptions
 
@@ -171,14 +171,14 @@ def remove_punctuation_all(descriptions):
     return descriptions
 
 
-def make_bow(descriptions):
-    all_words = sorted(set(flatten([flatten(desc.processed_text) for desc in descriptions])))
-    for desc in descriptions:
-        if isinstance(desc.processed_text[0], str):
-            desc.bow = Counter(desc.processed_text)
-        else:
-            desc.bow = Counter(flatten(desc.processed_text))
-    return all_words, descriptions
+# def make_bow(descriptions):
+#     all_words = sorted(set(flatten([flatten(desc.processed_text) for desc in descriptions])))
+#     for desc in descriptions:
+#         if isinstance(desc.processed_text[0], str):
+#             desc.bow = Counter(desc.processed_text)
+#         else:
+#             desc.bow = Counter(flatten(desc.processed_text))
+#     return all_words, descriptions
 
 
 

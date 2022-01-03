@@ -97,7 +97,8 @@ def setup_json_persister(ctx, ignore_nsamples=False):
     json_persister.default_metainf_getters = {"n_samples": n_samples_getter,
                                               "candidate_min_term_count": cand_ntc_getter,
                                               "prim_lambda": lambda: "ANY",
-                                              "sec_lambda": lambda: "ANY"}
+                                              "sec_lambda": lambda: "ANY",
+                                              "max_ngram": lambda: get_setting("MAX_NGRAM", silent=True)}
     return json_persister
 
 
@@ -147,7 +148,7 @@ def click_pass_add_context(fn):
 @click.option("--strict-metainf-checking/--strict-metainf-checking", default=lambda: get_setting("STRICT_METAINF_CHECKING"), help=f"If True, all subsequent steps of the pipeline must excplitly state which meta-info of the previous steps they demand")
 @click_pass_add_context
 def cli(ctx):
-    CustomIO.init()
+    CustomIO.init(ctx)
     print("Starting up at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
     #print settings
     import derive_conceptualspace.settings
@@ -208,6 +209,7 @@ def translate_descriptions(ctx, translate_policy, raw_descriptions_file, languag
 @click.option("--translations-file", type=str, default="translated_descriptions.json")
 @click.option("--title-languages-file", type=str, default="title_languages.json")
 @click.option("--title-translations-file", type=str, default="translated_titles.json")
+@click.option("--max-ngram", type=str, default=lambda: get_setting("MAX_NGRAM"))
 @click_pass_add_context
 def preprocess_descriptions(ctx, raw_descriptions_file, languages_file, translations_file, title_languages_file, title_translations_file):
     raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
@@ -215,12 +217,9 @@ def preprocess_descriptions(ctx, raw_descriptions_file, languages_file, translat
     translations = ctx.obj["json_persister"].load(translations_file, "translated_descriptions", ignore_params=["pp_components", "translate_policy"], force_overwrite=True, loader=lambda **kwargs: kwargs["translations"])
     title_languages = ctx.obj["json_persister"].load(title_languages_file, "title_languages", ignore_params=["pp_components", "translate_policy"], loader=lambda title_langs: title_langs)
     title_translations = ctx.obj["json_persister"].load(title_translations_file, "translated_titles", ignore_params=["pp_components", "translate_policy"], force_overwrite=True, loader=lambda **kwargs: kwargs["title_translations"])
-    ctx.obj["json_persister"].loaded_objects["languages"] = ((tmp := ctx.obj["json_persister"].loaded_objects["languages"])[0], tmp[1], list({i:None for i in tmp[2]}.keys()), tmp[3])
-    ctx.obj["json_persister"].loaded_objects["title_languages"] = ((tmp := ctx.obj["json_persister"].loaded_objects["title_languages"])[0], tmp[1], list({i:None for i in tmp[2]}.keys()), tmp[3])
-    #TODO[e] do this when saving them instead of when loading^^
-    vocab, descriptions = preprocess_descriptions_base(raw_descriptions, ctx.obj["pp_components"], ctx.obj["translate_policy"], languages, translations, title_languages, title_translations)
+    vocab, descriptions, metainf = preprocess_descriptions_base(raw_descriptions, ctx.obj["pp_components"], ctx.obj["translate_policy"], languages, translations, title_languages, title_translations)
     #TODO[e] depending on translate_policy and pp_compoments, title_languages etc may allowed to be empty
-    ctx.obj["json_persister"].save("pp_descriptions.json", vocab=vocab, descriptions=descriptions, relevant_metainf={"n_samples": len(descriptions)})
+    ctx.obj["json_persister"].save("pp_descriptions.json", vocab=vocab, descriptions=descriptions, relevant_metainf=metainf)
 
 
 ########################################################################################################################
@@ -402,6 +401,7 @@ def show_data_info(ctx):
     print("Dates:\n ", "\n  ".join(f"{k.rjust(max(len(i) for i in dates))}: {v}" for k,v in dates.items()))
     output = {k: merge_streams(v[3].get("stdout", ""), v[3].get("stderr", ""), k) for k, v in ctx.obj["json_persister"].loaded_objects.items()}
     print()
+
 
 def merge_streams(s1, s2, for_):
     format = sys.stdout.date_format if isinstance(sys.stdout, CustomIO) else CustomIO.DEFAULT_DATE_FORMAT

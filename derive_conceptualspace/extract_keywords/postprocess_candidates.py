@@ -27,7 +27,7 @@ def postprocess_candidateterms(candidate_terms, descriptions, extraction_method)
 
     postprocessed_candidates = [[] for _ in candidate_terms]
     fails = set()
-    in_text = (lambda phrase, desc: phrase in desc) if extraction_method == "pp_keybert" else (lambda phrase, desc: phrase_in_text(phrase, desc.text))
+    in_text = (lambda phrase, desc: phrase in desc) if extraction_method != "keybert" else (lambda phrase, desc: phrase_in_text(phrase, desc.text))
 
     for desc_ind, desc in enumerate(tqdm(descriptions)):
         for cand in candidate_terms[desc_ind]:

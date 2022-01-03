@@ -15,6 +15,14 @@ class DocTermMatrix():
         assert not struct["includes_pseudodocs"], "TODO"
         return DocTermMatrix({"doc_term_matrix": struct["dtm"], "all_terms": struct["all_terms"]})
 
+    @staticmethod
+    def from_descriptions(descriptions):
+        vocab = list(set(flatten([desc.bow().keys() for desc in descriptions])))
+        return DocTermMatrix.from_vocab_descriptions(vocab, descriptions)
+
+    @staticmethod
+    def from_vocab_descriptions(vocab, descriptions):
+        print()
 
     def __init__(self, *args, verbose=False, **kwargs):
         self.includes_pseudodocs = False
@@ -27,17 +35,20 @@ class DocTermMatrix():
                 self.all_terms = {int(k): v for k, v in self.all_terms.items()}
             #TODO store meta-info
             #TODO assert dass len(self.dtm) == len(mds_obj.names)
-        elif "all_terms" in kwargs and "descriptions" in kwargs:
-            assert hasattr(kwargs["descriptions"][0], "bow")
-            if isinstance(kwargs["all_terms"], dict):
-                self.all_terms = kwargs["all_terms"]
-            else:
-                self.all_terms = {n: elem for n, elem in enumerate(kwargs["all_terms"])}
-            self.dtm = []
-            for desc in kwargs["descriptions"]:
-                self.dtm.append([[self.reverse_term_dict[k], v] for k,v in desc.bow.items()])
+        # elif "all_terms" in kwargs and "descriptions" in kwargs:
+        #     # assert hasattr(kwargs["descriptions"][0], "bow")
+        #     if isinstance(kwargs["all_terms"], dict):
+        #         self.all_terms = kwargs["all_terms"]
+        #     else:
+        #         self.all_terms = {n: elem for n, elem in enumerate(kwargs["all_terms"])}
+        #     self.dtm = []
+        #     for desc in kwargs["descriptions"]:
+        #         self.dtm.append([[self.reverse_term_dict[k], v] for k,v in desc.bow().items()])
         elif "all_phrases" in kwargs and "descriptions" in kwargs and "dtm" in kwargs:
-            self.all_terms = {n: elem for n, elem in enumerate(kwargs["all_phrases"])}
+            if isinstance(kwargs["all_phrases"], dict):
+                self.all_terms = kwargs["all_phrases"]
+            else:
+                self.all_terms = {n: elem for n, elem in enumerate(kwargs["all_phrases"])}
             self.dtm = kwargs["dtm"]
             self.descriptions = kwargs["descriptions"]
         else:

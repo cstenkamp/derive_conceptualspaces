@@ -26,6 +26,7 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 ########################################################################################################################
 
 def extract_candidateterms(pp_descriptions, extraction_method, faster_keybert=False, verbose=False):
+    assert not (extraction_method in ["keybert", "pp_keybert"] and "2" in get_setting("PP_COMPONENTS"))
     if extraction_method.lower() == "keybert":
         candidateterms, metainf = extract_candidateterms_keybert_nopp(pp_descriptions, faster_keybert, verbose=verbose)
     elif extraction_method.lower() == "pp_keybert":

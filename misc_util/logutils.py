@@ -46,9 +46,10 @@ class ObjectWrapper(object):
 class CustomIO(ObjectWrapper):
     DEFAULT_DATE_FORMAT = '%Y-%m-%d, %H:%M:%S.%f'
 
-    def __init__(self, overwrites_stream, add_date=True, date_format=None):
+    def __init__(self, overwrites_stream, add_date=True, date_format=None, ctx=None):
         super(CustomIO, self).__init__(overwrites_stream)
         self.overwrites_stream = overwrites_stream
+        self.ctx = ctx
         self.add_date = add_date
         self.initialized = False
         self.saver_io = io.StringIO()
@@ -68,9 +69,9 @@ class CustomIO(ObjectWrapper):
         return self._wrapped.write(*bkp_args, **kwargs)
 
     @staticmethod
-    def init():
-        sys.stdout = CustomIO(sys.stdout)
-        sys.stderr = CustomIO(sys.stderr)
+    def init(ctx):
+        sys.stdout = CustomIO(sys.stdout, ctx=ctx)
+        sys.stderr = CustomIO(sys.stderr, ctx=ctx)
         return sys.stdout, sys.stderr
 
     @staticmethod
