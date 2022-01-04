@@ -162,6 +162,8 @@ def preprocess_descriptions(descriptions, components):
     # TODO it must save which kind of preprocessing it did (removed stop words, convered lowercase, stemmed, ...)
     descriptions = run_preprocessing_funcs(descriptions, components) #TODO allow the CountVectorizer!
     print("Ran the following preprocessing funcs:", ", ".join(descriptions.proc_steps))
+    descriptions.proc_min_df = 1
+    descriptions.proc_ngram_range = (1, 1)
     # vocab, descriptions = make_bow(descriptions) #TODO correct to remove?!
     # vocab = sorted(set(flatten([flatten(desc.processed_text) for desc in descriptions])))
     # return vocab, descriptions

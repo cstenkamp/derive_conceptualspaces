@@ -241,4 +241,11 @@ class DescriptionList():
                 all_words = {v: k for k, v in cnt.vocabulary_.items()}
                 return DocTermMatrix(dtm=aslist, all_terms=all_words)
         else:
+            if (max_ngram or 1) != self.proc_ngram_range[1] or (max_ngram not in [None, 1] and not self.prog_has_ngrams):
+                raise NotImplementedError("The Preprocessing didn't have that value for n-grams")
             return DocTermMatrix.from_descriptions(self, min_df=min_df)
+
+
+    def add_embeddings(self, embeddings):
+        for desc, embedding in zip(self._descriptions, list(embeddings)):
+            desc.embedding = embedding

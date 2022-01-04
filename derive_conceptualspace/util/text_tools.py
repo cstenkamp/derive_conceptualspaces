@@ -12,7 +12,7 @@ import nltk
 from HanTa import HanoverTagger as ht
 from nltk.corpus import stopwords as nlstopwords
 
-
+from derive_conceptualspace.settings import get_setting
 from derive_conceptualspace.util.desc_object import Description, DescriptionList
 from derive_conceptualspace.util.dtm_object import DocTermMatrix
 from derive_conceptualspace.util.nltk_util import NLTK_LAN_TRANSLATOR, wntag
@@ -36,13 +36,15 @@ def load_desc15_stopwords():
 
 
 @lru_cache(maxsize=None)
-def get_stopwords(language, include_desc15_stopwords=True):
+def get_stopwords(language, include_desc15_stopwords=True, include_custom=True):
     if language in NLTK_LAN_TRANSLATOR:
         language = NLTK_LAN_TRANSLATOR[language]
     assert language in NLTK_LAN_TRANSLATOR.values()
     stopwords = set(nlstopwords.words(language))
     if include_desc15_stopwords and language == "english":
         stopwords |= load_desc15_stopwords()
+    if include_custom and language == "english":
+        stopwords |= set(get_setting("CUSTOM_STOPWORDS"))
     return tuple(stopwords)
 
 

@@ -44,6 +44,7 @@ def create_dissim_mat(descriptions: DescriptionList, quantification_measure, ver
     assert all(len(set((lst := [i[0] for i in dtm]))) == len(lst) for dtm in quantification.dtm)
     dissim_mat = create_dissimilarity_matrix(quantification.as_csr())
     if verbose:
+        #TODO this can get more than 2 entries and looks shitty if it does
         closest_entries = list(np.where(dissim_mat==min(dissim_mat[dissim_mat>0]))[0])
         print(f"Closest Nonequal Descriptions: *b*", "*b* & *b*".join([descriptions._descriptions[i].title for i in closest_entries])), "*b*"
     return quantification, dissim_mat, {"ngrams_in_embedding": get_setting("NGRAMS_IN_EMBEDDING")}

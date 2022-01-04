@@ -3,8 +3,10 @@ Run default:   `MA_DEBUG=1 PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --core
 or             `MA_DEBUG=1 PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR tcsldp_translate/ppmi_3d/pp_keybert_count/clusters.json`
 or:            `(export $(cat $MA_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR default)`
 ALL Combis:    `ma_cont snakemake --cores 1 -p  --directory /opt/data all --keep-going`
-Get results:   `rsync -az --progress $MA_DATA_DIR etlpipelines:~/data --exclude .snakemake`
+ALL for 1 rule `(export $(cat $MA_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR all_for --config for_rule=create_embedding)`
 Plot DAG:      `PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -np --directory $MA_DATA_DIR --dag | grep -A99999 "digraph" | dot -Tsvg > dag.svg`
+Get results:   `rsync -az --progress $MA_DATA_DIR etlpipelines:~/data --exclude .snakemake`
+Kill Smk:      `killall -TERM snakemake`
 """
 
 #TODO before writing about it: have a way of not having to set the PYTHONPATH as cmd-arg
@@ -26,8 +28,7 @@ from derive_conceptualspace.extract_keywords.postprocess_candidates import (
 )
 from derive_conceptualspace.extract_keywords.keywords_main import (
     extract_candidateterms as extract_candidateterms_base,
-    create_doc_cand_matrix as create_doc_cand_matrix_base,
-    filter_keyphrases as filter_keyphrases_base,
+    create_filtered_doc_cand_matrix as create_filtered_doc_cand_matrix_base,
 )
 from derive_conceptualspace.create_spaces.preprocess_descriptions import (
     preprocess_descriptions_full as preprocess_descriptions_base,
@@ -222,28 +223,16 @@ rule create_doc_cand_matrix:
         pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/pp_descriptions.json",
         postprocessed_candidates = "{n_samples}_samples/{pp_components}_{translate_policy}/postprocessed_candidates_{extraction_method}.json"
     output:
-        "{n_samples}_samples/{pp_components}_{translate_policy}/doc_cand_matrix_{extraction_method}.json"
-    threads: 1
-    run:
-        autoload_context_inputs(ctx, input, wildcards)
-        doc_term_matrix = create_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"])
-        json_persister.save("doc_cand_matrix.json", doc_term_matrix=doc_term_matrix)
-
-
-rule filter_keyphrases:
-    input:
-        pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/pp_descriptions.json",
-        doc_cand_matrix = "{n_samples}_samples/{pp_components}_{translate_policy}/doc_cand_matrix_{extraction_method}.json"
-    output:
         "{n_samples}_samples/{pp_components}_{translate_policy}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json"
     threads: 1
     params:
         candidate_min_term_count = get_setting("CANDIDATE_MIN_TERM_COUNT"),
+        use_ndocs_count = get_setting("CANDS_USE_NDOCS_COUNT")
     run:
-        autoload_context_inputs(ctx, input, wildcards, params)
-        filtered_dcm = filter_keyphrases_base(ctx.obj["doc_cand_matrix"], ctx.obj["pp_descriptions"], min_term_count=ctx.obj["candidate_min_term_count"], dcm_quant_measure=ctx.obj["dcm_quant_measure"], verbose=ctx.obj["verbose"])
+        autoload_context_inputs(ctx, input, wildcards, params=params)
+        filtered_dcm = create_filtered_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], min_term_count=params.candidate_min_term_count,
+                                                    dcm_quant_measure=ctx.obj["dcm_quant_measure"], use_n_docs_count=params.use_ndocs_count, verbose=ctx.obj["verbose"])
         json_persister.save("filtered_dcm.json", relevant_metainf={"candidate_min_term_count": ctx.obj["candidate_min_term_count"]}, doc_term_matrix=filtered_dcm)
-
 
 
 rule create_candidate_svm:
@@ -266,10 +255,29 @@ rule create_candidate_svm:
 
 ########################################################################################################################
 
+def print_multicol(lst, line_len=220):
+    max_len = (max(len(i) for i in lst) + 1)
+    n_cols = max(line_len//max_len, 1)
+    divisions = list(zip(*[lst[i::n_cols] for i in range(n_cols)]))
+    for elems in zip(divisions):
+        print("".join([i.ljust(max_len) for i in elems[0]]))
+
+def input_all_for(wildcards):
+    all_rules = {k: v for k, v in rules.__dict__.items() if k not in ["all", "default", "all_for"]}
+    rl = all_rules.get(config.get("for_rule","preprocess_descriptions"))
+    if rl:
+        inputs = [i for i in
+             expand(rl.output,
+                 pp_components=ALL_PP_COMPONENTS,translate_policy=ALL_TRANSLATE_POLICY,quantification_measure=ALL_QUANTIFICATION_MEASURE,
+                 embed_dimensions=ALL_EMBED_DIMENSIONS,extraction_method=ALL_EXTRACTION_METHOD,dcm_quant_measure=ALL_DCM_QUANT_MEASURE,
+                 embed_algo=ALL_EMBED_ALGO,n_samples=n_samples)
+            if not any(j in i for j in FORBIDDEN_COMBIS)
+        ]
+        print("Running all rules for these inputs:")
+        print_multicol(inputs)
+        return inputs
+
+
 rule all_for:
-    #TODO allow to specify the name of the rule for which to do everything
     input:
-        expand(rules.preprocess_descriptions.output,
-             pp_components=ALL_PP_COMPONENTS,translate_policy=ALL_TRANSLATE_POLICY,quantification_measure=ALL_QUANTIFICATION_MEASURE,
-             embed_dimensions=ALL_EMBED_DIMENSIONS,extraction_method=ALL_EXTRACTION_METHOD,dcm_quant_measure=ALL_DCM_QUANT_MEASURE,
-             embed_algo=ALL_EMBED_ALGO,n_samples=n_samples)
+        input_all_for

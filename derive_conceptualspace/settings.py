@@ -7,10 +7,10 @@ ENV_PREFIX = "MA"
 ########################################################################################################################
 
 #!! use singular for these (bzw the form you'd use if there wasn't the "ALL_" before)
-ALL_PP_COMPONENTS = ["autcsldp", "tcsldp", "aucsd2"] #,"tcsdp"       # If in preprocessing it should add coursetitle, lemmatize, etc
+ALL_PP_COMPONENTS = ["aucsd2"] #,"tcsdp"                             # If in preprocessing it should add coursetitle, lemmatize, etc #TODO "autcsldp", "tcsldp" (gehen gerade nicht weil die nicht mit ngrams klarkommen)
 ALL_TRANSLATE_POLICY = ["translate"] #, "origlan", "onlyeng"         # If non-english descriptions should be translated
 ALL_QUANTIFICATION_MEASURE = ["ppmi", "tfidf", "count", "binary"]    # For the dissimiliarity Matrix of the Descripts
-ALL_EXTRACTION_METHOD = ["pp_keybert", "tfidf", "ppmi"]              # How candidate-terms are getting extracted         #TODO keybert
+ALL_EXTRACTION_METHOD = ["tfidf", "pp_keybert", "ppmi"]              # How candidate-terms are getting extracted         #TODO keybert
 ALL_EMBED_ALGO = ["mds", "tsne", "isomap"]                           # Actual Embedding of the Descriptions
 ALL_EMBED_DIMENSIONS = [100, 3] #, 50, 200                           # Actual Embedding of the Descriptions
 ALL_DCM_QUANT_MEASURE = ["tfidf", "count", "ppmi", "binary"]         # Quantification for the Doc-Keyphrase-Matrix       #TODO tag-share
@@ -42,9 +42,11 @@ DEFAULT_PRIM_LAMBDA = 0.45
 DEFAULT_SEC_LAMBDA = 0.3
 DEFAULT_STANFORDNLP_VERSION = "4.2.2" #whatever's newest at https://stanfordnlp.github.io/CoreNLP/history.html
 DEFAULT_COURSE_TYPES = ["colloquium", "seminar", "internship", "practice", "lecture"]
+DEFAULT_CUSTOM_STOPWORDS = ["one", "also", "take"]
 DEFAULT_MAX_NGRAM = 5
 DEFAULT_NGRAMS_IN_EMBEDDING = False #If I should set the ngram-range already in the preprocess_descriptions step (makes the dissimiliarity-matrix a shitton more sparse)
 DEFAULT_DISSIM_MAT_ONLY_PARTNERED = True
+DEFAULT_CANDS_USE_NDOCS_COUNT = True
 
 #Settings regarding the architecture/platform
 DEFAULT_STRICT_METAINF_CHECKING = True

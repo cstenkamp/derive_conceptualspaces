@@ -34,8 +34,7 @@ from derive_conceptualspace.extract_keywords.postprocess_candidates import (
 )
 from derive_conceptualspace.extract_keywords.keywords_main import (
     extract_candidateterms as extract_candidateterms_base,
-    create_doc_cand_matrix as create_doc_cand_matrix_base,
-    filter_keyphrases as filter_keyphrases_base,
+    create_filtered_doc_cand_matrix as create_filtered_doc_cand_matrix_base,
 )
 from derive_conceptualspace.create_spaces.preprocess_descriptions import (
     preprocess_descriptions_full as preprocess_descriptions_base,
@@ -289,11 +288,12 @@ def extract_candidateterms_stanfordlp(ctx):
 
 @prepare_candidateterms.command()
 @click.option("--faster-keybert/--no-faster-keybert", default=lambda: get_setting("FASTER_KEYBERT"))
+@click.option("--max-ngram", default=lambda: get_setting("MAX_NGRAM"))
 @click_pass_add_context
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
-def extract_candidateterms(ctx):
+def extract_candidateterms(ctx, max_ngram):
     #TODO if not NGRAMS_IN_EMBEDDING and extraction_method in tfidf/ppmi, you have to re-extract, otherwise you won't get n-grams
-    candidateterms, relevant_metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.obj["extraction_method"], ctx.obj["faster_keybert"], verbose=ctx.obj["verbose"])
+    candidateterms, relevant_metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.obj["extraction_method"], max_ngram, ctx.obj["faster_keybert"], verbose=ctx.obj["verbose"])
     ctx.obj["json_persister"].save("candidate_terms.json", candidateterms=candidateterms, relevant_metainf=relevant_metainf)
 
 
@@ -306,28 +306,18 @@ def postprocess_candidateterms(ctx):
 
 
 @prepare_candidateterms.command()
-@click_pass_add_context
-# @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
-def create_doc_cand_matrix(ctx):
-    ctx.obj["postprocessed_candidates"] = ctx.obj["json_persister"].load(None, "postprocessed_candidates", loader = lambda **args: args["postprocessed_candidates"])
-    doc_term_matrix = create_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"])
-    ctx.obj["json_persister"].save("doc_cand_matrix.json", doc_term_matrix=doc_term_matrix)
-    #TODO can't I go for a quantification_measure in this doc-cand-matrix as well?!
-    #TODO the create_doc_cand_matrix_base function used to have a "assert_postprocessed" arguement, can I still do this?!
-
-
-@prepare_candidateterms.command()
 @click.option("--candidate-min-term-count", type=int, default=lambda: get_setting("CANDIDATE_MIN_TERM_COUNT"))
 @click.option("--dcm-quant-measure", type=click.Choice(ALL_DCM_QUANT_MEASURE, case_sensitive=False), default=lambda: get_setting("DCM_QUANT_MEASURE"))
+@click.option("--use-ndocs-count/--no-use-ndocs-count", default=lambda: get_setting("CANDS_USE_NDOCS_COUNT"))
 @click_pass_add_context
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
-def filter_keyphrases(ctx, candidate_min_term_count):
+def create_filtered_doc_cand_matrix(ctx, candidate_min_term_count, use_ndocs_count):
     # TODO missing options here: `tag-share` (chap. 4.2.1 of [VISR12])
-    # TODO actually I don't need pp_descriptions here, only for verbosity -> make loading silent
-    ctx.obj["doc_cand_matrix"] = ctx.obj["json_persister"].load(None, "doc_cand_matrix", loader=dtm_loader)
-    filtered_dcm = filter_keyphrases_base(ctx.obj["doc_cand_matrix"], ctx.obj["pp_descriptions"], min_term_count=candidate_min_term_count, dcm_quant_measure=ctx.obj["dcm_quant_measure"], verbose=ctx.obj["verbose"])
+    # TODO Do I need pp_descriptions except for verbosity? -> if not, make loading silent
+    ctx.obj["postprocessed_candidates"] = ctx.obj["json_persister"].load(None, "postprocessed_candidates", loader = lambda **args: args["postprocessed_candidates"])
+    filtered_dcm = create_filtered_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], min_term_count=candidate_min_term_count,
+                                                    dcm_quant_measure=ctx.obj["dcm_quant_measure"], use_n_docs_count=use_ndocs_count, verbose=ctx.obj["verbose"])
     ctx.obj["json_persister"].save("filtered_dcm.json", relevant_metainf={"candidate_min_term_count": candidate_min_term_count}, doc_term_matrix=filtered_dcm)
-    #TODO: use_n_docs_count as argument
 
 
 ########################################################################################################################
@@ -434,18 +424,27 @@ def rank_courses_saldirs(ctx):
     from derive_conceptualspace.util.base_changer import NDPlane
     import numpy as np
     from itertools import combinations
+    from tqdm import tqdm
+
     cluster_loader = lambda **di: dict(clusters=di["clusters"], cluster_directions=di["cluster_directions"],
                                        decision_planes={k: NDPlane(np.array(v[1][0]),v[1][1]) for k, v in di["decision_planes"].items()}, metrics=di["metrics"])
     ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, "clusters", loader=cluster_loader)
-    for desc, embedding in zip(ctx.obj["pp_descriptions"]["descriptions"], list(ctx.obj["embedding"].embedding_)):
-        desc.embedding = embedding
+    ctx.obj["pp_descriptions"].add_embeddings(ctx.obj["embedding"].embedding_)
     _, _, decision_planes, metrics = ctx.obj["clusters"].values()
     existinds = {k: set(v) for k, v in ctx.obj["filtered_dcm"].term_existinds(use_index=False).items()}
     for k, v in metrics.items():
         metrics[k]["existinds"] = existinds[k]
         metrics[k]["decision_plane"] = decision_planes[k]
+
+    # TODO this is only bc in debug i set the min_existinds to 1
+    metrics = {k:v for k,v in metrics.items() if len(v["existinds"]) >= 25}
+    decision_planes = {k:v for k,v in decision_planes.items() if k in metrics}
+    existinds = {k:v for k,v in existinds.items() if k in metrics}
+    #/that
+
     good_candidates = dict([i for i in sorted(metrics.items(), key=lambda x:x[1]["accuracy"], reverse=True) if i[1]["accuracy"] > 0.9 and i[1]["precision"] > 0.2])
     semi_candidates = dict([i for i in sorted(metrics.items(), key=lambda x:x[1]["accuracy"], reverse=True) if i[1]["accuracy"] > 0.6 and i[1]["precision"] > 0.1 and i[1]["recall"] > 0.6 and i[0] not in good_candidates])
+    print()
 
     #jetzt will ich: Die Candidates gruppieren, die einen hohen overlap haben in welchen Texten sie vorkommen.
     # Also, wenn "a1" und "a2" in den beschreibungen von mostly den selben Kursen vorkommen, werden sie germergt.
@@ -455,52 +454,50 @@ def rank_courses_saldirs(ctx):
 
     # combs = list(combinations(existinds.keys(), 2))
     all_overlaps = {}
-    for nkey1, (key1, inds1) in enumerate(existinds.items()):
+    for nkey1, (key1, inds1) in enumerate(tqdm(existinds.items(), desc="Checking all overlaps")):
         n1 = len(inds1)
         for key2, inds2 in list(existinds.items())[nkey1+1:]:
-            overlap_percentages = (n12 := len(inds1 & inds2)) / n1, n12 / len(inds2), n12 / (n1+len(inds2))
+            overlap_percentages = (n12 := len(inds1 & inds2)) / n1, n12 / len(inds2), n12 / (n1+len(inds2)), n1/len(ctx.obj["pp_descriptions"]), len(inds2)/len(ctx.obj["pp_descriptions"])
             all_overlaps[(key1, key2)] = overlap_percentages
     for val in range(3):
         ar = np.array([i[val] for i in all_overlaps.values()])
         print(f"[{val}]: Mean Overlap of respective exist-indices: {ar[ar>0].mean()*100:.2f}% for those with any overlap, {ar.mean()*100:.2f}% overall")
+    merge_candidates = [[k[0], k[1]] for k,v in all_overlaps.items() if v[2] > 0.45 and max(v[3], v[4]) < 0.1]
+
+
+@generate_conceptualspace.command()
+@click_pass_add_context
+# @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
+def run_lsi(ctx):
+    """as in [VISR12: 4.2.1]"""
+    # TODO options here:
+    # * if it should filter AFTER the LSI
+    import numpy as np
+    from derive_conceptualspace.util.dtm_object import DocTermMatrix
+    from os.path import splitext
+    from gensim import corpora
+    from gensim.models import LsiModel
+
+    dtm = ctx.obj["filtered_dcm"]
+    if ctx.obj["verbose"]:
+        print("The 25 candidate_terms that occur in the most descriptions (incl the #descriptions they occur in):", {i[0]: len(i[1]) for i in sorted(dtm.term_existinds(use_index=False).items(), key=lambda x: len(x[1]), reverse=True)[:25]})
+        if ctx.obj["dcm_quant_measure"] != "binary":
+            max_ind = np.unravel_index(dtm.as_csr().argmax(), dtm.as_csr().shape)
+            print(f"Max {ctx.obj['dcm_quant_measure']}: Term *b*{dtm.all_terms[max_ind[0]]}*b* has value *b*{dict(dtm.dtm[max_ind[1]])[max_ind[0]]}*b* for doc *b*{ctx.obj['pp_descriptions']._descriptions[max_ind[1]].title}*b*")
+
+    dtm.add_pseudo_keyworddocs()
+
+    #ok so as much for the preprocessing, now let's actually go for the LSI
+    dictionary = corpora.Dictionary([list(dtm.all_terms.values())])
+    # print("Start creating the LSA-Model with MORE topics than terms...")
+    # lsamodel_manytopics = LsiModel(doc_term_matrix, num_topics=len(all_terms) * 2, id2word=dictionary)
+    print("Start creating the LSA-Model with FEWER topics than terms...")
+    lsamodel_lesstopics = LsiModel(dtm.dtm, num_topics=len(dtm.all_terms)//10, id2word=dictionary)
     print()
-
-
-# @prepare_candidateterms.command()
-# @click_pass_add_context
-# # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
-# def run_lsi(ctx, dtm_filename):
-#     """as in [VISR12: 4.2.1]"""
-#     # TODO options here:
-#     # * if it should filter AFTER the LSI
-#     import numpy as np
-#     from derive_conceptualspace.util.dtm_object import DocTermMatrix
-#     from os.path import splitext
-#     from gensim import corpora
-#     from gensim.models import LsiModel
-#
-#     metric = splitext(dtm_filename)[0].split('_')[-1]
-#     print(f"Using the DocTermMatrix with *b*{metric}*b* as metric!")
-#     dtm = DocTermMatrix(json_load(join(ctx.obj["base_dir"], dtm_filename), assert_meta=("CANDIDATE_MIN_TERM_COUNT", "STANFORDNLP_VERSION")))
-#     if ctx.obj["verbose"]:
-#         print("The 25 candidate_terms that occur in the most descriptions (incl the #descriptions they occur in):", {i[0]: len(i[1]) for i in sorted(dtm.term_existinds(use_index=False).items(), key=lambda x: len(x[1]), reverse=True)[:25]})
-#         if metric.lower() not in ["binary"]:
-#             max_ind = np.unravel_index(dtm.as_csr().argmax(), dtm.as_csr().shape)
-#             print(f"Max-{metric}: Term `*b*{dtm.all_terms[max_ind[0]]}*b*` has value *b*{dict(dtm.dtm[max_ind[1]])[max_ind[0]]}*b* for doc `*b*{ctx.obj['mds_obj'].names[max_ind[1]]}*b*`")
-#
-#     dtm.add_pseudo_keyworddocs()
-#
-#     #ok so as much for the preprocessing, now let's actually go for the LSI
-#     dictionary = corpora.Dictionary([list(dtm.all_terms.values())])
-#     # print("Start creating the LSA-Model with MORE topics than terms...")
-#     # lsamodel_manytopics = LsiModel(doc_term_matrix, num_topics=len(all_terms) * 2, id2word=dictionary)
-#     print("Start creating the LSA-Model with FEWER topics than terms...")
-#     lsamodel_lesstopics = LsiModel(dtm.dtm, num_topics=len(dtm.all_terms)//10, id2word=dictionary)
-#     print()
-#     import matplotlib.cm; import matplotlib.pyplot as plt
-#     #TODO use the mpl_tools here as well to also save plot!
-#     plt.imshow(lsamodel_lesstopics.get_topics()[:100,:200], vmin=lsamodel_lesstopics.get_topics().min(), vmax=lsamodel_lesstopics.get_topics().max(), cmap=matplotlib.cm.get_cmap("coolwarm")); plt.show()
-#     print()
+    import matplotlib.cm; import matplotlib.pyplot as plt
+    #TODO use the mpl_tools here as well to also save plot!
+    plt.imshow(lsamodel_lesstopics.get_topics()[:100,:200], vmin=lsamodel_lesstopics.get_topics().min(), vmax=lsamodel_lesstopics.get_topics().max(), cmap=matplotlib.cm.get_cmap("coolwarm")); plt.show()
+    print()
 #
 #
 #

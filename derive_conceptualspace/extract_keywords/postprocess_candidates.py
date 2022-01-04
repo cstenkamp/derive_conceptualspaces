@@ -51,7 +51,7 @@ def check_cand(cand, desc, in_text, try_fixing=True):
 
     # cand = desc.split(" ")[desc[:desc.find(cand)].count(" "):][0]
     # cand = "".join([i for i in cand if re.match(WORD_NUM_APOSTR_REGEX, i)])
-    part_cands = [[i for i in desc.bow.keys() if part in i] for part in cand.split(" ")]
+    part_cands = [[i for i in desc.bow().keys() if part in i] for part in cand.split(" ")]
     for ccand in product(*part_cands):
         if in_text(" ".join(ccand), desc):
            return True, " ".join(ccand)
