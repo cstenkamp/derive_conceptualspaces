@@ -4,7 +4,7 @@ import numpy as np
 
 from src.main.load_data.load_semanticspaces import load_mds_representation
 from src.static.settings import SPACES_DATA_BASE, SID_DATA_BASE
-from derive_conceptualspace.cli.create_siddata_dataset import load_mds
+from derive_conceptualspace.cli.run_pipeline import load_mds
 
 n_dims = 20
 

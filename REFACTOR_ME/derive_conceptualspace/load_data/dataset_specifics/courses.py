@@ -1,4 +1,4 @@
-from derive_conceptualspace.cli.create_siddata_dataset import get_data
+from derive_conceptualspace.cli.run_pipeline import get_data
 from src.static.settings import SID_DATA_BASE
 
 def get_classes(data_base, what, from_csv_path=SID_DATA_BASE, from_csv_name="kurse-beschreibungen.csv"):

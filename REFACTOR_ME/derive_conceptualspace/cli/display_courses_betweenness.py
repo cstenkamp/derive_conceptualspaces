@@ -16,7 +16,7 @@ def main():
 
 def get_descriptions():
     from src.static.settings import SID_DATA_BASE
-    from derive_conceptualspace.cli.create_siddata_dataset import load_mds
+    from derive_conceptualspace.cli.run_pipeline import load_mds
     names, descriptions, _ = load_mds(join(SID_DATA_BASE, f"siddata_names_descriptions_mds_{MDS_DIMENSIONS}.json"))
     return dict(zip(names, descriptions))
 

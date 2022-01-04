@@ -22,14 +22,13 @@ def fix_cand(cand, text):
 
 def postprocess_candidateterms(candidate_terms, descriptions, extraction_method):
     candidate_terms, = candidate_terms.values()
-    _, descriptions = descriptions.values()
     assert len(candidate_terms) == len(descriptions), f"Candidate Terms: {len(candidate_terms)}, Descriptions: {len(descriptions)}"
 
     postprocessed_candidates = [[] for _ in candidate_terms]
     fails = set()
     in_text = (lambda phrase, desc: phrase in desc) if extraction_method != "keybert" else (lambda phrase, desc: phrase_in_text(phrase, desc.text))
 
-    for desc_ind, desc in enumerate(tqdm(descriptions)):
+    for desc_ind, desc in enumerate(tqdm(descriptions._descriptions)):
         for cand in candidate_terms[desc_ind]:
             cond, ncand = check_cand(cand, desc, in_text)
             if cond:
@@ -37,7 +36,7 @@ def postprocess_candidateterms(candidate_terms, descriptions, extraction_method)
             else:
                 fails.add(cand)
 
-    for desc_ind, desc in enumerate(descriptions):
+    for desc_ind, desc in enumerate(descriptions._descriptions):
         for cand in postprocessed_candidates[desc_ind]:
             assert in_text(cand, desc)
             assert cand.lower() in desc.processed_as_string()

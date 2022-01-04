@@ -238,7 +238,7 @@ class JsonPersister():
                 return correct_cands
 
 
-    def load(self, filename, save_basename, relevant_metainf=None, ignore_params=None, loader=None, force_overwrite=False):
+    def load(self, filename, save_basename, relevant_metainf=None, ignore_params=None, loader=None, force_overwrite=False, silent=False):
         complete_metainf = {**{k: v() for k, v in self.default_metainf_getters.items()}, **(relevant_metainf or {})}
         ignore_params = ignore_params or []
         subdir = ""
@@ -256,38 +256,36 @@ class JsonPersister():
             # " ".join([tmp["basename"], "loaded", "(", *list(tmp["loaded_files"].keys()), ")"])
             # 'filtered_dcm loaded ( raw_descriptions translations languages pp_descriptions candidate_terms postprocessed_candidates doc_cand_matrix )'
             # 'embedding loaded ( raw_descriptions translations languages pp_descriptions dissim_mat )'
-            for k, v in tmp.get("loaded_files", {}).items():
-                # if k == "pp_descriptions":
-                #     print(f"Loading {tmp['basename']}: {self.loaded_objects[k][2]}")
-                if k not in self.loaded_objects: self.loaded_objects[k] = v
-                elif tmp["basename"] in v[2]:
-                    assert {k:v for k,v in self.loaded_objects[k][3].items()} == v[3]
-                    self.loaded_objects[k][2].extend(v[2])
-                    # the pp_descriptions are used in candidate_terms AND in postprocess_candidates. So when pp_cands loads stuff, it needs to note that pp_descriptions were used in boht.
-                elif k in self.loaded_objects:
-                    self.loaded_objects[k][2].extend(v[2])
-
-            for k, v in tmp.get("relevant_params", {}).items():
-                if k in self.loaded_relevant_params: assert self.loaded_relevant_params[k] == v
-                else: self.loaded_relevant_params[k] = v
-            for k, v in tmp.get("relevant_metainf", {}).items():
-                if k in self.loaded_relevant_metainf: assert self.loaded_relevant_metainf[k] == v
-                else: self.loaded_relevant_metainf[k] = v
-                if self.ctx.obj["strict_metainf_checking"]:
-                    assert k in complete_metainf, f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}`, but you don't have a value for this!"
-                    assert complete_metainf[k] in [v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
-                else:
-                    assert complete_metainf.get(k) in [None, v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
+            if not silent:
+                for k, v in tmp.get("loaded_files", {}).items():
+                    if k not in self.loaded_objects: self.loaded_objects[k] = v
+                    elif tmp["basename"] in v[2]:
+                        assert {k:v for k,v in self.loaded_objects[k][3].items()} == v[3]
+                        self.loaded_objects[k][2].extend(v[2])
+                    elif k in self.loaded_objects:
+                        self.loaded_objects[k][2].extend(v[2])
+                for k, v in tmp.get("relevant_params", {}).items():
+                    if k in self.loaded_relevant_params: assert self.loaded_relevant_params[k] == v
+                    else: self.loaded_relevant_params[k] = v
+                for k, v in tmp.get("relevant_metainf", {}).items():
+                    if k in self.loaded_relevant_metainf: assert self.loaded_relevant_metainf[k] == v
+                    else: self.loaded_relevant_metainf[k] = v
+                    if self.ctx.obj["strict_metainf_checking"]:
+                        assert k in complete_metainf, f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}`, but you don't have a value for this!"
+                        assert complete_metainf[k] in [v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
+                    else:
+                        assert complete_metainf.get(k) in [None, v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
             obj = tmp["object"] if "object" in tmp else tmp
             obj_info = {**tmp.get("obj_info", {}), "relevant_params": tmp.get("relevant_params", {}), "relevant_metainf": tmp.get("relevant_metainf", {})}
         if loader is not None:
             obj = loader(**obj)
-        for k, v in self.loaded_relevant_params.items():
-            if k in self.ctx.obj: assert self.ctx.obj[k] == v
-            else: self.ctx.obj[k] = v
-        if not force_overwrite:
-            assert save_basename not in self.loaded_objects
-        self.loaded_objects[save_basename] = (obj, join(self.in_dir, subdir, filename), ["this"], obj_info)
+        if not silent:
+            for k, v in self.loaded_relevant_params.items():
+                if k in self.ctx.obj: assert self.ctx.obj[k] == v
+                else: self.ctx.obj[k] = v
+            if not force_overwrite:
+                assert save_basename not in self.loaded_objects
+            self.loaded_objects[save_basename] = (obj, join(self.in_dir, subdir, filename), ["this"], obj_info)
         return obj
 
 

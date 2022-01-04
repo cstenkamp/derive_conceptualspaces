@@ -13,11 +13,10 @@ norm = lambda vec: vec/np.linalg.norm(vec)
 vec_cos = lambda v1, v2: np.arccos(np.clip(np.dot(norm(v1), norm(v2)), -1.0, 1.0))  #https://stackoverflow.com/a/13849249/5122790
 
 
-def create_candidate_svms(dcm, mds, pp_descriptions, prim_lambda, sec_lambda, verbose):
-    _, descriptions = pp_descriptions.values()
+def create_candidate_svms(dcm, mds, descriptions, prim_lambda, sec_lambda, verbose):
     metrics = {}
     decision_planes = {}
-    for term, exist_indices in tqdm(dcm.term_existinds(use_index=False).items()):
+    for term, exist_indices in tqdm(dcm.term_existinds(use_index=False).items(), desc="Creating Candidate SVMs"):
         if not get_setting("DEBUG"):
             assert len(exist_indices) >= get_setting("CANDIDATE_MIN_TERM_COUNT") #TODO this is relevant-metainf!!
         cand_mets, decision_plane = create_candidate_svm(mds, term, exist_indices, descriptions)
@@ -40,6 +39,17 @@ def create_candidate_svms(dcm, mds, pp_descriptions, prim_lambda, sec_lambda, ve
     clusters, cluster_directions = select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda)
     return clusters, cluster_directions, decision_planes, metrics
 
+class Comparer():
+    def __init__(self, decision_planes, compare_fn):
+        self.decision_planes = decision_planes
+        self.already_compared = {}
+        self.compare_fn = compare_fn
+    def __call__(self, v1, v2):
+        if v1+","+v2 not in self.already_compared:
+            if v2+","+v1 in self.already_compared:
+                return self.already_compared[v2+","+v1]
+            self.already_compared[v1+","+v2] = self.compare_fn(self.decision_planes[v1].normal, self.decision_planes[v2].normal)
+        return self.already_compared[v1+","+v2]
 
 def select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda):
     #TODO waitwaitwait. Am I 100% sure that the intercepts of the decision_planes are irrelevant?!
@@ -47,19 +57,17 @@ def select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda)
     get_tlambda2 = lambda sorted_kappa, primlamb, seclamb: list(set(get_tlambda(sorted_kappa, seclamb))-set(get_tlambda(sorted_kappa, primlamb)))
     candidates = get_tlambda(sorted_kappa, prim_lambda)
     salient_directions = [sorted_kappa[0][0],]
-    for nterm in tqdm(range(1, len(candidates))):
-        compare_vecs = [decision_planes[term].normal for term in salient_directions]
+    n_terms = min(len(candidates), 2*len(decision_planes[salient_directions[0]].coef)) #from [DESC15]
+    comparer = Comparer(decision_planes, vec_cos)
+    for nterm in tqdm(range(1, n_terms), desc="Merging Salient Directions"):
         cands = set(candidates)-set(salient_directions)
-        # TODO mit cachen lässt sich hier EXTREM viel beschleunigen
-        compares = {cand: max([vec_cos(decision_planes[cand].normal, vec2) for vec2 in compare_vecs]) for cand in cands}
+        compares = {cand: max(comparer(cand, compareto) for compareto in salient_directions) for cand in cands}
         salient_directions.append(min(compares.items(), key=lambda x:x[1])[0])
-        if len(salient_directions) >= 2*len(decision_planes[salient_directions[0]].coef):
-            break #from [DESC15]
     print(f"Found {len(salient_directions)} salient directions: {salient_directions}")
     compare_vecs = [decision_planes[term].normal for term in salient_directions]
     clusters = {term: [] for term in salient_directions}
     #TODO instead do the cluster-assignment with k-means!
-    for term in tqdm(get_tlambda2(sorted_kappa, prim_lambda, sec_lambda)):
+    for term in tqdm(get_tlambda2(sorted_kappa, prim_lambda, sec_lambda), desc="Associating Clusters"):
         # "we then associate with each term d_i a Cluster C_i containing all terms from T^{0.1} which are more similar to d_i than to any of the
         # other directions d_j." TODO: experiment with thresholds, if it's extremely unsimilar to ALL just effing discard it!
         clusters[salient_directions[np.argmin([vec_cos(decision_planes[term].normal, vec2) for vec2 in compare_vecs])]].append(term)
@@ -81,7 +89,7 @@ def create_candidate_svm(embedding, term, exist_indices, descriptions, plot_svm=
     precision = tp / (tp + fp); recall = tp / (tp + fn); accuracy = (tp + tn) / len(labels)
     # print(f"accuracy: {accuracy:.2f} | precision: {precision:.2f} | recall: {recall:.2f}")
     #now, in [DESC15:4.2.1], they compare the "ranking induced by \vec{v_t} with the number of times the term occurs in the entity's documents" with Cohen's Kappa.
-    num_occurances = [descriptions[ind].count_phrase(term) if occurs else 0 for ind, occurs in enumerate(labels)]
+    num_occurances = [descriptions._descriptions[ind].count_phrase(term) if occurs else 0 for ind, occurs in enumerate(labels)]
     #see notebooks/proof_of_concept/get_svm_decisionboundary.ipynb#Checking-projection-methods-&-distance-measures-from-point-to-projection for the ranking
     decision_plane = NDPlane(svm.coef_[0], svm.intercept_[0])
     dist = lambda x, plane: np.dot(plane.normal, x) + plane.intercept #TODO don't even need plane for this, just svm's stuff

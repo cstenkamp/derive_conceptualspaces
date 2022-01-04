@@ -52,11 +52,11 @@ from derive_conceptualspace.settings import (
     ALL_EXTRACTION_METHOD,
     ALL_EMBED_DIMENSIONS,
     ALL_EMBED_ALGO,
-    FORBIDDEN_COMBIS, set_envvar
+    FORBIDDEN_COMBIS, set_envvar, NORMALIFY_PARAMS
 )
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
-from derive_conceptualspace.cli.create_siddata_dataset import setup_json_persister, set_debug, get_jsonpersister_args
-from derive_conceptualspace.util.desc_object import pp_descriptions_loader
+from derive_conceptualspace.cli.run_pipeline import setup_json_persister, set_debug, get_jsonpersister_args, normalify
+from derive_conceptualspace.util.desc_object import DescriptionList
 from misc_util.logutils import CustomIO
 
 ########################################################################################################################
@@ -79,15 +79,17 @@ def initialize_snakemake():
                 globals()[k] =  telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(globals()[k])
     ctx = Context()
     CustomIO.init(ctx)
-    json_persister = setup_json_persister(ctx, ignore_nsamples=True)
+    ctx.obj["json_persister"] = setup_json_persister(ctx, ignore_nsamples=True)
     set_debug(ctx)
     os.environ[f"{ENV_PREFIX}_SMK_INITIALIZED"] = "1"
-    return ctx, json_persister
+    return ctx, ctx.obj["json_persister"]
 
 ctx, json_persister = initialize_snakemake()
 
 def add_to_ctx(wildcards, ctx):
     for k, v in wildcards.items():
+        if k.upper() in NORMALIFY_PARAMS:
+            v = normalify(v)
         if isinstance(v, str) and v.isnumeric():
             ctx.obj[k] = int(v)
         else:
@@ -95,7 +97,7 @@ def add_to_ctx(wildcards, ctx):
         set_envvar(ENV_PREFIX+"_"+k.upper().replace("-","_"), ctx.obj[k])
 
 autoloader_di = dict(
-    pp_descriptions=pp_descriptions_loader,
+    pp_descriptions=DescriptionList.from_json,
     dissim_mat=dtm_dissimmat_loader,
     doc_cand_matrix=dtm_loader,
     filtered_dcm=dtm_loader,
@@ -104,6 +106,7 @@ autoloader_di = dict(
     title_translations=lambda **kwargs: kwargs["title_translations"],
     languages=lambda **kwargs: kwargs["langs"],
     title_languages=lambda **kwargs: kwargs["title_langs"],
+    postprocessed_candidates=lambda **kwargs: kwargs["postprocessed_candidates"],
 )
 
 def autoload_context_inputs(ctx, inputs, wildcards, params=None, input_kwargs=None):
@@ -158,8 +161,8 @@ rule preprocess_descriptions:
     threads: 1
     run:
         autoload_context_inputs(ctx, input, wildcards, input_kwargs={"translations": {"force_overwrite": True}, "title_translations": {"force_overwrite": True}, "languages": {"force_overwrite": True}})
-        vocab, descriptions, metainf = preprocess_descriptions_base(ctx.obj["raw_descriptions"], wildcards.pp_components, wildcards.translate_policy, ctx.obj["languages"], ctx.obj["translations"], ctx.obj["title_languages"], ctx.obj["title_translations"])
-        json_persister.save("pp_descriptions.json", vocab=vocab, descriptions=descriptions, relevant_metainf=metainf)
+        descriptions, metainf = preprocess_descriptions_base(ctx.obj["raw_descriptions"], wildcards.pp_components, wildcards.translate_policy, ctx.obj["languages"], ctx.obj["translations"], ctx.obj["title_languages"], ctx.obj["title_translations"])
+        json_persister.save("pp_descriptions.json", descriptions=descriptions, relevant_metainf=metainf)
 
 
 rule create_dissim_mat:
@@ -170,8 +173,8 @@ rule create_dissim_mat:
     threads: 1
     run:
         autoload_context_inputs(ctx, input, wildcards)
-        quant_dtm, dissim_mat = create_dissim_mat_base(ctx.obj["pp_descriptions"], ctx.obj["quantification_measure"])
-        json_persister.save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat)
+        quant_dtm, dissim_mat, metainf = create_dissim_mat_base(ctx.obj["pp_descriptions"], ctx.obj["quantification_measure"], ctx.obj["verbose"])
+        json_persister.save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat, relevant_metainf=metainf)
 
 
 rule create_embedding:
@@ -256,9 +259,9 @@ rule create_candidate_svm:
         sec_lambda = get_setting("SEC_LAMBDA")
     run:
         autoload_context_inputs(ctx, input, wildcards, params=params)
-        clusters, cluster_directions, kappa_scores, decision_planes = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"],
+        clusters, cluster_directions, decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"],
                                                                         prim_lambda=ctx.obj["prim_lambda"], sec_lambda=ctx.obj["sec_lambda"], verbose=ctx.obj["verbose"])
-        json_persister.save("clusters.json", clusters=clusters, cluster_directions=cluster_directions, kappa_scores=kappa_scores, decision_planes=decision_planes,
+        json_persister.save("clusters.json", clusters=clusters, cluster_directions=cluster_directions, decision_planes=decision_planes, metrics=metrics,
                             relevant_metainf={"prim_lambda": params.prim_lambda, "sec_lambda": params.sec_lambda})
 
 ########################################################################################################################

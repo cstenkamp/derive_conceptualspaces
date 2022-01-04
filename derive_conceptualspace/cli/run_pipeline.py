@@ -17,8 +17,12 @@ from misc_util.telegram_notifier import telegram_notify
 from misc_util.logutils import setup_logging, CustomIO
 from misc_util.pretty_print import pretty_print as print
 
-from derive_conceptualspace.settings import ALL_DCM_QUANT_MEASURE, ENV_PREFIX, get_setting, set_envvar, get_envvar
-from derive_conceptualspace.util.desc_object import pp_descriptions_loader
+from derive_conceptualspace.util.desc_object import DescriptionList
+from derive_conceptualspace.settings import (
+    ALL_TRANSLATE_POLICY, ALL_QUANTIFICATION_MEASURE, ALL_EXTRACTION_METHOD, ALL_DCM_QUANT_MEASURE, ALL_EMBED_ALGO, ALL_DCM_QUANT_MEASURE,
+    ENV_PREFIX, NORMALIFY_PARAMS,
+    get_setting, set_envvar, get_envvar,
+)
 from derive_conceptualspace.util.jsonloadstore import JsonPersister
 from derive_conceptualspace.create_spaces.translate_descriptions import (
     full_translate_titles as translate_titles_base,
@@ -55,6 +59,8 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 ########################################################################################################################
 #cli helpers & main
 
+normalify = lambda txt: "".join([i for i in txt.lower() if i.isalpha() or i in "_"])
+
 def loadstore_settings_envvars(ctx, use_auto_envvar_prefix=False):
     """auto_envvar_prefix only works for options, not for arguments. So this function overwrites ctx.params & ctx.obj
        from env-vars (if they have the correct prefix), and also SETS these env-vars from the cmd-args such that they
@@ -62,6 +68,8 @@ def loadstore_settings_envvars(ctx, use_auto_envvar_prefix=False):
     env_prefix = ctx.auto_envvar_prefix if use_auto_envvar_prefix else ENV_PREFIX
     #the auto_envvar_prefix always gets appended the subcommand, I don't want that generally though.
     for param, val in ctx.params.items():
+        if param.upper() in NORMALIFY_PARAMS:
+            val = normalify(val)
         ctx.obj[param] = val
         envvarname = env_prefix+"_"+param.upper().replace("-","_")
         # https://github.com/pallets/click/issues/714#issuecomment-651389598
@@ -131,7 +139,6 @@ def click_pass_add_context(fn):
         res = fn(*args, **nkw)
         if isinstance(ctx.command, click.Group):
             if ctx.obj["notify_telegram"] == True:
-                print("wtfff")
                 if not isinstance(cli.get_command(ctx, ctx.invoked_subcommand), click.Group):
                     ctx.command.get_command(ctx, ctx.invoked_subcommand).callback = telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(ctx.command.get_command(ctx, ctx.invoked_subcommand).callback)
         return res
@@ -178,7 +185,7 @@ def process_result(*args, **kwargs):
 
 @cli.command()
 @click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS"))
-@click.option("--translate-policy", type=str, default=lambda: get_setting("TRANSLATE_POLICY"))
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY"))
 @click.option("--raw-descriptions-file", type=str, default="kurse-beschreibungen.csv")
 @click.option("--title-languages-file", type=str, default="title_languages.json")
 @click.option("--title-translations-file", type=str, default="translated_titles.json")
@@ -190,7 +197,7 @@ def translate_titles(ctx, pp_components, translate_policy, raw_descriptions_file
 
 
 @cli.command()
-@click.option("--translate-policy", type=str, default=lambda: get_setting("TRANSLATE_POLICY"))
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY"))
 @click.option("--raw-descriptions-file", type=str, default="kurse-beschreibungen.csv")
 @click.option("--languages-file", type=str, default="languages.json")
 @click.option("--translations-file", type=str, default="translated_descriptions.json")
@@ -203,13 +210,13 @@ def translate_descriptions(ctx, translate_policy, raw_descriptions_file, languag
 
 @cli.command()
 @click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS"))
-@click.option("--translate-policy", type=str, default=lambda: get_setting("TRANSLATE_POLICY"))
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY"))
 @click.option("--raw-descriptions-file", type=str, default="kurse-beschreibungen.csv")
 @click.option("--languages-file", type=str, default="languages.json")
 @click.option("--translations-file", type=str, default="translated_descriptions.json")
 @click.option("--title-languages-file", type=str, default="title_languages.json")
 @click.option("--title-translations-file", type=str, default="translated_titles.json")
-@click.option("--max-ngram", type=str, default=lambda: get_setting("MAX_NGRAM"))
+@click.option("--max-ngram", type=int, default=lambda: get_setting("MAX_NGRAM"))
 @click_pass_add_context
 def preprocess_descriptions(ctx, raw_descriptions_file, languages_file, translations_file, title_languages_file, title_translations_file):
     raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
@@ -217,9 +224,9 @@ def preprocess_descriptions(ctx, raw_descriptions_file, languages_file, translat
     translations = ctx.obj["json_persister"].load(translations_file, "translated_descriptions", ignore_params=["pp_components", "translate_policy"], force_overwrite=True, loader=lambda **kwargs: kwargs["translations"])
     title_languages = ctx.obj["json_persister"].load(title_languages_file, "title_languages", ignore_params=["pp_components", "translate_policy"], loader=lambda title_langs: title_langs)
     title_translations = ctx.obj["json_persister"].load(title_translations_file, "translated_titles", ignore_params=["pp_components", "translate_policy"], force_overwrite=True, loader=lambda **kwargs: kwargs["title_translations"])
-    vocab, descriptions, metainf = preprocess_descriptions_base(raw_descriptions, ctx.obj["pp_components"], ctx.obj["translate_policy"], languages, translations, title_languages, title_translations)
+    descriptions, metainf = preprocess_descriptions_base(raw_descriptions, ctx.obj["pp_components"], ctx.obj["translate_policy"], languages, translations, title_languages, title_translations)
     #TODO[e] depending on translate_policy and pp_compoments, title_languages etc may allowed to be empty
-    ctx.obj["json_persister"].save("pp_descriptions.json", vocab=vocab, descriptions=descriptions, relevant_metainf=metainf)
+    ctx.obj["json_persister"].save("pp_descriptions.json", descriptions=descriptions, relevant_metainf=metainf)
 
 
 ########################################################################################################################
@@ -229,8 +236,8 @@ def preprocess_descriptions(ctx, raw_descriptions_file, languages_file, translat
 
 @cli.group()
 @click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS"))
-@click.option("--translate-policy", type=str, default=lambda: get_setting("TRANSLATE_POLICY"))
-@click.option("--quantification-measure", type=str, default=lambda: get_setting("QUANTIFICATION_MEASURE"))
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY"))
+@click.option("--quantification-measure", type=click.Choice(ALL_QUANTIFICATION_MEASURE, case_sensitive=False), default=lambda: get_setting("QUANTIFICATION_MEASURE"))
 @click_pass_add_context
 def create_spaces(ctx):
     """[group] CLI base to create the spaces from texts"""
@@ -240,18 +247,20 @@ def create_spaces(ctx):
 @create_spaces.command()
 @click_pass_add_context
 def create_dissim_mat(ctx):
-    pp_descriptions = ctx.obj["json_persister"].load(None, "pp_descriptions", ignore_params=["quantification_measure"], loader=pp_descriptions_loader)
-    quant_dtm, dissim_mat = create_dissim_mat_base(pp_descriptions, ctx.obj["quantification_measure"])
-    ctx.obj["json_persister"].save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat)
+    pp_descriptions = ctx.obj["json_persister"].load(None, "pp_descriptions", ignore_params=["quantification_measure"], loader=DescriptionList.from_json)
+    quant_dtm, dissim_mat, metainf = create_dissim_mat_base(pp_descriptions, ctx.obj["quantification_measure"], ctx.obj["verbose"])
+    ctx.obj["json_persister"].save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat, relevant_metainf=metainf)
 
 
 @create_spaces.command()
 @click.option("--embed-dimensions", type=int, default=lambda: get_setting("EMBED_DIMENSIONS"))
-@click.option("--embed-algo", type=str, default=lambda: get_setting("EMBED_ALGO"))
+@click.option("--embed-algo", type=click.Choice(ALL_EMBED_ALGO, case_sensitive=False), default=lambda: get_setting("EMBED_ALGO"))
 @click_pass_add_context
 def create_embedding(ctx):
     dissim_mat = ctx.obj["json_persister"].load(None, "dissim_mat", ignore_params=["embed_dimensions"], loader=dtm_dissimmat_loader)
-    embedding = create_embedding_base(dissim_mat, ctx.obj["embed_dimensions"], ctx.obj["embed_algo"])
+    pp_descriptions = ctx.obj["json_persister"].load(None, "pp_descriptions", ignore_params=["quantification_measure"], loader=DescriptionList.from_json, silent=True) \
+                      if ctx.obj["verbose"] else None
+    embedding = create_embedding_base(dissim_mat, ctx.obj["embed_dimensions"], ctx.obj["embed_algo"], ctx.obj["verbose"], pp_descriptions=pp_descriptions)
     ctx.obj["json_persister"].save("embedding.json", embedding=embedding)
 
 ########################################################################################################################
@@ -261,12 +270,12 @@ def create_embedding(ctx):
 
 @cli.group()
 @click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS"))
-@click.option("--translate-policy", type=str, default=lambda: get_setting("TRANSLATE_POLICY"))
-@click.option("--extraction-method", type=str, default=lambda: get_setting("EXTRACTION_METHOD"))
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY"))
+@click.option("--extraction-method", type=click.Choice(ALL_EXTRACTION_METHOD, case_sensitive=False), default=lambda: get_setting("EXTRACTION_METHOD"))
 @click_pass_add_context
 def prepare_candidateterms(ctx):
     """[group] CLI base to extract candidate-terms from texts"""
-    ctx.obj["pp_descriptions"] = ctx.obj["json_persister"].load(None, "pp_descriptions", loader=pp_descriptions_loader)
+    ctx.obj["pp_descriptions"] = ctx.obj["json_persister"].load(None, "pp_descriptions", loader=DescriptionList.from_json)
 
 
 @prepare_candidateterms.command()
@@ -283,6 +292,7 @@ def extract_candidateterms_stanfordlp(ctx):
 @click_pass_add_context
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
 def extract_candidateterms(ctx):
+    #TODO if not NGRAMS_IN_EMBEDDING and extraction_method in tfidf/ppmi, you have to re-extract, otherwise you won't get n-grams
     candidateterms, relevant_metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.obj["extraction_method"], ctx.obj["faster_keybert"], verbose=ctx.obj["verbose"])
     ctx.obj["json_persister"].save("candidate_terms.json", candidateterms=candidateterms, relevant_metainf=relevant_metainf)
 
@@ -299,7 +309,7 @@ def postprocess_candidateterms(ctx):
 @click_pass_add_context
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
 def create_doc_cand_matrix(ctx):
-    ctx.obj["postprocessed_candidates"] = ctx.obj["json_persister"].load(None, "postprocessed_candidates")
+    ctx.obj["postprocessed_candidates"] = ctx.obj["json_persister"].load(None, "postprocessed_candidates", loader = lambda **args: args["postprocessed_candidates"])
     doc_term_matrix = create_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"])
     ctx.obj["json_persister"].save("doc_cand_matrix.json", doc_term_matrix=doc_term_matrix)
     #TODO can't I go for a quantification_measure in this doc-cand-matrix as well?!
@@ -312,7 +322,8 @@ def create_doc_cand_matrix(ctx):
 @click_pass_add_context
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
 def filter_keyphrases(ctx, candidate_min_term_count):
-    # TODO missing options here: `tag-share` (chap. 4.2.1 of [VISR12]), PPMI,
+    # TODO missing options here: `tag-share` (chap. 4.2.1 of [VISR12])
+    # TODO actually I don't need pp_descriptions here, only for verbosity -> make loading silent
     ctx.obj["doc_cand_matrix"] = ctx.obj["json_persister"].load(None, "doc_cand_matrix", loader=dtm_loader)
     filtered_dcm = filter_keyphrases_base(ctx.obj["doc_cand_matrix"], ctx.obj["pp_descriptions"], min_term_count=candidate_min_term_count, dcm_quant_measure=ctx.obj["dcm_quant_measure"], verbose=ctx.obj["verbose"])
     ctx.obj["json_persister"].save("filtered_dcm.json", relevant_metainf={"candidate_min_term_count": candidate_min_term_count}, doc_term_matrix=filtered_dcm)
@@ -327,16 +338,16 @@ def filter_keyphrases(ctx, candidate_min_term_count):
 
 @cli.group()
 @click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS"))
-@click.option("--translate-policy", type=str, default=lambda: get_setting("TRANSLATE_POLICY"))
-@click.option("--quantification-measure", type=str, default=lambda: get_setting("QUANTIFICATION_MEASURE"))
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY"))
+@click.option("--quantification-measure", type=click.Choice(ALL_QUANTIFICATION_MEASURE, case_sensitive=False), default=lambda: get_setting("QUANTIFICATION_MEASURE"))
 @click.option("--embed-dimensions", type=int, default=lambda: get_setting("EMBED_DIMENSIONS"))
-@click.option("--embed-algo", type=str, default=lambda: get_setting("EMBED_ALGO"))
-@click.option("--extraction-method", type=str, default=lambda: get_setting("EXTRACTION_METHOD"))
+@click.option("--embed-algo", type=click.Choice(ALL_EMBED_ALGO, case_sensitive=False), default=lambda: get_setting("EMBED_ALGO"))
+@click.option("--extraction-method", type=click.Choice(ALL_EXTRACTION_METHOD, case_sensitive=False), default=lambda: get_setting("EXTRACTION_METHOD"))
 @click.option("--dcm-quant-measure", type=click.Choice(ALL_DCM_QUANT_MEASURE, case_sensitive=False), default=lambda: get_setting("DCM_QUANT_MEASURE"))
 @click_pass_add_context
 def generate_conceptualspace(ctx):
     """[group] CLI base to create the actual conceptual spaces"""
-    ctx.obj["pp_descriptions"] = ctx.obj["json_persister"].load(None, "pp_descriptions", loader=pp_descriptions_loader, ignore_params=["quantification_measure", "embed_dimensions"])
+    ctx.obj["pp_descriptions"] = ctx.obj["json_persister"].load(None, "pp_descriptions", loader=DescriptionList.from_json, ignore_params=["quantification_measure", "embed_dimensions"])
     ctx.obj["filtered_dcm"] = ctx.obj["json_persister"].load(None, "filtered_dcm", loader=dtm_loader, ignore_params=["quantification_measure", "embed_dimensions"])
     ctx.obj["embedding"] = ctx.obj["json_persister"].load(None, "embedding", ignore_params=["extraction_method", "dcm_quant_measure"], loader=lambda **args: args["embedding"])
     assert ctx.obj["embedding"].embedding_.shape[0] == len(ctx.obj["filtered_dcm"].dtm), f'The Doc-Candidate-Matrix contains {len(ctx.obj["filtered_dcm"].dtm)} items But your embedding has {ctx.obj["embedding"].embedding_.shape[0] } descriptions!'

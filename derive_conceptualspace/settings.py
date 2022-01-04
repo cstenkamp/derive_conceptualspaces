@@ -9,11 +9,11 @@ ENV_PREFIX = "MA"
 #!! use singular for these (bzw the form you'd use if there wasn't the "ALL_" before)
 ALL_PP_COMPONENTS = ["autcsldp", "tcsldp", "aucsd2"] #,"tcsdp"       # If in preprocessing it should add coursetitle, lemmatize, etc
 ALL_TRANSLATE_POLICY = ["translate"] #, "origlan", "onlyeng"         # If non-english descriptions should be translated
-ALL_QUANTIFICATION_MEASURE = ["ppmi", "tf-idf", "count", "binary"]   # For the dissimiliarity Matrix of the Descripts
-ALL_EXTRACTION_METHOD = ["pp_keybert", "tf-idf", "ppmi"]             # How candidate-terms are getting extracted         #TODO keybert
+ALL_QUANTIFICATION_MEASURE = ["ppmi", "tfidf", "count", "binary"]    # For the dissimiliarity Matrix of the Descripts
+ALL_EXTRACTION_METHOD = ["pp_keybert", "tfidf", "ppmi"]              # How candidate-terms are getting extracted         #TODO keybert
 ALL_EMBED_ALGO = ["mds", "tsne", "isomap"]                           # Actual Embedding of the Descriptions
 ALL_EMBED_DIMENSIONS = [100, 3] #, 50, 200                           # Actual Embedding of the Descriptions
-ALL_DCM_QUANT_MEASURE = ["tf-idf", "count", "ppmi", "binary"]        # Quantification for the Doc-Keyphrase-Matrix       #TODO tag-share
+ALL_DCM_QUANT_MEASURE = ["tfidf", "count", "ppmi", "binary"]         # Quantification for the Doc-Keyphrase-Matrix       #TODO tag-share
 
 FORBIDDEN_COMBIS = ["tsne_50d", "tsne_100d"]
 #TODO: add (extraction_method in ["keybert", "pp_keybert"] and "2" in get_setting("PP_COMPONENTS")) to forbidden_combis
@@ -23,6 +23,7 @@ FORBIDDEN_COMBIS = ["tsne_50d", "tsne_100d"]
 for k, v in {k[4:]: v[0] for k,v in dict(locals()).items() if isinstance(v, list) and k.startswith("ALL_")}.items():
     locals()["DEFAULT_"+k] = v
 
+NORMALIFY_PARAMS = ["QUANTIFICATION_MEASURE", "EXTRACTON_METHOD", "EMBED_ALGO", "DCM_QUANT_MEASURE"] #for all params that are in this, eg `Tf-IdF` will become `tfidf`
 ########################################################################################################################
 ################################################## other default values ################################################
 ########################################################################################################################
@@ -32,6 +33,7 @@ DEFAULT_DEBUG = False
 DEFAULT_DEBUG_N_ITEMS = 100
 DEFAULT_RANDOM_SEED = 1
 DEFAULT_VERBOSE = True
+DEFAULT_RIG_ASSERTS = True
 
 #Settings that influence the algorithm
 DEFAULT_CANDIDATE_MIN_TERM_COUNT = 25

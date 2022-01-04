@@ -41,10 +41,8 @@ def show_hist(x, title="", xlabel="Data", ylabel="Count", cutoff_percentile=95, 
     elif x.max() - x.min() < 30:
         bins = x.max() - x.min()
         kwargs["bins"] = bins
-    full_data = dict(type="hist", x=x, kwargs=kwargs, xlim=(0, max_val), cutoff_percentile=cutoff_percentile, xlabel=xlabel, ylabel=ylabel, title=title)
-    if cutoff_percentile is not None:
-        full_data["xticks"] = list(plt.xticks()[0][:-1]) + [max_val]
-        full_data["xticklabels"] = [str(round(i)) for i in plt.xticks()[0]][:-1] + [f"{max_val}-{old_max}"]
+    full_data = dict(type="hist", x=x, kwargs=kwargs, xlim=(0, max_val), cutoff_percentile=cutoff_percentile, xlabel=xlabel,
+                     ylabel=ylabel, title=title, max_val=max_val, old_max=old_max)
     prepare_fig(full_data, title)
 
 
@@ -58,9 +56,9 @@ def prepare_fig(full_data, title):
     if full_data["type"] == "hist":
         ax.hist(full_data["x"], **full_data["kwargs"])
         ax.set_xlim(*full_data["xlim"])
-        if full_data.get("xticks") and full_data.get("xticklabels"):
-            ax.set_xticks(full_data["xticks"])
-            ax.set_xticklabels(full_data["xticklabels"], ha="right", rotation=45)
+        if full_data.get("cutoff_percentile") is not None:
+            ax.set_xticks(list(plt.xticks()[0][:-1]) + [full_data["max_val"]])
+            ax.set_xticklabels([str(round(i)) for i in plt.xticks()[0]][:-1] + [f"{full_data['max_val']}-{full_data['old_max']}"], ha="right", rotation=45)
         ax.set_ylabel(full_data["ylabel"])
         ax.set_xlabel(full_data["xlabel"])
     else:

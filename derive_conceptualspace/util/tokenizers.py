@@ -16,13 +16,6 @@ char_replacer = {
 ########################################################################################################################
 
 
-def tokenize_sentences_countvectorizer(descriptions):
-    #TODO CountVectorizer can be customized a lot, see https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.CountVectorizer.html
-    vectorizer = CountVectorizer()
-    counted = vectorizer.fit_transform(descriptions)
-    vocab = vectorizer.get_feature_names()
-    return vocab, counted.toarray()
-
 
 @lru_cache(maxsize=None)
 def tokenize_text(text, stopwords=None):

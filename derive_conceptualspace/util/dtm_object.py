@@ -1,3 +1,6 @@
+import warnings
+from collections import Counter
+
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
 
@@ -13,46 +16,57 @@ class DocTermMatrix():
     @staticmethod
     def fromstruct(struct):
         assert not struct["includes_pseudodocs"], "TODO"
-        return DocTermMatrix({"doc_term_matrix": struct["dtm"], "all_terms": struct["all_terms"]})
+        return DocTermMatrix(dtm=struct["dtm"], all_terms={int(k): v for k, v in struct["all_terms"].items()})
 
     @staticmethod
-    def from_descriptions(descriptions):
-        vocab = list(set(flatten([desc.bow().keys() for desc in descriptions])))
-        return DocTermMatrix.from_vocab_descriptions(vocab, descriptions)
+    def from_descriptions(descriptions, **kwargs):
+        return DocTermMatrix.from_vocab_descriptions(descriptions.all_words(), descriptions, **kwargs)
 
     @staticmethod
-    def from_vocab_descriptions(vocab, descriptions):
-        print()
+    def from_vocab_descriptions(vocab, descriptions, min_df=1, verbose=False):
+        if hasattr(descriptions, "recover_settings"):
+            warnings.warn("Are you sure you don't want to use descriptions.generate_DocTermMatrix instead?")
+        assert descriptions.proc_min_df <= min_df
+        all_terms = {n: elem for n, elem in enumerate(vocab)}
+        reverse_term_dict = {v: k for k,v in all_terms.items()}
+        dtm = []
+        for desc in tqdm(descriptions._descriptions, desc="Loading Bag-Of-Words to DocTermMatrix.."):
+            dtm.append([[reverse_term_dict[k], v] for k,v in desc.bow().items()])
+        if min_df > 1:
+            return DocTermMatrix.filter(dtm, min_df, use_n_docs_count=True, verbose=verbose, descriptions=descriptions, all_terms=all_terms) #TODO make use_n_docs_count an arg
+        return DocTermMatrix(dtm, all_terms)
 
-    def __init__(self, *args, verbose=False, **kwargs):
+    def __init__(self, dtm, all_terms, verbose=False, **kwargs):
         self.includes_pseudodocs = False
-        if len(args) == 1 and isinstance(args[0], dict):
-            assert "doc_term_matrix" in args[0] and "all_terms" in args[0]
-            assert not kwargs
-            self.dtm = args[0]["doc_term_matrix"]
-            self.all_terms = args[0]["all_terms"]
-            if isinstance(next(iter(self.all_terms.keys())), str):
-                self.all_terms = {int(k): v for k, v in self.all_terms.items()}
-            #TODO store meta-info
-            #TODO assert dass len(self.dtm) == len(mds_obj.names)
-        # elif "all_terms" in kwargs and "descriptions" in kwargs:
-        #     # assert hasattr(kwargs["descriptions"][0], "bow")
-        #     if isinstance(kwargs["all_terms"], dict):
-        #         self.all_terms = kwargs["all_terms"]
+        self.dtm = dtm
+        self.all_terms = {n: elem for n, elem in enumerate(all_terms)} if isinstance(all_terms, list) else all_terms
+        # if len(args) == 1 and isinstance(args[0], dict):
+        #     assert "doc_term_matrix" in args[0] and "all_terms" in args[0]
+        #     assert not kwargs
+        #     self.dtm = args[0]["doc_term_matrix"]
+        #     self.all_terms = args[0]["all_terms"]
+        #     if isinstance(next(iter(self.all_terms.keys())), str):
+        #         self.all_terms = {int(k): v for k, v in self.all_terms.items()}
+        #     #TODO store meta-info
+        #     #TODO assert dass len(self.dtm) == len(mds_obj.names)
+        # # elif "all_terms" in kwargs and "descriptions" in kwargs:
+        # #     # assert hasattr(kwargs["descriptions"][0], "bow")
+        # #     if isinstance(kwargs["all_terms"], dict):
+        # #         self.all_terms = kwargs["all_terms"]
+        # #     else:
+        # #         self.all_terms = {n: elem for n, elem in enumerate(kwargs["all_terms"])}
+        # #     self.dtm = []
+        # #     for desc in kwargs["descriptions"]:
+        # #         self.dtm.append([[self.reverse_term_dict[k], v] for k,v in desc.bow().items()])
+        # elif "all_phrases" in kwargs and "descriptions" in kwargs and "dtm" in kwargs:
+        #     if isinstance(kwargs["all_phrases"], dict):
+        #         self.all_terms = kwargs["all_phrases"]
         #     else:
-        #         self.all_terms = {n: elem for n, elem in enumerate(kwargs["all_terms"])}
-        #     self.dtm = []
-        #     for desc in kwargs["descriptions"]:
-        #         self.dtm.append([[self.reverse_term_dict[k], v] for k,v in desc.bow().items()])
-        elif "all_phrases" in kwargs and "descriptions" in kwargs and "dtm" in kwargs:
-            if isinstance(kwargs["all_phrases"], dict):
-                self.all_terms = kwargs["all_phrases"]
-            else:
-                self.all_terms = {n: elem for n, elem in enumerate(kwargs["all_phrases"])}
-            self.dtm = kwargs["dtm"]
-            self.descriptions = kwargs["descriptions"]
-        else:
-            assert False
+        #         self.all_terms = {n: elem for n, elem in enumerate(kwargs["all_phrases"])}
+        #     self.dtm = kwargs["dtm"]
+        #     self.descriptions = kwargs["descriptions"]
+        # else:
+        #     assert False
         assert set(self.all_terms) == set(flatten([[elem[0] for elem in row] for row in self.dtm]))
         print(f"Loaded Doc-Term-Matrix with {len(self.dtm)} documents and {len(self.all_terms)} items.")
         if verbose:
@@ -63,7 +77,7 @@ class DocTermMatrix():
 
     def show_info(self):
         occurs_in = [set(j[0] for j in i) if i else [] for i in self.dtm]
-        num_occurences = [sum([term_ind in i for i in occurs_in]) for term_ind in tqdm(range(len(self.all_terms)))]
+        num_occurences = [sum([term_ind in i for i in occurs_in]) for term_ind in tqdm(range(len(self.all_terms)), desc="Counting Occurences [verbose]")]
         show_hist(num_occurences, "Docs per Keyword", xlabel="# Documents the Keyword appears in", ylabel="Count (log scale)", cutoff_percentile=98, log=True)
         above_threshold = len([i for i in num_occurences if i>= get_setting("CANDIDATE_MIN_TERM_COUNT", silent=True)])
         sorted_canditerms = sorted([[ind, elem] for ind, elem in enumerate(num_occurences)], key=lambda x:x[1], reverse=True)
@@ -78,7 +92,7 @@ class DocTermMatrix():
         """the number of documents containing a word, for all words"""
         if not hasattr(self, "_doc_freqs"):
             occurences = [set(i[0] for i in doc) for doc in self.dtm]
-            self._doc_freqs = {term: sum(term in doc for doc in occurences) for term in tqdm(list(self.all_terms.keys()))}
+            self._doc_freqs = {term: sum(term in doc for doc in occurences) for term in tqdm(list(self.all_terms.keys()), desc="Calculating Doc-Frequencies")}
             print("Most frequent term:", self.all_terms[max(self._doc_freqs.items(), key=lambda x:x[1])[0]])
         return self._doc_freqs
 
@@ -115,6 +129,47 @@ class DocTermMatrix():
         self.dtm += [[[i, max_val]] for i in self.all_terms.keys()]
         if hasattr(self, "_csr"): del self._csr
         if hasattr(self, "_term_existinds"): del self._term_existinds
+
+
+    @staticmethod
+    def filter(dtm, min_count, use_n_docs_count=True, verbose=False, descriptions=None, all_terms=None):
+        """can get either a DocTermMatrix as dtm, or a DocTermMatrix.dtm as dtm and an all_terms value"""
+        if not all_terms:
+            assert isinstance(dtm, DocTermMatrix)
+            all_terms = dtm.all_terms
+            dtm = dtm.dtm
+        else:
+            assert not isinstance(dtm, DocTermMatrix)
+        if use_n_docs_count:
+            occurences = [set(i[0] for i in doc) for doc in dtm]
+            term_counts = {term: sum([term in i for i in occurences]) for term in tqdm(all_terms.keys(), desc="Counting Terms")}
+        else:
+            flat_terms = [flatten([[i[0]] * i[1] for i in doc]) for doc in dtm]
+            term_counts = Counter(flatten(flat_terms))
+        used_terms = {k: v for k, v in term_counts.items() if v >= min_count}
+        if verbose:
+            print(f"Filtering such that terms occur " + (f"in at least {min_count} documents" if use_n_docs_count else
+                                                         f"at least {min_count} times") + f", which are {len(used_terms)} of {len(term_counts)} terms.")
+            most_used = sorted(list(used_terms.items()), key=lambda x: x[1], reverse=True)[:10]
+            print("The most used terms are: " + ", ".join([f"{all_terms[ind]} ({count})" for ind, count in most_used]))
+            show_hist(list(used_terms.values()), "Occurences per Keyword", xlabel="Occurences per Keyword", cutoff_percentile=93)
+        doc_term_matrix = [[[all_terms[ind], num] for ind, num in doc] for doc in dtm]
+        all_terms = {all_terms[elem]: i for i, elem in enumerate(used_terms.keys())}; del used_terms
+        doc_term_matrix = [[[all_terms[ind], num] for ind, num in doc if ind in all_terms] for doc in doc_term_matrix]
+        assert set(i[0] for doc in doc_term_matrix for i in doc) == set(all_terms.values())
+        all_terms = {v: k for k, v in all_terms.items()}
+        if descriptions:
+            assert all(all_terms[ind] in descriptions._descriptions[ndoc] for ndoc, doc in enumerate(tqdm(doc_term_matrix)) for ind, count in doc)
+            if verbose:
+                print("Documents without any keyphrase:", [descriptions._descriptions[i] for i, e in enumerate(doc_term_matrix) if len(e) < 1][:5])
+                print("Documents with just 1 keyphrase:", [[descriptions._descriptions[i], all_terms[e[0][0]]] for i, e in enumerate(doc_term_matrix) if len(e) == 1][:5])
+        return DocTermMatrix(dtm=doc_term_matrix, all_terms=all_terms)
+
+
+
+
+
+
 
 
 def dtm_dissimmat_loader(quant_dtm, dissim_mat):

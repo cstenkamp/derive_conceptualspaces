@@ -9,6 +9,7 @@ from sklearn.manifold import MDS, TSNE, Isomap
 from tqdm import tqdm
 
 from derive_conceptualspace.settings import get_setting
+from misc_util.pretty_print import pretty_print as print
 
 logger = logging.getLogger(basename(__file__))
 
@@ -31,12 +32,11 @@ def create_dissimilarity_matrix(arr, full=False):
         arr = arr.toarray().T
     assert arr.shape[0] < arr.shape[1], "I cannot believe your Doc-Term-Matrix has less distinct words then documents."
     assert arr.max(axis=1).min() > 0, "If one of the vectors is zero the calculation will fail!"
-    logger.info("Creating the dissimilarity matrix...")
     # return squareform(np.apply_along_axis(cos_to_normangdiff, 0, pdist(arr, metric="cosine")))
     # assert np.allclose(np.hstack([cdist(arr, arr[i*10:(i+1)*10], "cosine") for i in range(10)]), squareform(tmp))
     tmp = []
     N_CHUNKS = 200
-    for chunk in tqdm(np.array_split(arr, N_CHUNKS)):
+    for chunk in tqdm(np.array_split(arr, N_CHUNKS), desc="Creating dissimilarity matrix"):
         tmp.append(cdist(arr, chunk, "cosine"))
     assert np.allclose(np.hstack(tmp), np.hstack(tmp).T), "The matrix must be symmetric!"
     flat = squareform(np.hstack(tmp), checks=False) #I check in the line above, dunno why this one fails if the upper works..
@@ -44,16 +44,23 @@ def create_dissimilarity_matrix(arr, full=False):
     return res
 
 
-def create_embedding(dissim_mat, embed_dimensions, embed_algo):
-    embed_algo = "".join([i for i in embed_algo.lower() if i.isalpha()])
+def create_embedding(dissim_mat, embed_dimensions, embed_algo, verbose=False, pp_descriptions=None):
     if embed_algo == "mds":
-        return create_mds(dissim_mat, embed_dimensions)
+        embed = create_mds(dissim_mat, embed_dimensions)
     elif embed_algo == "tsne":
-        return create_tsne(dissim_mat, embed_dimensions)
+        embed = create_tsne(dissim_mat, embed_dimensions)
     elif embed_algo == "isomap":
-        return create_isomap(dissim_mat, embed_dimensions)
+        embed = create_isomap(dissim_mat, embed_dimensions)
     else:
         raise NotImplementedError(f"Algorithm {embed_algo} is not implemented!")
+    if verbose:
+        min_vals = sorted(squareform(embed.dissimilarity_matrix_))[:10]
+        min_indices = np.where(np.isin(embed.dissimilarity_matrix_, min_vals))
+        min_indices = [(i,j) for i,j in zip(*min_indices) if i!=j]
+        print("Closest 10 Descriptions in Embedding:")
+        for first, second in min_indices[:10]:
+            print(f"  *b*{pp_descriptions._descriptions[first].title}*b* and *b*{pp_descriptions._descriptions[second].title}*b*")
+    return embed
 
 
 def create_mds(dissim_mat, embed_dimensions):
