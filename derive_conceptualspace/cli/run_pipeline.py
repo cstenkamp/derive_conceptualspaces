@@ -133,8 +133,13 @@ def click_pass_add_context(fn):
             assert k not in args[0].obj
             args[0].obj[k] = v
         ctx = args[0]
-        nkw = {k:v for k,v in kwargs.items() if k in set(inspect.getfullargspec(fn).args)-{"ctx", "context"}}
+        nkw = {k:v for k,v in {**kwargs, **ctx.obj}.items() if k in set(inspect.getfullargspec(fn).args)-{"ctx", "context"}}
         loadstore_settings_envvars(ctx)
+        if isinstance(ctx.command, click.Command) and not isinstance(ctx.command, click.Group): #print settings
+            import derive_conceptualspace.settings
+            all_params = {i: get_setting(i.upper(), stay_silent=True, silent=True) for i in get_jsonpersister_args()[0]}
+            default_params = {k[len("DEFAULT_"):].lower():v for k,v in derive_conceptualspace.settings.__dict__.items() if k in ["DEFAULT_"+i.upper() for i in all_params.keys()]}
+            print("Running with the following settings:", ", ".join([f"{k}: *{'b' if v==default_params[k] else 'r'}*{v}*{'b' if v==default_params[k] else 'r'}*" for k, v in all_params.items()]))
         res = fn(*args, **nkw)
         if isinstance(ctx.command, click.Group):
             if ctx.obj["notify_telegram"] == True:
@@ -156,12 +161,6 @@ def click_pass_add_context(fn):
 def cli(ctx):
     CustomIO.init(ctx)
     print("Starting up at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
-    #print settings
-    import derive_conceptualspace.settings
-    all_params = {i: get_setting(i.upper(), stay_silent=True, silent=True) for i in get_jsonpersister_args()[0]}
-    default_params = {k[len("DEFAULT_"):].lower():v for k,v in derive_conceptualspace.settings.__dict__.items() if k in ["DEFAULT_"+i.upper() for i in all_params.keys()]}
-    print("Running with the following settings:", ", ".join([f"{k}: *{'b' if v==default_params[k] else 'r'}*{v}*{'b' if v==default_params[k] else 'r'}*" for k, v in all_params.items()]))
-    #/print settings
     setup_logging(ctx.obj["log"], ctx.obj["logfile"])
     set_debug(ctx)
     ctx.obj["json_persister"] = setup_json_persister(ctx)
@@ -183,8 +182,8 @@ def process_result(*args, **kwargs):
 #     return count_translations_base(ctx.obj["base_dir"], mds_basename=mds_basename, descriptions_basename=descriptions_basename)
 
 @cli.command()
-@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS"))
-@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY"))
+@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", silent=True))
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", silent=True))
 @click.option("--raw-descriptions-file", type=str, default="kurse-beschreibungen.csv")
 @click.option("--title-languages-file", type=str, default="title_languages.json")
 @click.option("--title-translations-file", type=str, default="translated_titles.json")
@@ -196,7 +195,7 @@ def translate_titles(ctx, pp_components, translate_policy, raw_descriptions_file
 
 
 @cli.command()
-@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY"))
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", silent=True))
 @click.option("--raw-descriptions-file", type=str, default="kurse-beschreibungen.csv")
 @click.option("--languages-file", type=str, default="languages.json")
 @click.option("--translations-file", type=str, default="translated_descriptions.json")
@@ -208,8 +207,8 @@ def translate_descriptions(ctx, translate_policy, raw_descriptions_file, languag
 
 
 @cli.command()
-@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS"))
-@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY"))
+@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", silent=True))
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", silent=True))
 @click.option("--raw-descriptions-file", type=str, default="kurse-beschreibungen.csv")
 @click.option("--languages-file", type=str, default="languages.json")
 @click.option("--translations-file", type=str, default="translated_descriptions.json")
@@ -234,9 +233,9 @@ def preprocess_descriptions(ctx, raw_descriptions_file, languages_file, translat
 #create-spaces group
 
 @cli.group()
-@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS"))
-@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY"))
-@click.option("--quantification-measure", type=click.Choice(ALL_QUANTIFICATION_MEASURE, case_sensitive=False), default=lambda: get_setting("QUANTIFICATION_MEASURE"))
+@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", silent=True))
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", silent=True))
+@click.option("--quantification-measure", type=click.Choice(ALL_QUANTIFICATION_MEASURE, case_sensitive=False), default=lambda: get_setting("QUANTIFICATION_MEASURE", silent=True))
 @click_pass_add_context
 def create_spaces(ctx):
     """[group] CLI base to create the spaces from texts"""
@@ -252,8 +251,8 @@ def create_dissim_mat(ctx):
 
 
 @create_spaces.command()
-@click.option("--embed-dimensions", type=int, default=lambda: get_setting("EMBED_DIMENSIONS"))
-@click.option("--embed-algo", type=click.Choice(ALL_EMBED_ALGO, case_sensitive=False), default=lambda: get_setting("EMBED_ALGO"))
+@click.option("--embed-dimensions", type=int, default=lambda: get_setting("EMBED_DIMENSIONS", silent=True))
+@click.option("--embed-algo", type=click.Choice(ALL_EMBED_ALGO, case_sensitive=False), default=lambda: get_setting("EMBED_ALGO", silent=True))
 @click_pass_add_context
 def create_embedding(ctx):
     dissim_mat = ctx.obj["json_persister"].load(None, "dissim_mat", ignore_params=["embed_dimensions"], loader=dtm_dissimmat_loader)
@@ -268,9 +267,9 @@ def create_embedding(ctx):
 #prepare-candidateterms group
 
 @cli.group()
-@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS"))
-@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY"))
-@click.option("--extraction-method", type=click.Choice(ALL_EXTRACTION_METHOD, case_sensitive=False), default=lambda: get_setting("EXTRACTION_METHOD"))
+@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", silent=True))
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", silent=True))
+@click.option("--extraction-method", type=click.Choice(ALL_EXTRACTION_METHOD, case_sensitive=False), default=lambda: get_setting("EXTRACTION_METHOD", silent=True))
 @click_pass_add_context
 def prepare_candidateterms(ctx):
     """[group] CLI base to extract candidate-terms from texts"""
@@ -307,7 +306,7 @@ def postprocess_candidateterms(ctx):
 
 @prepare_candidateterms.command()
 @click.option("--candidate-min-term-count", type=int, default=lambda: get_setting("CANDIDATE_MIN_TERM_COUNT"))
-@click.option("--dcm-quant-measure", type=click.Choice(ALL_DCM_QUANT_MEASURE, case_sensitive=False), default=lambda: get_setting("DCM_QUANT_MEASURE"))
+@click.option("--dcm-quant-measure", type=click.Choice(ALL_DCM_QUANT_MEASURE, case_sensitive=False), default=lambda: get_setting("DCM_QUANT_MEASURE", silent=True))
 @click.option("--use-ndocs-count/--no-use-ndocs-count", default=lambda: get_setting("CANDS_USE_NDOCS_COUNT"))
 @click_pass_add_context
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
@@ -327,13 +326,13 @@ def create_filtered_doc_cand_matrix(ctx, candidate_min_term_count, use_ndocs_cou
 
 
 @cli.group()
-@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS"))
-@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY"))
-@click.option("--quantification-measure", type=click.Choice(ALL_QUANTIFICATION_MEASURE, case_sensitive=False), default=lambda: get_setting("QUANTIFICATION_MEASURE"))
-@click.option("--embed-dimensions", type=int, default=lambda: get_setting("EMBED_DIMENSIONS"))
-@click.option("--embed-algo", type=click.Choice(ALL_EMBED_ALGO, case_sensitive=False), default=lambda: get_setting("EMBED_ALGO"))
-@click.option("--extraction-method", type=click.Choice(ALL_EXTRACTION_METHOD, case_sensitive=False), default=lambda: get_setting("EXTRACTION_METHOD"))
-@click.option("--dcm-quant-measure", type=click.Choice(ALL_DCM_QUANT_MEASURE, case_sensitive=False), default=lambda: get_setting("DCM_QUANT_MEASURE"))
+@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", silent=True))
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", silent=True))
+@click.option("--quantification-measure", type=click.Choice(ALL_QUANTIFICATION_MEASURE, case_sensitive=False), default=lambda: get_setting("QUANTIFICATION_MEASURE", silent=True))
+@click.option("--embed-dimensions", type=int, default=lambda: get_setting("EMBED_DIMENSIONS", silent=True))
+@click.option("--embed-algo", type=click.Choice(ALL_EMBED_ALGO, case_sensitive=False), default=lambda: get_setting("EMBED_ALGO", silent=True))
+@click.option("--extraction-method", type=click.Choice(ALL_EXTRACTION_METHOD, case_sensitive=False), default=lambda: get_setting("EXTRACTION_METHOD", silent=True))
+@click.option("--dcm-quant-measure", type=click.Choice(ALL_DCM_QUANT_MEASURE, case_sensitive=False), default=lambda: get_setting("DCM_QUANT_MEASURE", silent=True))
 @click_pass_add_context
 def generate_conceptualspace(ctx):
     """[group] CLI base to create the actual conceptual spaces"""
@@ -467,37 +466,58 @@ def rank_courses_saldirs(ctx):
 
 @generate_conceptualspace.command()
 @click_pass_add_context
-# @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
-def run_lsi(ctx):
+def run_lsi_gensim(ctx, filtered_dcm):
     """as in [VISR12: 4.2.1]"""
     # TODO options here:
     # * if it should filter AFTER the LSI
-    import numpy as np
-    from derive_conceptualspace.util.dtm_object import DocTermMatrix
-    from os.path import splitext
     from gensim import corpora
     from gensim.models import LsiModel
 
-    dtm = ctx.obj["filtered_dcm"]
     if ctx.obj["verbose"]:
-        print("The 25 candidate_terms that occur in the most descriptions (incl the #descriptions they occur in):", {i[0]: len(i[1]) for i in sorted(dtm.term_existinds(use_index=False).items(), key=lambda x: len(x[1]), reverse=True)[:25]})
-        if ctx.obj["dcm_quant_measure"] != "binary":
-            max_ind = np.unravel_index(dtm.as_csr().argmax(), dtm.as_csr().shape)
-            print(f"Max {ctx.obj['dcm_quant_measure']}: Term *b*{dtm.all_terms[max_ind[0]]}*b* has value *b*{dict(dtm.dtm[max_ind[1]])[max_ind[0]]}*b* for doc *b*{ctx.obj['pp_descriptions']._descriptions[max_ind[1]].title}*b*")
+        filtered_dcm.show_info(descriptions=ctx.obj["pp_descriptions"])
+        if get_setting("DCM_QUANT_MEASURE") != "binary":
+            warnings.warn("VISR12 say it works best with binary!")
 
-    dtm.add_pseudo_keyworddocs()
-
-    #ok so as much for the preprocessing, now let's actually go for the LSI
-    dictionary = corpora.Dictionary([list(dtm.all_terms.values())])
-    # print("Start creating the LSA-Model with MORE topics than terms...")
-    # lsamodel_manytopics = LsiModel(doc_term_matrix, num_topics=len(all_terms) * 2, id2word=dictionary)
+    filtered_dcm.add_pseudo_keyworddocs()
+    dictionary = corpora.Dictionary([list(filtered_dcm.all_terms.values())])
+    print("Start creating the LSA-Model with MORE topics than terms...")
+    lsamodel_manytopics = LsiModel(doc_term_matrix, num_topics=len(all_terms) * 2, id2word=dictionary)
     print("Start creating the LSA-Model with FEWER topics than terms...")
-    lsamodel_lesstopics = LsiModel(dtm.dtm, num_topics=len(dtm.all_terms)//10, id2word=dictionary)
+    lsamodel_lesstopics = LsiModel(filtered_dcm.dtm, num_topics=len(filtered_dcm.all_terms)//10, id2word=dictionary)
     print()
     import matplotlib.cm; import matplotlib.pyplot as plt
-    #TODO use the mpl_tools here as well to also save plot!
+    # TODO use the mpl_tools here as well to also save plot!
     plt.imshow(lsamodel_lesstopics.get_topics()[:100,:200], vmin=lsamodel_lesstopics.get_topics().min(), vmax=lsamodel_lesstopics.get_topics().max(), cmap=matplotlib.cm.get_cmap("coolwarm")); plt.show()
-    print()
+
+
+
+@generate_conceptualspace.command()
+@click_pass_add_context
+# @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
+def run_lsi(ctx, filtered_dcm):
+    """as in [VISR12: 4.2.1]"""
+    from sklearn.decomposition import TruncatedSVD
+    from scipy.spatial.distance import cosine
+    import numpy as np
+    from tqdm import tqdm
+    if ctx.obj["verbose"]:
+        filtered_dcm.show_info(descriptions=ctx.obj["pp_descriptions"])
+        if get_setting("DCM_QUANT_MEASURE") != "binary":
+            warnings.warn("VISR12 say it works best with binary!")
+    orig_len = len(filtered_dcm.dtm)
+    filtered_dcm.add_pseudo_keyworddocs()
+    #https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.TruncatedSVD.html
+    svd = TruncatedSVD(n_components=100, random_state=get_setting("RANDOM_SEED"))
+    transformed = svd.fit_transform(filtered_dcm.as_csr().T)
+    desc_psdoc_dists = np.zeros([orig_len, len(filtered_dcm.all_terms)])
+    for desc in tqdm(range(orig_len)):
+        for psdoc in range(orig_len, len(filtered_dcm.dtm)):
+            desc_psdoc_dists[desc, psdoc-len(filtered_dcm.all_terms)] = cosine(transformed[desc], transformed[psdoc])
+            if desc_psdoc_dists[desc, psdoc-len(filtered_dcm.all_terms)] < 0.1:
+                print()
+    good_fits = np.where(desc_psdoc_dists.min(axis=1) < 0.1)[0]
+    for ndesc, keyword in zip(good_fits, np.argmin(desc_psdoc_dists[good_fits], axis=1)):
+        print(f"*b*{filtered_dcm.all_terms[keyword]}*b*", ctx.obj["pp_descriptions"]._descriptions[ndesc], )
 #
 #
 #

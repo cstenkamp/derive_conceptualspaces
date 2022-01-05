@@ -1,12 +1,15 @@
 import warnings
 from collections import Counter
 
+from plotly.serializers import np
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
 
 from derive_conceptualspace.settings import get_setting
 from derive_conceptualspace.util.jsonloadstore import Struct
 from derive_conceptualspace.util.mpl_tools import show_hist
+
+from misc_util.pretty_print import pretty_print as print
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
@@ -75,7 +78,7 @@ class DocTermMatrix():
     def json_serialize(self):
         return Struct(**{k:v for k,v in self.__dict__.items() if not k.startswith("_") and k not in ["csr_matrix", "doc_freqs", "reverse_term_dict"]})
 
-    def show_info(self):
+    def show_info(self, descriptions=None):
         occurs_in = [set(j[0] for j in i) if i else [] for i in self.dtm]
         num_occurences = [sum([term_ind in i for i in occurs_in]) for term_ind in tqdm(range(len(self.all_terms)), desc="Counting Occurences [verbose]")]
         show_hist(num_occurences, "Docs per Keyword", xlabel="# Documents the Keyword appears in", ylabel="Count (log scale)", cutoff_percentile=98, log=True)
@@ -84,6 +87,9 @@ class DocTermMatrix():
         print(f"Found {len(self.all_terms)} candidate Terms, {above_threshold} ({round(above_threshold/len(self.all_terms)*100)}%) of which occur in at least {get_setting('CANDIDATE_MIN_TERM_COUNT', silent=True)} descriptions.")
         print("The 25 terms that occur in the most descriptions (incl the #descriptions they occur in):",
               ", ".join([f"{self.all_terms[ind]} ({occs})" for ind, occs in sorted_canditerms[:25]]))
+        if descriptions is not None:
+            max_ind = np.unravel_index(self.as_csr().argmax(), self.as_csr().shape)
+            print(f"Max value: Term *b*{self.all_terms[max_ind[0]]}*b* has value *b*{dict(self.dtm[max_ind[1]])[max_ind[0]]:.3f}*b* for doc *b*{descriptions._descriptions[max_ind[1]].title}*b*")
 
     #num_occurences = [sum([term_ind in i for i in occurs_in]) for term_ind in tqdm(range(len(dtm.all_terms)))]
 
