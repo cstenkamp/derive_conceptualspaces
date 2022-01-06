@@ -37,6 +37,7 @@ def extract_candidateterms(pp_descriptions, extraction_method, max_ngram, faster
         candidateterms, metainf = extract_candidateterms_quantific(pp_descriptions, max_ngram, quantific="ppmi", verbose=verbose)
     else:
         raise NotImplementedError()
+    print("Terms I found: ", ", ".join([f"{k+1}-grams: {v}" for k, v in sorted(Counter([i.count(" ") for i in flatten(candidateterms)]).items(), key=lambda x:x[0])]))
     return candidateterms, metainf
 
 def extract_candidateterms_keybert_nopp(pp_descriptions, faster_keybert=False, verbose=False):

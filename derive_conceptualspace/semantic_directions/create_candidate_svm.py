@@ -34,7 +34,7 @@ def create_candidate_svms(dcm, mds, descriptions, prim_lambda, sec_lambda, verbo
     sorted_kappa = [(i[0], i[1]["kappa"]) for i in sorted(metrics.items(), key=lambda x:x[1]["kappa"], reverse=True)]
     if verbose and mds.embedding_.shape[1] == 3:
         create_candidate_svm(mds, sorted_kappa[0][0], dcm.term_existinds(use_index=False)[sorted_kappa[0][0]], descriptions, plot_svm=True)
-        while (another := input("Another one to display: ").strip()) != "" or another not in dcm.term_existinds(use_index=False):
+        while (another := input("Another one to display: ").strip()) != "" and another not in dcm.term_existinds(use_index=False):
             create_candidate_svm(mds, another, dcm.term_existinds(use_index=False)[another], descriptions, plot_svm=True)
     clusters, cluster_directions = select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda)
     return clusters, cluster_directions, decision_planes, metrics
@@ -108,9 +108,9 @@ def create_candidate_svm(embedding, term, exist_indices, descriptions, plot_svm=
 def display_svm(X, y, svm, term=None, name=None, descriptions=None):
     assert X.shape[1] == 3
     decision_plane = ThreeDPlane(svm.coef_[0], svm.intercept_[0])
-    occurences = [descriptions[i].count_phrase(term) for i in range(len(X))]
+    occurences = [descriptions._descriptions[i].count_phrase(term) for i in range(len(X))]
     percentile = lambda percentage: np.percentile(np.array([i for i in occurences if i]), percentage)
-    extras = [{"Name": descriptions[i].title, "Occurences": occurences[i], "extra": {"Description": shorten(descriptions[i].text, 200)}} for i in range(len(X))]
+    extras = [{"Name": descriptions._descriptions[i].title, "Occurences": occurences[i], "extra": {"Description": shorten(descriptions._descriptions[i].text, 200)}} for i in range(len(X))]
     with ThreeDFigure(name=name) as fig:
         fig.add_markers(X[np.where(np.logical_not(y))], color="blue", size=2, custom_data=[extras[i] for i in np.where(np.logical_not(y))[0]], linelen_right=50, name="negative samples")
         fig.add_markers(X[np.where(y)], color="red", size=[9 if occurences[i] > percentile(70) else 4 for i in np.where(y)[0]], custom_data=[extras[i] for i in np.where(y)[0]], linelen_right=50, name="positive samples")

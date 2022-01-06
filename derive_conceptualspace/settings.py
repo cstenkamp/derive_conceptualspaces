@@ -8,7 +8,7 @@ ENV_PREFIX = "MA"
 
 #!! use singular for these (bzw the form you'd use if there wasn't the "ALL_" before)
 ALL_PP_COMPONENTS = ["aucsd2"] #,"tcsdp"                             # If in preprocessing it should add coursetitle, lemmatize, etc #TODO "autcsldp", "tcsldp" (gehen gerade nicht weil die nicht mit ngrams klarkommen)
-ALL_TRANSLATE_POLICY = ["translate"] #, "origlan", "onlyeng"         # If non-english descriptions should be translated
+ALL_TRANSLATE_POLICY = ["translate", "origlang", "onlyeng"]          # If non-english descriptions should be translated
 ALL_QUANTIFICATION_MEASURE = ["ppmi", "tfidf", "count", "binary"]    # For the dissimiliarity Matrix of the Descripts
 ALL_EXTRACTION_METHOD = ["tfidf", "pp_keybert", "ppmi"]              # How candidate-terms are getting extracted         #TODO keybert
 ALL_EMBED_ALGO = ["mds", "tsne", "isomap"]                           # Actual Embedding of the Descriptions

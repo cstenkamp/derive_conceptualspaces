@@ -62,16 +62,16 @@ class PPComponents():
 ########################################################################################################################
 
 
-def preprocess_descriptions_full(raw_descriptions, pp_components, translate_policy, languages, translations, title_languages, title_translations):
+def preprocess_descriptions_full(raw_descriptions, pp_components, translate_policy, languages, translations=None, title_languages=None, title_translations=None):
     #TODO options to consider language and fachbereich
     max_ngram = get_setting("MAX_NGRAM") if get_setting("NGRAMS_IN_EMBEDDING") else 1
     pp_components = PPComponents.from_str(pp_components)
-    descriptions = preprocess_raw_course_file(raw_descriptions)
+    descriptions = preprocess_coursera_file(raw_descriptions) #TODO make this better!!!!
     if get_setting("DEBUG"):
         descriptions = pd.DataFrame([descriptions.iloc[key] for key in random.sample(range(len(descriptions)), k=get_setting("DEBUG_N_ITEMS"))])
     descriptions = create_bare_desclist(languages, translations, list(descriptions["Name"]), list(descriptions["Beschreibung"]),
-                                       [i if str(i) != "nan" else None for i in descriptions["Untertitel"]], translate_policy, title_languages, title_translations,
-                                       add_coursetitle=pp_components.add_coursetitle, add_subtitle=pp_components.add_subtitle, assert_all_translated=True) #TODO only if translate?!
+                        [i if str(i) != "nan" else None for i in descriptions["Untertitel"]], translate_policy, title_languages, title_translations,
+                        add_coursetitle=pp_components.add_coursetitle, add_subtitle=pp_components.add_subtitle, assert_all_translated=True) #TODO only if translate?!
     if pp_components.use_skcountvec:
         descriptions = pp_descriptions_countvec(descriptions, pp_components, max_ngram)
         metainf = {"n_samples": len(descriptions), "ngrams_in_embedding": get_setting("NGRAMS_IN_EMBEDDING"), **({"pp_max_ngram": get_setting("MAX_NGRAM")} if get_setting("NGRAMS_IN_EMBEDDING") else {})}
@@ -105,23 +105,28 @@ def preprocess_raw_course_file(df, min_desc_len=10):
             df.loc[n]["Name"] = f"{cont['Name']} ({cont['VeranstaltungsNummer']})"
     return df
 
+def preprocess_coursera_file(df):
+    df = df.rename(columns={"CourseId": "Name", "Review": "Beschreibung"})
+    df["Untertitel"] = ""
+    return df
+
 
 def create_bare_desclist(languages, translations, names, descriptions, subtitles, translate_policy, title_languages, title_translations,
                         assert_all_translated=True, add_coursetitle=False, add_subtitle=False):
     """Creates the Bare Descriptions-List. This function handles the *translate_policy* and the pp_components *add_coursetitle* and *add_subtitle*.
     All Other Preprocessing-steps must be done after this step. After this step the Raw Descriptions are superflous."""
+    title_languages = title_languages or languages
     orig_lans = [languages[i] for i in names]
     desc_list = DescriptionList(add_title=add_coursetitle, add_subtitle=add_subtitle, translate_policy=translate_policy)
 
-    if translate_policy == "origlan":
+    if translate_policy == "origlang":
         for i in range(len(descriptions)):
             desc_list.add(Description(lang=orig_lans[i], text=descriptions[i], title=names[i], subtitle=subtitles[i], orig_textlang=orig_lans[i], orig_titlelang=title_languages[names[i]]))
     elif translate_policy == "onlyeng":
-        raise NotImplementedError("TODO: add_coursetitle und add_subtitle for this")
-        # indices = [ind for ind, elem in enumerate(orig_lans) if elem == "en"]
-        # print(f"Dropped {len(names)-len(indices)} out of {len(names)} descriptions because I will take only the english ones")
-        # names, descriptions = [names[i] for i in indices], [descriptions[i] for i in indices]
-        # result = [Description(text=descriptions[i], lang="en", for_name=names[i], orig_lang="en") for i in range(len(descriptions))]
+        indices = [ind for ind, elem in enumerate(orig_lans) if elem == "en"]
+        print(f"Dropped {len(names)-len(indices)} out of {len(names)} descriptions because I will take only the english ones")
+        for i in indices:
+            desc_list.add(Description(lang="en", text=descriptions[i], title=names[i], subtitle=subtitles[i], orig_textlang="en", orig_titlelang=title_languages[names[i]]))
     elif translate_policy == "translate":
         missing_translations = set()
         for desc, title, subtitle in zip(descriptions, names, subtitles):

@@ -73,7 +73,7 @@ def loadstore_settings_envvars(ctx, use_auto_envvar_prefix=False):
         envvarname = env_prefix+"_"+param.upper().replace("-","_")
         # https://github.com/pallets/click/issues/714#issuecomment-651389598
         if (envvar := get_envvar(envvarname)) is not None and envvar != ctx.params[param]:
-            print(f"The param {param} used to be {ctx.params[param]}, but is overwritten by an env-var to {envvar}")
+            print(f"The param {param} used to be *r*{ctx.params[param]}*r*, but is overwritten by an env-var to *b*{envvar}*b*")
             ctx.params[param] = envvar
             ctx.obj[param] = envvar
         else:
@@ -99,7 +99,7 @@ def setup_json_persister(ctx, ignore_nsamples=False):
         n_samples_getter = lambda: "ANY"
         cand_ntc_getter = lambda: "ANY"
     else:
-        n_samples_getter = lambda: get_setting("DEBUG_N_ITEMS", silent=True) if get_setting("DEBUG", silent=True) else 7588 #TODO don't hard-code this!
+        n_samples_getter = lambda: get_setting("DEBUG_N_ITEMS", silent=True) if get_setting("DEBUG", silent=True) else 847 #TODO don't hard-code this!
         cand_ntc_getter = lambda: get_setting("CANDIDATE_MIN_TERM_COUNT", silent=True)
     json_persister.default_metainf_getters = {"n_samples": n_samples_getter,
                                               "candidate_min_term_count": cand_ntc_getter,
@@ -133,8 +133,8 @@ def click_pass_add_context(fn):
             assert k not in args[0].obj
             args[0].obj[k] = v
         ctx = args[0]
-        nkw = {k:v for k,v in {**kwargs, **ctx.obj}.items() if k in set(inspect.getfullargspec(fn).args)-{"ctx", "context"}}
         loadstore_settings_envvars(ctx)
+        nkw = {k:v for k,v in {**kwargs, **ctx.obj}.items() if k in set(inspect.getfullargspec(fn).args)-{"ctx", "context"}}
         if isinstance(ctx.command, click.Command) and not isinstance(ctx.command, click.Group): #print settings
             import derive_conceptualspace.settings
             all_params = {i: get_setting(i.upper(), stay_silent=True, silent=True) for i in get_jsonpersister_args()[0]}
@@ -219,11 +219,17 @@ def translate_descriptions(ctx, translate_policy, raw_descriptions_file, languag
 def preprocess_descriptions(ctx, raw_descriptions_file, languages_file, translations_file, title_languages_file, title_translations_file):
     raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
     languages = ctx.obj["json_persister"].load(languages_file, "languages", ignore_params=["pp_components", "translate_policy"], loader=lambda langs: langs)
-    translations = ctx.obj["json_persister"].load(translations_file, "translated_descriptions", ignore_params=["pp_components", "translate_policy"], force_overwrite=True, loader=lambda **kwargs: kwargs["translations"])
-    title_languages = ctx.obj["json_persister"].load(title_languages_file, "title_languages", ignore_params=["pp_components", "translate_policy"], loader=lambda title_langs: title_langs)
-    title_translations = ctx.obj["json_persister"].load(title_translations_file, "translated_titles", ignore_params=["pp_components", "translate_policy"], force_overwrite=True, loader=lambda **kwargs: kwargs["title_translations"])
+    try:
+        title_languages = ctx.obj["json_persister"].load(title_languages_file, "title_languages", ignore_params=["pp_components", "translate_policy"], loader=lambda title_langs: title_langs)
+    except FileNotFoundError:
+        title_languages = languages
+    if ctx.obj["translate_policy"] == "translate":
+        translations = ctx.obj["json_persister"].load(translations_file, "translated_descriptions", ignore_params=["pp_components", "translate_policy"], force_overwrite=True, loader=lambda **kwargs: kwargs["translations"])
+        title_translations = ctx.obj["json_persister"].load(title_translations_file, "translated_titles", ignore_params=["pp_components", "translate_policy"], force_overwrite=True, loader=lambda **kwargs: kwargs["title_translations"])
+        # TODO[e] depending on pp_compoments, title_languages etc may still allowed to be empty
+    else:
+        translations, title_translations = None, None
     descriptions, metainf = preprocess_descriptions_base(raw_descriptions, ctx.obj["pp_components"], ctx.obj["translate_policy"], languages, translations, title_languages, title_translations)
-    #TODO[e] depending on translate_policy and pp_compoments, title_languages etc may allowed to be empty
     ctx.obj["json_persister"].save("pp_descriptions.json", descriptions=descriptions, relevant_metainf=metainf)
 
 
@@ -401,6 +407,13 @@ def show_data_info(ctx):
     print("Dates:\n ", "\n  ".join(f"{k.rjust(max(len(i) for i in dates))}: {v}" for k,v in dates.items()))
     output = {k: merge_streams(v[3].get("stdout", ""), v[3].get("stderr", ""), k) for k, v in ctx.obj["json_persister"].loaded_objects.items()}
     print()
+    N_SPACES = 30
+    while (show := input(f"Which step's output should be shown ({', '.join([k for k, v in output.items() if v])}): ").strip()) in output.keys():
+        print(f"\n{'='*N_SPACES} Showing output of **{show}** {'='*N_SPACES}")
+        print(output[show])
+        print("="*len(f"{'='*N_SPACES} Showing output of **{show}** {'='*N_SPACES}")+"\n")
+    print()
+
 
 
 def merge_streams(s1, s2, for_):
@@ -513,11 +526,11 @@ def run_lsi(ctx, filtered_dcm):
     for desc in tqdm(range(orig_len)):
         for psdoc in range(orig_len, len(filtered_dcm.dtm)):
             desc_psdoc_dists[desc, psdoc-len(filtered_dcm.all_terms)] = cosine(transformed[desc], transformed[psdoc])
-            if desc_psdoc_dists[desc, psdoc-len(filtered_dcm.all_terms)] < 0.1:
-                print()
-    good_fits = np.where(desc_psdoc_dists.min(axis=1) < 0.1)[0]
+    tenth_lowest = np.partition(desc_psdoc_dists.min(axis=1), 10)[10] #https://stackoverflow.com/a/43171216/5122790
+    good_fits = np.where(desc_psdoc_dists.min(axis=1) < tenth_lowest)[0]
     for ndesc, keyword in zip(good_fits, np.argmin(desc_psdoc_dists[good_fits], axis=1)):
-        print(f"*b*{filtered_dcm.all_terms[keyword]}*b*", ctx.obj["pp_descriptions"]._descriptions[ndesc], )
+        print(f"*b*{filtered_dcm.all_terms[keyword]}*b*", ctx.obj["pp_descriptions"]._descriptions[ndesc])
+    print()
 #
 #
 #

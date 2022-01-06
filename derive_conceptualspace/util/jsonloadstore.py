@@ -281,7 +281,8 @@ class JsonPersister():
             obj = loader(**obj)
         if not silent:
             for k, v in self.loaded_relevant_params.items():
-                if k in self.ctx.obj: assert self.ctx.obj[k] == v
+                if k in self.ctx.obj: assert self.ctx.obj[k] == v, f"{k} is demanded to be {self.ctx.obj[k]}, but is {v} in {tmp['basename']} at {join(subdir, filename)}"
+                #TODO better error message that tells which file is probably missing
                 else: self.ctx.obj[k] = v
             if not force_overwrite:
                 assert save_basename not in self.loaded_objects

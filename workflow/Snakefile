@@ -52,7 +52,7 @@ from derive_conceptualspace.settings import (
     ALL_EXTRACTION_METHOD,
     ALL_EMBED_DIMENSIONS,
     ALL_EMBED_ALGO,
-    FORBIDDEN_COMBIS, set_envvar, NORMALIFY_PARAMS
+    FORBIDDEN_COMBIS, set_envvar, NORMALIFY_PARAMS, get_envvar
 )
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
 from derive_conceptualspace.cli.run_pipeline import setup_json_persister, set_debug, get_jsonpersister_args, normalify
@@ -65,10 +65,11 @@ from misc_util.logutils import CustomIO
 ########################################################################################################################
 ########################################################################################################################
 
+overwritable = lambda param, value: get_envvar(envvarname = ENV_PREFIX + "_" + param.upper().replace("-","_")) or value
+
 class Context():
     obj = {"base_dir": os.getcwd(), "add_relevantparams_to_filename": True, "verbose": get_setting("VERBOSE"), "strict_metainf_checking": get_setting("STRICT_METAINF_CHECKING")}
     auto_envvar_prefix = ENV_PREFIX
-
 
 def initialize_snakemake():
     if int(os.getenv(f"{ENV_PREFIX}_SNAKEMAKE_TELEGRAM", 0)):
@@ -125,7 +126,7 @@ def autoload_context_inputs(ctx, inputs, wildcards, params=None, input_kwargs=No
 ########################################################################################################################
 ########################################################################################################################
 
-n_samples = 7588 if not get_setting("DEBUG") else get_setting("DEBUG_N_ITEMS")
+n_samples = 847 if not get_setting("DEBUG") else get_setting("DEBUG_N_ITEMS") #TODO obviously don't hardcode
 dir_struct = get_jsonpersister_args()[2]
 
 
@@ -163,6 +164,22 @@ rule preprocess_descriptions:
         autoload_context_inputs(ctx, input, wildcards, input_kwargs={"translations": {"force_overwrite": True}, "title_translations": {"force_overwrite": True}, "languages": {"force_overwrite": True}})
         descriptions, metainf = preprocess_descriptions_base(ctx.obj["raw_descriptions"], wildcards.pp_components, wildcards.translate_policy, ctx.obj["languages"], ctx.obj["translations"], ctx.obj["title_languages"], ctx.obj["title_translations"])
         json_persister.save("pp_descriptions.json", descriptions=descriptions, relevant_metainf=metainf)
+
+
+rule preprocess_descriptions_notranslate:
+    input:
+        raw_descriptions = overwritable("raw_descriptions_file", "kurse-beschreibungen.csv"), #TODO add this to the schema of the rest
+        languages = "languages.json",
+    output:
+        "{n_samples}_samples/{pp_components}_{translate_policy}/pp_descriptions.json"
+    threads: 1
+    run:
+        assert wildcards.translate_policy != "translate"
+        autoload_context_inputs(ctx, input, wildcards)
+        descriptions, metainf = preprocess_descriptions_base(ctx.obj["raw_descriptions"], wildcards.pp_components, wildcards.translate_policy, ctx.obj["languages"])
+        json_persister.save("pp_descriptions.json", descriptions=descriptions, relevant_metainf=metainf)
+
+ruleorder: preprocess_descriptions > preprocess_descriptions_notranslate
 
 
 rule create_dissim_mat:
