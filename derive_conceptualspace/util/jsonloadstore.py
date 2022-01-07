@@ -246,7 +246,9 @@ class JsonPersister():
             subdir, _ = self.get_subdir(complete_metainf, ignore_params)
             assert isdir(join(self.in_dir, subdir)), f"Directory `{join(self.in_dir, subdir)}` doesn't exist - Cannot get {save_basename}"
             candidates = self.get_file_by_config(subdir, complete_metainf, save_basename)
-            assert len(candidates) == 1, "TODO: still wrong?!"
+            if len(candidates) != 1:
+                raise Exception(f"There are != 1 candidates for {save_basename} in {subdir} with demanded params {self.loaded_relevant_params}: {candidates}")
+                #TODO: still wrong?!
             filename = candidates[0]
         if splitext(filename)[1] == ".csv":
             obj = pd.read_csv(join(self.in_dir, subdir, filename))

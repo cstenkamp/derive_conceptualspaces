@@ -7,21 +7,21 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-
-from derive_conceptualspace.util.jsonloadstore import json_dumps, NumpyEncoder
+from misc_util.pretty_print import isnotebook
 
 def show_fig(fig, title):
     #TODO maybe be able to overwrite this with an env-var
     is_pycharm = "PYCHARM_HOSTED" in os.environ
-    if is_pycharm:
+    if is_pycharm and not isnotebook():
         fig.show()
-    title = title.replace(" ", "_")
-    title += "_"+datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    save_path = os.getenv("MA_BASE_DIR") or os.environ["HOME"]
-    save_path = os.path.join(save_path, "saved_plots", datetime.now().strftime("%Y-%m-%d"), title+".png")
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    print(f"Saving figure `{title}` under `{save_path}`")
-    fig.savefig(save_path)
+    if not isnotebook():
+        title = title.replace(" ", "_")
+        title += "_"+datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        save_path = os.getenv("MA_BASE_DIR") or os.environ["HOME"]
+        save_path = os.path.join(save_path, "saved_plots", datetime.now().strftime("%Y-%m-%d"), title+".png")
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        print(f"Saving figure `{title}` under `{save_path}`")
+        fig.savefig(save_path)
 
 
 

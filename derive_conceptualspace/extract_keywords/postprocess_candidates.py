@@ -39,7 +39,7 @@ def postprocess_candidateterms(candidate_terms, descriptions, extraction_method)
     for desc_ind, desc in enumerate(descriptions._descriptions):
         for cand in postprocessed_candidates[desc_ind]:
             assert in_text(cand, desc)
-            assert cand.lower() in desc.processed_as_string()
+            # assert cand.lower() in desc.processed_as_string()
     print(f"Had to drop {len(fails)} out of {len(list(set(flatten(candidate_terms))))} candidates.")
     return postprocessed_candidates
 

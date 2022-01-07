@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from misc_util.pretty_print import pretty_print as print
 from derive_conceptualspace.util.google_translate import translate_text
-from derive_conceptualspace.create_spaces.preprocess_descriptions import preprocess_raw_course_file, PPComponents
+from derive_conceptualspace.create_spaces.preprocess_descriptions import PPComponents
 
 logger = logging.getLogger(basename(__file__))
 

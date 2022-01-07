@@ -78,6 +78,8 @@ class DocTermMatrix():
     def json_serialize(self):
         return Struct(**{k:v for k,v in self.__dict__.items() if not k.startswith("_") and k not in ["csr_matrix", "doc_freqs", "reverse_term_dict"]})
 
+    n_docs = property(lambda self: len(self.dtm))
+
     def show_info(self, descriptions=None):
         occurs_in = [set(j[0] for j in i) if i else [] for i in self.dtm]
         num_occurences = [sum([term_ind in i for i in occurs_in]) for term_ind in tqdm(range(len(self.all_terms)), desc="Counting Occurences [verbose]")]
@@ -172,6 +174,10 @@ class DocTermMatrix():
         return DocTermMatrix(dtm=doc_term_matrix, all_terms=all_terms)
 
 
+    def doc_freq(self, keyword, rel=False, supress=False):
+        if supress:
+            return len(self.term_existinds(use_index=False).get(keyword, [])) / (self.n_docs if rel else 1)
+        return len(self.term_existinds(use_index=False)[keyword]) / (self.n_docs if rel else 1)
 
 
 

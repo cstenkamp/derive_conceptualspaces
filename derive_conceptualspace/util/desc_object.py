@@ -1,9 +1,12 @@
 import random
 import textwrap
 from collections import Counter
+from os.path import basename
 from typing import Optional, List
 import inspect
+import logging
 
+from sklearn.feature_extraction.text import CountVectorizer
 from tqdm import tqdm
 
 from .dtm_object import DocTermMatrix
@@ -12,6 +15,7 @@ from ..settings import get_setting
 
 
 flatten = lambda l: [item for sublist in l for item in sublist]
+logger = logging.getLogger(basename(__file__))
 
 from misc_util.pretty_print import fmt
 
@@ -92,7 +96,7 @@ class Description():
 
     @property
     def unprocessed_text(self):
-        """returns minimally processed text."""
+        """returns minimally processed text (translated and with title/subtitle, but no pp steps)"""
         return ((self.title+". ") if self._add_title else "") + ((self.subtitle+". ") if self._add_subtitle and self.subtitle else "") + self.text
 
     def processed_as_string(self, no_dots=False):
@@ -242,10 +246,29 @@ class DescriptionList():
                 return DocTermMatrix(dtm=aslist, all_terms=all_words)
         else:
             if (max_ngram or 1) != self.proc_ngram_range[1] or (max_ngram not in [None, 1] and not self.prog_has_ngrams):
-                raise NotImplementedError("The Preprocessing didn't have that value for n-grams")
+                logger.warning(f"The Preprocessing had max-ngrams={self.proc_ngram_range[1]}, now you require {max_ngram or 1}!")
+                if (max_ngram or 1) < self.proc_ngram_range[1]:
+                    raise NotImplementedError()
+                cnt = CountVectorizer(strip_accents=None, lowercase=False, stop_words=None, ngram_range=(1, max_ngram), min_df=min_df)
+                X = cnt.fit_transform(self.iter("processed_as_string"))
+                aslist = [list(sorted(zip((tmp := X.getrow(nrow).tocoo()).col, tmp.data), key=lambda x:x[0])) for nrow in range(X.shape[0])]
+                all_words = {v: k for k, v in cnt.vocabulary_.items()}
+                return DocTermMatrix(dtm=aslist, all_terms=all_words)
             return DocTermMatrix.from_descriptions(self, min_df=min_df)
 
 
     def add_embeddings(self, embeddings):
         for desc, embedding in zip(self._descriptions, list(embeddings)):
             desc.embedding = embedding
+
+    def iter(self, func):
+        for desc in self._descriptions:
+            yield getattr(desc, func)()
+
+    def filter_words(self, min_words):
+        tmp = [i for i in self._descriptions if len(i.processed_text) >= min_words] \
+                if isinstance(self._descriptions[0].processed_text[0], str) \
+                else [i for i in self._descriptions if len(flatten(i.processed_text)) >= min_words]
+        print(f"Removed {len(self)-len(tmp)} of {len(self)} Descriptions because they are less than {min_words} words")
+        self._descriptions = tmp
+        return self

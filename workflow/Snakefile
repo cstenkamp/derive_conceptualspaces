@@ -41,6 +41,7 @@ from derive_conceptualspace.create_spaces.create_embedding import (
 from derive_conceptualspace.semantic_directions.create_candidate_svm import (
     create_candidate_svms as create_candidate_svms_base
 )
+from derive_conceptualspace.pipeline import Context
 
 from derive_conceptualspace.settings import (
     get_setting,
@@ -67,9 +68,6 @@ from misc_util.logutils import CustomIO
 
 overwritable = lambda param, value: get_envvar(envvarname = ENV_PREFIX + "_" + param.upper().replace("-","_")) or value
 
-class Context():
-    obj = {"base_dir": os.getcwd(), "add_relevantparams_to_filename": True, "verbose": get_setting("VERBOSE"), "strict_metainf_checking": get_setting("STRICT_METAINF_CHECKING")}
-    auto_envvar_prefix = ENV_PREFIX
 
 def initialize_snakemake():
     if int(os.getenv(f"{ENV_PREFIX}_SNAKEMAKE_TELEGRAM", 0)):
@@ -78,7 +76,7 @@ def initialize_snakemake():
         for k, v in dict(globals()).items():
             if k.endswith("_base") and callable(v):
                 globals()[k] =  telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(globals()[k])
-    ctx = Context()
+    ctx = Context(base_dir=os.getcwd())
     CustomIO.init(ctx)
     ctx.obj["json_persister"] = setup_json_persister(ctx, ignore_nsamples=True)
     set_debug(ctx)
@@ -97,18 +95,6 @@ def add_to_ctx(wildcards, ctx):
             ctx.obj[k] = v
         set_envvar(ENV_PREFIX+"_"+k.upper().replace("-","_"), ctx.obj[k])
 
-autoloader_di = dict(
-    pp_descriptions=DescriptionList.from_json,
-    dissim_mat=dtm_dissimmat_loader,
-    doc_cand_matrix=dtm_loader,
-    filtered_dcm=dtm_loader,
-    embedding=lambda **kwargs: kwargs["embedding"],
-    translations=lambda **kwargs: kwargs["translations"],
-    title_translations=lambda **kwargs: kwargs["title_translations"],
-    languages=lambda **kwargs: kwargs["langs"],
-    title_languages=lambda **kwargs: kwargs["title_langs"],
-    postprocessed_candidates=lambda **kwargs: kwargs["postprocessed_candidates"],
-)
 
 def autoload_context_inputs(ctx, inputs, wildcards, params=None, input_kwargs=None):
     """

@@ -7,16 +7,16 @@ ENV_PREFIX = "MA"
 ########################################################################################################################
 
 #!! use singular for these (bzw the form you'd use if there wasn't the "ALL_" before)
-ALL_PP_COMPONENTS = ["aucsd2"] #,"tcsdp"                             # If in preprocessing it should add coursetitle, lemmatize, etc #TODO "autcsldp", "tcsldp" (gehen gerade nicht weil die nicht mit ngrams klarkommen)
+ALL_PP_COMPONENTS = ["aucsd2", "autcsldp"] #,"tcsdp"                 # If in preprocessing it should add coursetitle, lemmatize, etc #TODO "autcsldp", "tcsldp" (gehen gerade nicht weil die nicht mit ngrams klarkommen)
 ALL_TRANSLATE_POLICY = ["translate", "origlang", "onlyeng"]          # If non-english descriptions should be translated
 ALL_QUANTIFICATION_MEASURE = ["ppmi", "tfidf", "count", "binary"]    # For the dissimiliarity Matrix of the Descripts
 ALL_EXTRACTION_METHOD = ["tfidf", "pp_keybert", "ppmi"]              # How candidate-terms are getting extracted         #TODO keybert
 ALL_EMBED_ALGO = ["mds", "tsne", "isomap"]                           # Actual Embedding of the Descriptions
 ALL_EMBED_DIMENSIONS = [100, 3] #, 50, 200                           # Actual Embedding of the Descriptions
-ALL_DCM_QUANT_MEASURE = ["tfidf", "count", "ppmi", "binary"]         # Quantification for the Doc-Keyphrase-Matrix       #TODO tag-share
+ALL_DCM_QUANT_MEASURE = ["ppmi", "tfidf", "count", "binary"]         # Quantification for the Doc-Keyphrase-Matrix       #TODO tag-share
 
 FORBIDDEN_COMBIS = ["tsne_50d", "tsne_100d"]
-#TODO: add (extraction_method in ["keybert", "pp_keybert"] and "2" in get_setting("PP_COMPONENTS")) to forbidden_combis
+
 
 #set default-values for the ALL_... variables (always the first one)
 # `DEFAULT_PP_COMPONENTS = ALL_PP_COMPONENTS[0] \n ...`
@@ -47,6 +47,15 @@ DEFAULT_MAX_NGRAM = 5
 DEFAULT_NGRAMS_IN_EMBEDDING = False #If I should set the ngram-range already in the preprocess_descriptions step (makes the dissimiliarity-matrix a shitton more sparse)
 DEFAULT_DISSIM_MAT_ONLY_PARTNERED = True
 DEFAULT_CANDS_USE_NDOCS_COUNT = True
+DEFAULT_MIN_WORDS_PER_DESC = 50
+
+DEFAULT_QUANTEXTRACT_MAXPERDOC_ABS = 20
+DEFAULT_QUANTEXTRACT_MAXPERDOC_REL = 0.1
+DEFAULT_QUANTEXTRACT_MINVAL = None
+DEFAULT_QUANTEXTRACT_MINVAL_PERC = 0.8
+DEFAULT_QUANTEXTRACT_MINPERDOC = 0
+DEFAULT_QUANTEXTRACT_FORCETAKE_PERC = 0.98
+
 
 #Settings regarding the architecture/platform
 DEFAULT_STRICT_METAINF_CHECKING = True

@@ -1,7 +1,8 @@
-from os.path import basename, isfile
+from os.path import basename, isfile, join, dirname
 import re
 import logging
 import random
+
 
 import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
@@ -11,6 +12,7 @@ from misc_util.pretty_print import pretty_print as print
 from derive_conceptualspace.util.desc_object import Description, DescriptionList
 from derive_conceptualspace.settings import get_setting
 from derive_conceptualspace.util.text_tools import run_preprocessing_funcs, tf_idf, get_stopwords
+from derive_conceptualspace.util.mpl_tools import show_hist
 
 logger = logging.getLogger(basename(__file__))
 
@@ -61,54 +63,27 @@ class PPComponents():
 ########################################################################################################################
 ########################################################################################################################
 
-
-def preprocess_descriptions_full(raw_descriptions, pp_components, translate_policy, languages, translations=None, title_languages=None, title_translations=None):
+def preprocess_descriptions_full(raw_descriptions, dataset_specifics_module, pp_components, translate_policy, languages, translations=None, title_languages=None, title_translations=None):
     #TODO options to consider language and fachbereich
     max_ngram = get_setting("MAX_NGRAM") if get_setting("NGRAMS_IN_EMBEDDING") else 1
     pp_components = PPComponents.from_str(pp_components)
-    descriptions = preprocess_coursera_file(raw_descriptions) #TODO make this better!!!!
+    descriptions = dataset_specifics_module.preprocess_raw_file(raw_descriptions)
     if get_setting("DEBUG"):
         descriptions = pd.DataFrame([descriptions.iloc[key] for key in random.sample(range(len(descriptions)), k=get_setting("DEBUG_N_ITEMS"))])
     descriptions = create_bare_desclist(languages, translations, list(descriptions["Name"]), list(descriptions["Beschreibung"]),
                         [i if str(i) != "nan" else None for i in descriptions["Untertitel"]], translate_policy, title_languages, title_translations,
                         add_coursetitle=pp_components.add_coursetitle, add_subtitle=pp_components.add_subtitle, assert_all_translated=True) #TODO only if translate?!
     if pp_components.use_skcountvec:
-        descriptions = pp_descriptions_countvec(descriptions, pp_components, max_ngram)
-        metainf = {"n_samples": len(descriptions), "ngrams_in_embedding": get_setting("NGRAMS_IN_EMBEDDING"), **({"pp_max_ngram": get_setting("MAX_NGRAM")} if get_setting("NGRAMS_IN_EMBEDDING") else {})}
+        descriptions = pp_descriptions_countvec(descriptions, pp_components, max_ngram).filter_words(min_words=get_setting("MIN_WORDS_PER_DESC"))
+        metainf = {"n_samples": len(descriptions), "ngrams_in_embedding": get_setting("NGRAMS_IN_EMBEDDING"), **({"pp_max_ngram": get_setting("MAX_NGRAM")} if get_setting("NGRAMS_IN_EMBEDDING") else {}),
+                   "min_words": get_setting("MIN_WORDS_PER_DESC")}
     else:
         assert max_ngram == 1, "Cannot deal with n-grams without SKLearn!"
-        descriptions = preprocess_descriptions(descriptions, pp_components)
-        metainf = {"n_samples": len(descriptions), "ngrams_in_embedding": False}
+        descriptions = preprocess_descriptions(descriptions, pp_components).filter_words(min_words=get_setting("MIN_WORDS_PER_DESC"))
+        metainf = {"n_samples": len(descriptions), "ngrams_in_embedding": False, "min_words": get_setting("MIN_WORDS_PER_DESC")}
+    show_hist([len(i.processed_text) for i in descriptions._descriptions], "Words per Description", xlabel="Number of Words")
     return descriptions, metainf
 
-
-def preprocess_raw_course_file(df, min_desc_len=10):
-    """loads the given Siddata-Style CSV into a pandas-dataframe, already performing some processing like
-        dropping duplicates"""
-    #TODO in exploration I also played around with Levenhsthein-distance etc!
-    #remove those for which the Name (exluding stuff in parantheses) is equal...
-    df['NameNoParanth'] = df['Name'].str.replace(re.compile(r'\([^)]*\)'), '')
-    df = df.drop_duplicates(subset='NameNoParanth')
-    #remove those with too short a description...
-    df = df[~df['Beschreibung'].isna()]
-    df.loc[:, 'desc_len'] = [len(i) for i in df['Beschreibung']]
-    df = df[df["desc_len"] > min_desc_len]
-    df = df.drop(columns=['desc_len','NameNoParanth'])
-    #remove those with equal Veranstaltungsnummer...
-    df = df.drop_duplicates(subset='VeranstaltungsNummer')
-    #TODO instead of dropping, I could append descriptions or smth!!
-    for column in ["Name", "Beschreibung", "Untertitel"]:
-        df[column] = df[column].str.strip()
-    if len((dups := df[df["Name"].duplicated(keep=False)])) > 0:
-        print("There are courses with different VeranstaltungsNummer but equal Name!")
-        for n, cont in dups.iterrows():
-            df.loc[n]["Name"] = f"{cont['Name']} ({cont['VeranstaltungsNummer']})"
-    return df
-
-def preprocess_coursera_file(df):
-    df = df.rename(columns={"CourseId": "Name", "Review": "Beschreibung"})
-    df["Untertitel"] = ""
-    return df
 
 
 def create_bare_desclist(languages, translations, names, descriptions, subtitles, translate_policy, title_languages, title_translations,

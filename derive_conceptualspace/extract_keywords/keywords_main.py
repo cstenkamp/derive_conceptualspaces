@@ -80,23 +80,28 @@ def extract_candidateterms_keybert_preprocessed(descriptions, max_ngram, faster_
         candidateterms.append(candidates)
     return candidateterms, {"keybertextractor_modelname": model_name, "kw_max_ngram": max_ngram}
 
-#TODO put the parameters here in settings.py
 #TODO play around with the parameters here!
-def extract_candidateterms_quantific(descriptions, max_ngram, quantific, max_per_doc_abs = 10, max_per_doc_rel = 0.1, min_val = None, min_val_percentile = 0.8, min_per_doc = 2, forcetake_percentile = 0.98, verbose=False):
+def extract_candidateterms_quantific(descriptions, max_ngram, quantific, verbose=False):
+    max_per_doc_abs = get_setting("QUANTEXTRACT_MAXPERDOC_ABS");  max_per_doc_rel = get_setting("QUANTEXTRACT_MAXPERDOC_REL")
+    min_val = get_setting("QUANTEXTRACT_MINVAL"); min_val_percentile = get_setting("QUANTEXTRACT_MINVAL_PERC")
+    min_per_doc = get_setting("QUANTEXTRACT_MINPERDOC"); forcetake_percentile = get_setting("QUANTEXTRACT_FORCETAKE_PERC")
     assert not (min_val and min_val_percentile)
     print("Loading Doc-Term-Matrix...")
-    dtm = descriptions.generate_DocTermMatrix(min_df=2, max_ngram=max_ngram)
+    dtm = descriptions.generate_DocTermMatrix(min_df=get_setting("CANDIDATE_MIN_TERM_COUNT"), max_ngram=max_ngram)
+    #Now I'm filtering here, I originally didn't want to do that but it makes the processing incredibly much faster
     if quantific == "tfidf":
         quant = tf_idf(dtm, verbose=verbose, descriptions=descriptions)
     elif quantific == "ppmi":
         quant = ppmi(dtm, verbose=verbose, descriptions=descriptions)
     else:
         raise NotImplementedError()
+    metainf = dict(kw_max_per_doc_abs=max_per_doc_abs, kw_max_per_doc_rel=max_per_doc_rel, kw_min_per_doc=min_per_doc,
+                   kw_forcetake_percentile=forcetake_percentile, candidate_min_term_count=get_setting("CANDIDATE_MIN_TERM_COUNT"))
     if min_val_percentile:
         min_val = np.percentile(np.array(flatten([[j[1] for j in i] for i in quant])), min_val_percentile * 100)
-        metainf = dict(kw_max_per_doc_abs=max_per_doc_abs, kw_max_per_doc_rel=max_per_doc_rel, kw_min_val_percentile=min_val_percentile, kw_min_per_doc=min_per_doc, kw_forcetake_percentile=forcetake_percentile)
+        metainf.update(kw_min_val_percentile=min_val_percentile)
     else:
-        metainf = dict(kw_max_per_doc_abs=max_per_doc_abs, kw_max_per_doc_rel=max_per_doc_rel, kw_min_val=min_val, kw_min_per_doc=min_per_doc, kw_forcetake_percentile=forcetake_percentile)
+        metainf.update(kw_min_val=min_val)
     forcetake_val = np.percentile(np.array(flatten([[j[1] for j in i] for i in quant])), forcetake_percentile * 100)
     candidates = [ [ sorted(i, key=lambda x:x[1], reverse=True),
                      min(round(len(i)*max_per_doc_rel), max_per_doc_abs),

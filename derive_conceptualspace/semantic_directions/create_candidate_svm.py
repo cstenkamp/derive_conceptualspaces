@@ -13,13 +13,13 @@ norm = lambda vec: vec/np.linalg.norm(vec)
 vec_cos = lambda v1, v2: np.arccos(np.clip(np.dot(norm(v1), norm(v2)), -1.0, 1.0))  #https://stackoverflow.com/a/13849249/5122790
 
 
-def create_candidate_svms(dcm, mds, descriptions, prim_lambda, sec_lambda, verbose):
+def create_candidate_svms(dcm, embedding, descriptions, prim_lambda, sec_lambda, verbose):
     metrics = {}
     decision_planes = {}
     for term, exist_indices in tqdm(dcm.term_existinds(use_index=False).items(), desc="Creating Candidate SVMs"):
         if not get_setting("DEBUG"):
             assert len(exist_indices) >= get_setting("CANDIDATE_MIN_TERM_COUNT") #TODO this is relevant-metainf!!
-        cand_mets, decision_plane = create_candidate_svm(mds, term, exist_indices, descriptions)
+        cand_mets, decision_plane = create_candidate_svm(embedding, term, exist_indices, descriptions)
         metrics[term] = cand_mets
         decision_planes[term] = decision_plane
     if verbose:
@@ -32,10 +32,10 @@ def create_candidate_svms(dcm, mds, descriptions, prim_lambda, sec_lambda, verbo
                        for term, metrics in sorted_by[:20]]
             print("  "+"\n  ".join(strings))
     sorted_kappa = [(i[0], i[1]["kappa"]) for i in sorted(metrics.items(), key=lambda x:x[1]["kappa"], reverse=True)]
-    if verbose and mds.embedding_.shape[1] == 3:
-        create_candidate_svm(mds, sorted_kappa[0][0], dcm.term_existinds(use_index=False)[sorted_kappa[0][0]], descriptions, plot_svm=True)
+    if verbose and embedding.embedding_.shape[1] == 3:
+        create_candidate_svm(embedding, sorted_kappa[0][0], dcm.term_existinds(use_index=False)[sorted_kappa[0][0]], descriptions, plot_svm=True)
         while (another := input("Another one to display: ").strip()) != "" and another not in dcm.term_existinds(use_index=False):
-            create_candidate_svm(mds, another, dcm.term_existinds(use_index=False)[another], descriptions, plot_svm=True)
+            create_candidate_svm(embedding, another, dcm.term_existinds(use_index=False)[another], descriptions, plot_svm=True)
     clusters, cluster_directions = select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda)
     return clusters, cluster_directions, decision_planes, metrics
 

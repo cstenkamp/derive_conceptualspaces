@@ -7,10 +7,12 @@ import logging
 from datetime import datetime
 from time import sleep
 import sys
+import importlib.util
 
 if abspath(join(dirname(__file__), "../..")) not in sys.path:
     sys.path.append(abspath(join(dirname(__file__), "../..")))
 
+from dotenv import load_dotenv
 import click
 
 from misc_util.telegram_notifier import telegram_notify
@@ -49,6 +51,8 @@ from derive_conceptualspace.semantic_directions.create_candidate_svm import (
     create_candidate_svms as create_candidate_svms_base
 )
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
+from derive_conceptualspace.load_data import dataset_specifics
+from derive_conceptualspace.pipeline import setup_json_persister, print_settings, cluster_loader
 
 logger = logging.getLogger(basename(__file__))
 flatten = lambda l: [item for sublist in l for item in sublist]
@@ -57,6 +61,8 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 ########################################################################################################################
 ########################################################################################################################
 #cli helpers & main
+#TODO putt the stuff from here in ../pipeline.py
+
 
 normalify = lambda txt: "".join([i for i in txt.lower() if i.isalpha() or i in "_"])
 
@@ -79,34 +85,6 @@ def loadstore_settings_envvars(ctx, use_auto_envvar_prefix=False):
         else:
             set_envvar(envvarname, ctx.obj[param])
 
-def get_jsonpersister_args():
-    import derive_conceptualspace.settings
-    all_params = [k[4:].lower() for k in derive_conceptualspace.settings.__dict__ if k.startswith("ALL_")]
-    forward_meta_inf = ["n_samples", "faster_keybert", "candidate_min_term_count"]
-    dir_struct = ["{n_samples}_samples", "{pp_components}_{translate_policy}","{quantification_measure}_{embed_algo}_{embed_dimensions}d", "{extraction_method}_{dcm_quant_measure}"]
-               # ["{n_samples}_samples", "preproc-{pp_components}_{translate_policy}", "{quantification_measure}_{embed_dimensions}dim",]
-    return all_params, forward_meta_inf, dir_struct
-
-
-def setup_json_persister(ctx, ignore_nsamples=False):
-    all_params, forward_meta_inf, dir_struct = get_jsonpersister_args()
-    json_persister = JsonPersister(ctx.obj["base_dir"], ctx.obj["base_dir"], ctx,
-                                   forward_params = all_params, forward_meta_inf = forward_meta_inf, dir_struct = dir_struct,
-                                   add_relevantparams_to_filename=ctx.obj.get("add_relevantparams_to_filename", True),
-                                   strict_metainf_checking=ctx.obj["strict_metainf_checking"],
-                                  )
-    if ignore_nsamples:
-        n_samples_getter = lambda: "ANY"
-        cand_ntc_getter = lambda: "ANY"
-    else:
-        n_samples_getter = lambda: get_setting("DEBUG_N_ITEMS", silent=True) if get_setting("DEBUG", silent=True) else 847 #TODO don't hard-code this!
-        cand_ntc_getter = lambda: get_setting("CANDIDATE_MIN_TERM_COUNT", silent=True)
-    json_persister.default_metainf_getters = {"n_samples": n_samples_getter,
-                                              "candidate_min_term_count": cand_ntc_getter,
-                                              "prim_lambda": lambda: "ANY",
-                                              "sec_lambda": lambda: "ANY",
-                                              "max_ngram": lambda: get_setting("MAX_NGRAM", silent=True)}
-    return json_persister
 
 
 def set_debug(ctx, use_auto_envvar_prefix=False):
@@ -135,11 +113,8 @@ def click_pass_add_context(fn):
         ctx = args[0]
         loadstore_settings_envvars(ctx)
         nkw = {k:v for k,v in {**kwargs, **ctx.obj}.items() if k in set(inspect.getfullargspec(fn).args)-{"ctx", "context"}}
-        if isinstance(ctx.command, click.Command) and not isinstance(ctx.command, click.Group): #print settings
-            import derive_conceptualspace.settings
-            all_params = {i: get_setting(i.upper(), stay_silent=True, silent=True) for i in get_jsonpersister_args()[0]}
-            default_params = {k[len("DEFAULT_"):].lower():v for k,v in derive_conceptualspace.settings.__dict__.items() if k in ["DEFAULT_"+i.upper() for i in all_params.keys()]}
-            print("Running with the following settings:", ", ".join([f"{k}: *{'b' if v==default_params[k] else 'r'}*{v}*{'b' if v==default_params[k] else 'r'}*" for k, v in all_params.items()]))
+        if isinstance(ctx.command, click.Command) and not isinstance(ctx.command, click.Group):
+            print_settings() #TODO Once I use the other context here, I can use ctx.print_settings()
         res = fn(*args, **nkw)
         if isinstance(ctx.command, click.Group):
             if ctx.obj["notify_telegram"] == True:
@@ -149,10 +124,16 @@ def click_pass_add_context(fn):
     return wrapped
 
 
+
+
 @click.group()
 @click.argument("base-dir", type=str)
+@click.option("--env-file", callback=lambda ctx, param, value: load_dotenv(value) if param.human_readable_name == "env_file" and value else None,
+              default=lambda: get_setting("ENV_FILE", default_none=True), type=click.Path(exists=True), is_eager=True,
+              help="If you want to provide environment-variables using .env-files you can provide the path to a .env-file here.")
+@click.option("--dataset", type=str, default=lambda: get_setting("DATASET_NAME"))
 @click.option("--verbose/--no-verbose", default=True, help="default: True")
-@click.option("--debug/--no-debug", default=lambda: get_setting("DEBUG"), help=f"If True, many functions will only run on a few samples, such that everything should run really quickly. Default: {get_setting('DEBUG')}")
+@click.option("--debug/--no-debug", default=lambda: get_setting("DEBUG"), help=f"If True, many functions will only run on a few samples, such that everything should run really quickly. Default: {get_setting('DEBUG', silent=True)}")
 @click.option("--log", type=str, default="INFO", help="log-level for logging-module. one of [DEBUG, INFO, WARNING, ERROR, CRITICAL]")
 @click.option("--logfile", type=str, default="", help="logfile to log to. If not set, it will be logged to standard stdout/stderr")
 @click.option("--notify-telegram/--no-notify-telegram", default=False, help="If you want to get telegram-notified of start & end of the command")
@@ -163,8 +144,9 @@ def cli(ctx):
     print("Starting up at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
     setup_logging(ctx.obj["log"], ctx.obj["logfile"])
     set_debug(ctx)
+    ctx.obj["dataset_class"] = dataset_specifics.load_dataset_class(ctx.obj["dataset"])
     ctx.obj["json_persister"] = setup_json_persister(ctx)
-
+    #TODO statt diese beidne hier zu machen, kann ich nicht doch die selbe Context-Klasse wie Snakemake und Jupyter nehmen?
 
 @cli.resultcallback()
 def process_result(*args, **kwargs):
@@ -216,7 +198,7 @@ def translate_descriptions(ctx, translate_policy, raw_descriptions_file, languag
 @click.option("--title-translations-file", type=str, default="translated_titles.json")
 @click.option("--max-ngram", type=int, default=lambda: get_setting("MAX_NGRAM"))
 @click_pass_add_context
-def preprocess_descriptions(ctx, raw_descriptions_file, languages_file, translations_file, title_languages_file, title_translations_file):
+def preprocess_descriptions(ctx, dataset_class, raw_descriptions_file, languages_file, translations_file, title_languages_file, title_translations_file):
     raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
     languages = ctx.obj["json_persister"].load(languages_file, "languages", ignore_params=["pp_components", "translate_policy"], loader=lambda langs: langs)
     try:
@@ -229,7 +211,7 @@ def preprocess_descriptions(ctx, raw_descriptions_file, languages_file, translat
         # TODO[e] depending on pp_compoments, title_languages etc may still allowed to be empty
     else:
         translations, title_translations = None, None
-    descriptions, metainf = preprocess_descriptions_base(raw_descriptions, ctx.obj["pp_components"], ctx.obj["translate_policy"], languages, translations, title_languages, title_translations)
+    descriptions, metainf = preprocess_descriptions_base(raw_descriptions, dataset_class, ctx.obj["pp_components"], ctx.obj["translate_policy"], languages, translations, title_languages, title_translations)
     ctx.obj["json_persister"].save("pp_descriptions.json", descriptions=descriptions, relevant_metainf=metainf)
 
 
@@ -438,8 +420,6 @@ def rank_courses_saldirs(ctx):
     from itertools import combinations
     from tqdm import tqdm
 
-    cluster_loader = lambda **di: dict(clusters=di["clusters"], cluster_directions=di["cluster_directions"],
-                                       decision_planes={k: NDPlane(np.array(v[1][0]),v[1][1]) for k, v in di["decision_planes"].items()}, metrics=di["metrics"])
     ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, "clusters", loader=cluster_loader)
     ctx.obj["pp_descriptions"].add_embeddings(ctx.obj["embedding"].embedding_)
     _, _, decision_planes, metrics = ctx.obj["clusters"].values()
@@ -447,6 +427,7 @@ def rank_courses_saldirs(ctx):
     for k, v in metrics.items():
         metrics[k]["existinds"] = existinds[k]
         metrics[k]["decision_plane"] = decision_planes[k]
+    n_items = len(ctx.obj["pp_descriptions"])
 
     # TODO this is only bc in debug i set the min_existinds to 1
     metrics = {k:v for k,v in metrics.items() if len(v["existinds"]) >= 25}
@@ -469,13 +450,15 @@ def rank_courses_saldirs(ctx):
     for nkey1, (key1, inds1) in enumerate(tqdm(existinds.items(), desc="Checking all overlaps")):
         n1 = len(inds1)
         for key2, inds2 in list(existinds.items())[nkey1+1:]:
-            overlap_percentages = (n12 := len(inds1 & inds2)) / n1, n12 / len(inds2), n12 / (n1+len(inds2)), n1/len(ctx.obj["pp_descriptions"]), len(inds2)/len(ctx.obj["pp_descriptions"])
+            overlap_percentages = (n12 := len(inds1 & inds2)) / n1, n12 / len(inds2), n12 / (n1+len(inds2)), n1/n_items, len(inds2)/n_items
             all_overlaps[(key1, key2)] = overlap_percentages
     for val in range(3):
         ar = np.array([i[val] for i in all_overlaps.values()])
         print(f"[{val}]: Mean Overlap of respective exist-indices: {ar[ar>0].mean()*100:.2f}% for those with any overlap, {ar.mean()*100:.2f}% overall")
     merge_candidates = [[k[0], k[1]] for k,v in all_overlaps.items() if v[2] > 0.45 and max(v[3], v[4]) < 0.1]
 
+    docfreq = {k: len(v["existinds"]) / n_items for k, v in metrics.items()}
+    #TODO VISR12 have a "critique entropy", which is high for tags which seperate an entity from similar entities, isn't that useful?
 
 @generate_conceptualspace.command()
 @click_pass_add_context
@@ -510,25 +493,26 @@ def run_lsi_gensim(ctx, filtered_dcm):
 def run_lsi(ctx, filtered_dcm):
     """as in [VISR12: 4.2.1]"""
     from sklearn.decomposition import TruncatedSVD
-    from scipy.spatial.distance import cosine
+    from scipy.spatial.distance import cosine, cdist
     import numpy as np
     from tqdm import tqdm
     if ctx.obj["verbose"]:
         filtered_dcm.show_info(descriptions=ctx.obj["pp_descriptions"])
         if get_setting("DCM_QUANT_MEASURE") != "binary":
-            warnings.warn("VISR12 say it works best with binary!")
+            logger.warn("VISR12 say it works best with binary!")
     orig_len = len(filtered_dcm.dtm)
     filtered_dcm.add_pseudo_keyworddocs()
     #https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.TruncatedSVD.html
     svd = TruncatedSVD(n_components=100, random_state=get_setting("RANDOM_SEED"))
     transformed = svd.fit_transform(filtered_dcm.as_csr().T)
-    desc_psdoc_dists = np.zeros([orig_len, len(filtered_dcm.all_terms)])
-    for desc in tqdm(range(orig_len)):
-        for psdoc in range(orig_len, len(filtered_dcm.dtm)):
-            desc_psdoc_dists[desc, psdoc-len(filtered_dcm.all_terms)] = cosine(transformed[desc], transformed[psdoc])
-    tenth_lowest = np.partition(desc_psdoc_dists.min(axis=1), 10)[10] #https://stackoverflow.com/a/43171216/5122790
+    desc_psdoc_dists = cdist(transformed[:orig_len], transformed[orig_len:], "cosine")
+    already_keywords = [[ind, j[0]] for ind, elem in enumerate(filtered_dcm.dtm[:orig_len]) for j in elem] #we don't gain information from those that are close but already keywords
+    desc_psdoc_dists[list(zip(*already_keywords))] = np.inf
+    WHICH_LOWEST = 30
+    tenth_lowest = np.partition(desc_psdoc_dists.min(axis=1), WHICH_LOWEST)[WHICH_LOWEST] #https://stackoverflow.com/a/43171216/5122790
     good_fits = np.where(desc_psdoc_dists.min(axis=1) < tenth_lowest)[0]
     for ndesc, keyword in zip(good_fits, np.argmin(desc_psdoc_dists[good_fits], axis=1)):
+        assert not filtered_dcm.all_terms[keyword] in ctx.obj["pp_descriptions"]._descriptions[ndesc]
         print(f"*b*{filtered_dcm.all_terms[keyword]}*b*", ctx.obj["pp_descriptions"]._descriptions[ndesc])
     print()
 #
