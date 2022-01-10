@@ -61,7 +61,44 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 ########################################################################################################################
 ########################################################################################################################
 #cli helpers & main
+#TODO putt the stuff from here in ../pipeline.py
 
+
+normalify = lambda txt: "".join([i for i in txt.lower() if i.isalpha() or i in "_"])
+
+def loadstore_settings_envvars(ctx, use_auto_envvar_prefix=False):
+    """auto_envvar_prefix only works for options, not for arguments. So this function overwrites ctx.params & ctx.obj
+       from env-vars (if they have the correct prefix), and also SETS these env-vars from the cmd-args such that they
+       can be accessed using get_setting() """
+    env_prefix = ctx.auto_envvar_prefix if use_auto_envvar_prefix else ENV_PREFIX
+    #the auto_envvar_prefix always gets appended the subcommand, I don't want that generally though.
+    for param, val in ctx.params.items():
+        if param.upper() in NORMALIFY_PARAMS:
+            val = normalify(val)
+        ctx.obj[param] = val
+        envvarname = env_prefix+"_"+param.upper().replace("-","_")
+        # https://github.com/pallets/click/issues/714#issuecomment-651389598
+        if (envvar := get_envvar(envvarname)) is not None and envvar != ctx.params[param]:
+            print(f"The param {param} used to be *r*{ctx.params[param]}*r*, but is overwritten by an env-var to *b*{envvar}*b*")
+            ctx.params[param] = envvar
+            ctx.obj[param] = envvar
+        else:
+            set_envvar(envvarname, ctx.obj[param])
+
+
+
+def set_debug(ctx, use_auto_envvar_prefix=False):
+    env_prefix = ctx.auto_envvar_prefix if use_auto_envvar_prefix else ENV_PREFIX
+    if get_setting("DEBUG"):
+        if not os.getenv(env_prefix+"_DEBUG_SET"):
+            assert env_prefix+"_CANDIDATE_MIN_TERM_COUNT" not in os.environ
+            os.environ[env_prefix + "_CANDIDATE_MIN_TERM_COUNT"] = "1"
+            print(f"Debug is active! #Items for Debug: {get_setting('DEBUG_N_ITEMS')}")
+            if get_setting("RANDOM_SEED", default_none=True): print("Using a random seed!")
+        if get_setting("RANDOM_SEED", default_none=True):
+            random.seed(get_setting("RANDOM_SEED"))
+        assert os.environ[env_prefix + "_CANDIDATE_MIN_TERM_COUNT"] == "1"
+        os.environ[env_prefix+"_DEBUG_SET"] = "1"
 
 
 
@@ -85,6 +122,8 @@ def click_pass_add_context(fn):
                     ctx.command.get_command(ctx, ctx.invoked_subcommand).callback = telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(ctx.command.get_command(ctx, ctx.invoked_subcommand).callback)
         return res
     return wrapped
+
+
 
 
 @click.group()
@@ -159,7 +198,7 @@ def translate_descriptions(ctx, translate_policy, raw_descriptions_file, languag
 @click.option("--title-translations-file", type=str, default="translated_titles.json")
 @click.option("--max-ngram", type=int, default=lambda: get_setting("MAX_NGRAM"))
 @click_pass_add_context
-def preprocess_descriptions(ctx, dataset_class, pp_components, translate_policy, raw_descriptions_file, languages_file, translations_file, title_languages_file, title_translations_file):
+def preprocess_descriptions(ctx, dataset_class, raw_descriptions_file, languages_file, translations_file, title_languages_file, title_translations_file):
     raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
     languages = ctx.obj["json_persister"].load(languages_file, "languages", ignore_params=["pp_components", "translate_policy"], loader=lambda langs: langs)
     try:
@@ -172,7 +211,7 @@ def preprocess_descriptions(ctx, dataset_class, pp_components, translate_policy,
         # TODO[e] depending on pp_compoments, title_languages etc may still allowed to be empty
     else:
         translations, title_translations = None, None
-    descriptions, metainf = preprocess_descriptions_base(raw_descriptions, dataset_class, pp_components, translate_policy, languages, translations, title_languages, title_translations)
+    descriptions, metainf = preprocess_descriptions_base(raw_descriptions, dataset_class, ctx.obj["pp_components"], ctx.obj["translate_policy"], languages, translations, title_languages, title_translations)
     ctx.obj["json_persister"].save("pp_descriptions.json", descriptions=descriptions, relevant_metainf=metainf)
 
 
@@ -193,9 +232,9 @@ def create_spaces(ctx):
 
 @create_spaces.command()
 @click_pass_add_context
-def create_dissim_mat(ctx, quantification_measure):
+def create_dissim_mat(ctx):
     pp_descriptions = ctx.obj["json_persister"].load(None, "pp_descriptions", ignore_params=["quantification_measure"], loader=DescriptionList.from_json)
-    quant_dtm, dissim_mat, metainf = create_dissim_mat_base(pp_descriptions, quantification_measure, ctx.obj["verbose"])
+    quant_dtm, dissim_mat, metainf = create_dissim_mat_base(pp_descriptions, ctx.obj["quantification_measure"], ctx.obj["verbose"])
     ctx.obj["json_persister"].save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat, relevant_metainf=metainf)
 
 
@@ -203,11 +242,11 @@ def create_dissim_mat(ctx, quantification_measure):
 @click.option("--embed-dimensions", type=int, default=lambda: get_setting("EMBED_DIMENSIONS", silent=True))
 @click.option("--embed-algo", type=click.Choice(ALL_EMBED_ALGO, case_sensitive=False), default=lambda: get_setting("EMBED_ALGO", silent=True))
 @click_pass_add_context
-def create_embedding(ctx, embed_dimensions, embed_algo):
+def create_embedding(ctx):
     dissim_mat = ctx.obj["json_persister"].load(None, "dissim_mat", ignore_params=["embed_dimensions"], loader=dtm_dissimmat_loader)
     pp_descriptions = ctx.obj["json_persister"].load(None, "pp_descriptions", ignore_params=["quantification_measure"], loader=DescriptionList.from_json, silent=True) \
                       if ctx.obj["verbose"] else None
-    embedding = create_embedding_base(dissim_mat, embed_dimensions, embed_algo, ctx.obj["verbose"], pp_descriptions=pp_descriptions)
+    embedding = create_embedding_base(dissim_mat, ctx.obj["embed_dimensions"], ctx.obj["embed_algo"], ctx.obj["verbose"], pp_descriptions=pp_descriptions)
     ctx.obj["json_persister"].save("embedding.json", embedding=embedding)
 
 ########################################################################################################################
@@ -239,7 +278,7 @@ def extract_candidateterms_stanfordlp(ctx):
 @click.option("--max-ngram", default=lambda: get_setting("MAX_NGRAM"))
 @click_pass_add_context
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
-def extract_candidateterms(ctx, max_ngram, extraction_method):
+def extract_candidateterms(ctx, max_ngram):
     #TODO if not NGRAMS_IN_EMBEDDING and extraction_method in tfidf/ppmi, you have to re-extract, otherwise you won't get n-grams
     candidateterms, relevant_metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.obj["extraction_method"], max_ngram, ctx.obj["faster_keybert"], verbose=ctx.obj["verbose"])
     ctx.obj["json_persister"].save("candidate_terms.json", candidateterms=candidateterms, relevant_metainf=relevant_metainf)

@@ -2,6 +2,8 @@ import re
 from derive_conceptualspace.load_data.dataset_specifics import BaseDataset
 
 class Dataset(BaseDataset):
+    N_ITEMS = 4074
+
     @staticmethod
     def preprocess_raw_file(df, min_desc_len=10):
         """loads the given Siddata-Style CSV into a pandas-dataframe, already performing some processing like

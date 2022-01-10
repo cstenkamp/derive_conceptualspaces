@@ -9,7 +9,12 @@ def load_dataset_class(dataset_name):
     return specifics_module.Dataset
 
 class BaseDataset(ABC):
+    @property
+    @abstractmethod
+    def N_ITEMS():
+        ...
+
     @staticmethod
     @abstractmethod
     def preprocess_raw_file(df, *args, **kwargs):
-        raise NotImplementedError()
+        ...
