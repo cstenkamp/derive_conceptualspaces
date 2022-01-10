@@ -130,7 +130,6 @@ def prepare_dump(*args, write_meta=True, **kwargs):
     if write_meta:
         content = {"git_hash": get_commithash(), "settings": get_settings(), "date": str(datetime.now()),
                    "env_vars": {k:v for k,v in os.environ.items() if k.startswith(settings.ENV_PREFIX+"_")}, "cmdargs": sys.argv, "content": args[0]}
-        #TODO: also stored plots, ...
     else:
         content = args[0]
     return content
@@ -206,6 +205,7 @@ class JsonPersister():
         self.default_metainf_getters = {}
         self.strict_metainf_checking = strict_metainf_checking
         self.created_data = {}
+        self.used_config = {}
 
     def get_subdir(self, relevant_metainf, ignore_params=None):
         if not (self.dir_struct and all(i for i in self.dir_struct)):
@@ -292,7 +292,11 @@ class JsonPersister():
         return obj
 
 
+    def get_path(self, basename):
+        print()
+
     def save(self, basename, /, relevant_params=None, relevant_metainf=None, force_overwrite=False, **kwargs):
+        #TODO use get_path here
         basename, ext = splitext(basename)
         filename = basename
         if relevant_params is not None:
@@ -300,6 +304,9 @@ class JsonPersister():
             assert len(set(relevant_params)) == len(relevant_params)
         else:
             relevant_params = [i for i in self.forward_params if i in self.ctx.obj]
+        if ( more_settings := {k.lower(): v for k,v in self.used_config.items() if k in settings.ADD_TO_NAME}):
+            self.ctx.obj.update(more_settings)
+            relevant_params += more_settings.keys()
         relevant_metainf = {**self.loaded_relevant_metainf, **(relevant_metainf or {})}
         subdir, used_args = self.get_subdir(relevant_metainf)
         if self.add_relevantparams_to_filename and [i for i in relevant_params if i not in used_args]:
@@ -316,3 +323,7 @@ class JsonPersister():
 
     def add_data(self, title, data):
         self.created_data[title] = json.dumps(data, cls=NumpyEncoder)
+
+    def add_config(self, key, val):
+        assert self.used_config.get(key, val) == val
+        self.used_config[key] = val

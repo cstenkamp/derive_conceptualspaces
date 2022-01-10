@@ -6,6 +6,10 @@ ENV_PREFIX = "MA"
 ############################################## the important parameters ################################################
 ########################################################################################################################
 
+ADD_TO_NAME = "MIN_WORDS_PER_DESC"
+
+ALL_MIN_WORDS_PER_DESC = [50, 20]
+
 #!! use singular for these (bzw the form you'd use if there wasn't the "ALL_" before)
 ALL_PP_COMPONENTS = ["aucsd2", "autcsldp"] #,"tcsdp"                 # If in preprocessing it should add coursetitle, lemmatize, etc #TODO "autcsldp", "tcsldp" (gehen gerade nicht weil die nicht mit ngrams klarkommen)
 ALL_TRANSLATE_POLICY = ["translate", "origlang", "onlyeng"]          # If non-english descriptions should be translated
@@ -90,6 +94,22 @@ def get_envvar(envvarname):
     return None
 
 
+from functools import wraps
+import sys
+
+def notify_jsonpersister(fn):
+    @wraps(fn)
+    def wrapped(*args, **kwargs):
+        res = fn(*args, **kwargs)
+        if not kwargs.get("silent"):
+            if hasattr(sys.stdout, "ctx"):  # TODO getting the json_serializer this way is dirty as fuck!
+                if "json_persister" in sys.stdout.ctx.obj:
+                    sys.stdout.ctx.obj["json_persister"].add_config(args[0], res)
+        return res
+    return wrapped
+
+
+@notify_jsonpersister
 def get_setting(name, default_none=False, silent=False, set_env_from_default=False, stay_silent=False):
     suppress_further = True if not silent else True if stay_silent else False
     if get_envvar(ENV_PREFIX+"_"+name) is not None:

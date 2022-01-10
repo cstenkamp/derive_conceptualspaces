@@ -6,14 +6,18 @@ ALL Combis:    `ma_cont snakemake --cores 1 -p  --directory /opt/data all --keep
 ALL for 1 rule `(export $(cat $MA_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR all_for --config for_rule=create_embedding)`
 Plot DAG:      `PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -np --directory $MA_DATA_DIR --dag | grep -A99999 "digraph" | dot -Tsvg > dag.svg`
 Get results:   `rsync -az --progress $MA_DATA_DIR etlpipelines:~/data --exclude .snakemake`
+UPDATE: ` (export $(cat $MA_SELECT_ENV_FILE | xargs) && export $(cat $MA_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR/$MA_DATASET_NAME)`
 """
 
 #TODO before writing about it: have a way of not having to set the PYTHONPATH as cmd-arg
 
 import os
+from string import Formatter
+from functools import partial
 
 from snakemake.io import expand
 
+from derive_conceptualspace import settings
 from misc_util.pretty_print import pretty_print as print
 from misc_util.telegram_notifier import telegram_notify
 
@@ -41,24 +45,23 @@ from derive_conceptualspace.create_spaces.create_embedding import (
 from derive_conceptualspace.semantic_directions.create_candidate_svm import (
     create_candidate_svms as create_candidate_svms_base
 )
-from derive_conceptualspace.pipeline import Context
+from derive_conceptualspace.pipeline import Context, cast_config
 
 from derive_conceptualspace.settings import (
     get_setting,
     ENV_PREFIX,
-    ALL_PP_COMPONENTS,
-    ALL_TRANSLATE_POLICY,
-    ALL_QUANTIFICATION_MEASURE,
-    ALL_DCM_QUANT_MEASURE,
-    ALL_EXTRACTION_METHOD,
-    ALL_EMBED_DIMENSIONS,
-    ALL_EMBED_ALGO,
-    FORBIDDEN_COMBIS, set_envvar, NORMALIFY_PARAMS, get_envvar
+    set_envvar,
+    get_envvar,
+    NORMALIFY_PARAMS, FORBIDDEN_COMBIS
 )
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
-from derive_conceptualspace.cli.run_pipeline import setup_json_persister, set_debug, get_jsonpersister_args, normalify
+from derive_conceptualspace.cli.run_pipeline import set_debug
+from derive_conceptualspace.pipeline import setup_json_persister, get_jsonpersister_args
 from derive_conceptualspace.util.desc_object import DescriptionList
 from misc_util.logutils import CustomIO
+from misc_util.pretty_print import print_multicol
+from derive_conceptualspace.load_data import dataset_specifics
+from derive_conceptualspace import settings
 
 ########################################################################################################################
 ########################################################################################################################
@@ -76,7 +79,8 @@ def initialize_snakemake():
         for k, v in dict(globals()).items():
             if k.endswith("_base") and callable(v):
                 globals()[k] =  telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(globals()[k])
-    ctx = Context(base_dir=os.getcwd())
+    ctx = Context(base_dir=os.path.join(os.getcwd(), ".."), dataset_name=get_setting("DATASET_NAME", silent=True))
+    ctx.obj["dataset_class"] = dataset_specifics.load_dataset_class(ctx.obj["dataset"])
     CustomIO.init(ctx)
     ctx.obj["json_persister"] = setup_json_persister(ctx, ignore_nsamples=True)
     set_debug(ctx)
@@ -87,13 +91,9 @@ ctx, json_persister = initialize_snakemake()
 
 def add_to_ctx(wildcards, ctx):
     for k, v in wildcards.items():
-        if k.upper() in NORMALIFY_PARAMS:
-            v = normalify(v)
-        if isinstance(v, str) and v.isnumeric():
-            ctx.obj[k] = int(v)
-        else:
-            ctx.obj[k] = v
-        set_envvar(ENV_PREFIX+"_"+k.upper().replace("-","_"), ctx.obj[k])
+        v = cast_config(k,v)
+        ctx.obj[k] = v
+        set_envvar(ENV_PREFIX+"_"+k.upper().replace("-","_"), v)
 
 
 def autoload_context_inputs(ctx, inputs, wildcards, params=None, input_kwargs=None):
@@ -101,40 +101,44 @@ def autoload_context_inputs(ctx, inputs, wildcards, params=None, input_kwargs=No
     input_kwargs could eg. be: `input_kwargs={"pp_descriptions": {"relevant_metainf": {"n_samples": "ANY"}}}` to ignore the n_samples check for ONE call.
     TO ignore it from all,
     """
+    def loader(key):
+        if key in ctx.autoloader_di:
+            return ctx.autoloader_di[key]
+        return lambda **kwargs: kwargs[key] if key in kwargs else kwargs
     input_kwargs = input_kwargs or {}
     add_to_ctx(wildcards, ctx)
     if params: add_to_ctx(params, ctx)
     for key, val in inputs.items():
-        ctx.obj[key] = json_persister.load(val, key, loader=autoloader_di.get(key), **input_kwargs.get(key, {}))
+        ctx.obj[key] = json_persister.load(val, key, loader=loader(key), **input_kwargs.get(key, {}))
 
 
 ########################################################################################################################
 ########################################################################################################################
 ########################################################################################################################
 
-n_samples = 847 if not get_setting("DEBUG") else get_setting("DEBUG_N_ITEMS") #TODO obviously don't hardcode
 dir_struct = get_jsonpersister_args()[2]
 
-
-rule all:
+rule trigger_default:
     input:
-        [i for i in
-            expand(os.sep.join(dir_struct+["clusters.json"]),
-                    pp_components=ALL_PP_COMPONENTS, translate_policy=ALL_TRANSLATE_POLICY, quantification_measure=ALL_QUANTIFICATION_MEASURE,
-                    embed_dimensions=ALL_EMBED_DIMENSIONS, extraction_method=ALL_EXTRACTION_METHOD, dcm_quant_measure=ALL_DCM_QUANT_MEASURE,
-                    embed_algo=ALL_EMBED_ALGO, n_samples=n_samples)
-            if not any(j in i for j in FORBIDDEN_COMBIS)
-        ]
-
-rule default:
-    input:
-        expand(os.sep.join(dir_struct+["clusters.json"]),
-                pp_components=get_setting("PP_COMPONENTS"), translate_policy=get_setting("TRANSLATE_POLICY"), quantification_measure=get_setting("QUANTIFICATION_MEASURE"),
-                embed_dimensions=get_setting("EMBED_DIMENSIONS"), extraction_method=get_setting("EXTRACTION_METHOD"), dcm_quant_measure=get_setting("DCM_QUANT_MEASURE"),
-                embed_algo=get_setting("EMBED_ALGO"), n_samples=n_samples)
-
+        ".alldone"
 
 ########################################################################################################################
+    # dir_struct = ["debug_{debug}",
+    #               "{pp_components}_{translate_policy}_minwords{min_words_per_desc}",
+    #               "{quantification_measure}_{embed_algo}_{embed_dimensions}d",
+    #               "{extraction_method}_{dcm_quant_measure}"]
+
+generated_paths = dict(
+    pp_descriptions = "debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/pp_descriptions.json",
+    dissim_mat = "debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/dissim_mat_{quantification_measure}.json",
+    embedding = "debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/{quantification_measure}_{embed_algo}_{embed_dimensions}d/embedding.json",
+    candidate_terms = "debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/candidate_terms_{extraction_method}.json",
+    postprocessed_candidates = "debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/postprocessed_candidates_{extraction_method}.json",
+    filtered_dcm = "debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json",
+    clusters = "debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/{quantification_measure}_{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}/clusters.json"
+)
+
+
 
 rule preprocess_descriptions:
     input:
@@ -144,11 +148,11 @@ rule preprocess_descriptions:
         title_languages = "title_languages.json",
         title_translations = "translated_titles.json",
     output:
-        "{n_samples}_samples/{pp_components}_{translate_policy}/pp_descriptions.json"
+        generated_paths["pp_descriptions"]
     threads: 1
     run:
         autoload_context_inputs(ctx, input, wildcards, input_kwargs={"translations": {"force_overwrite": True}, "title_translations": {"force_overwrite": True}, "languages": {"force_overwrite": True}})
-        descriptions, metainf = preprocess_descriptions_base(ctx.obj["raw_descriptions"], wildcards.pp_components, wildcards.translate_policy, ctx.obj["languages"], ctx.obj["translations"], ctx.obj["title_languages"], ctx.obj["title_translations"])
+        descriptions, metainf = preprocess_descriptions_base(ctx.obj["raw_descriptions"], ctx.obj["dataset_class"], wildcards.pp_components, wildcards.translate_policy, ctx.obj["languages"], ctx.obj["translations"], ctx.obj["title_languages"], ctx.obj["title_translations"])
         json_persister.save("pp_descriptions.json", descriptions=descriptions, relevant_metainf=metainf)
 
 
@@ -157,12 +161,12 @@ rule preprocess_descriptions_notranslate:
         raw_descriptions = overwritable("raw_descriptions_file", "kurse-beschreibungen.csv"), #TODO add this to the schema of the rest
         languages = "languages.json",
     output:
-        "{n_samples}_samples/{pp_components}_{translate_policy}/pp_descriptions.json"
+        generated_paths["pp_descriptions"]
     threads: 1
     run:
         assert wildcards.translate_policy != "translate"
         autoload_context_inputs(ctx, input, wildcards)
-        descriptions, metainf = preprocess_descriptions_base(ctx.obj["raw_descriptions"], wildcards.pp_components, wildcards.translate_policy, ctx.obj["languages"])
+        descriptions, metainf = preprocess_descriptions_base(ctx.obj["raw_descriptions"], ctx.obj["dataset_class"], wildcards.pp_components, wildcards.translate_policy, ctx.obj["languages"])
         json_persister.save("pp_descriptions.json", descriptions=descriptions, relevant_metainf=metainf)
 
 ruleorder: preprocess_descriptions > preprocess_descriptions_notranslate
@@ -170,9 +174,9 @@ ruleorder: preprocess_descriptions > preprocess_descriptions_notranslate
 
 rule create_dissim_mat:
     input:
-        pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/pp_descriptions.json"
+        pp_descriptions = generated_paths["pp_descriptions"]
     output:
-        "{n_samples}_samples/{pp_components}_{translate_policy}/dissim_mat_{quantification_measure}.json"
+        generated_paths["dissim_mat"]
     threads: 1
     run:
         autoload_context_inputs(ctx, input, wildcards)
@@ -182,9 +186,9 @@ rule create_dissim_mat:
 
 rule create_embedding:
     input:
-        dissim_mat = "{n_samples}_samples/{pp_components}_{translate_policy}/dissim_mat_{quantification_measure}.json",
+        dissim_mat = generated_paths["dissim_mat"]
     output:
-        "{n_samples}_samples/{pp_components}_{translate_policy}/{quantification_measure}_{embed_algo}_{embed_dimensions}d/embedding.json"
+        generated_paths["embedding"]
     threads: 3
     run:
         autoload_context_inputs(ctx, input, wildcards)
@@ -195,9 +199,9 @@ rule create_embedding:
 
 rule extract_candidate_terms:
     input:
-        pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/pp_descriptions.json"
+        pp_descriptions = generated_paths["pp_descriptions"]
     output:
-        "{n_samples}_samples/{pp_components}_{translate_policy}/candidate_terms_{extraction_method}.json"
+        generated_paths["candidate_terms"]
     threads: 1
     params:
         faster_keybert=get_setting("FASTER_KEYBERT")
@@ -209,10 +213,10 @@ rule extract_candidate_terms:
 
 rule postprocess_candidateterms:
     input:
-        pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/pp_descriptions.json",
-        candidate_terms = "{n_samples}_samples/{pp_components}_{translate_policy}/candidate_terms_{extraction_method}.json"
+        pp_descriptions = generated_paths["pp_descriptions"],
+        candidate_terms = generated_paths["candidate_terms"],
     output:
-        "{n_samples}_samples/{pp_components}_{translate_policy}/postprocessed_candidates_{extraction_method}.json"
+        generated_paths["postprocessed_candidates"]
     threads: 1
     run:
         autoload_context_inputs(ctx, input, wildcards)
@@ -222,10 +226,10 @@ rule postprocess_candidateterms:
 
 rule create_doc_cand_matrix:
     input:
-        pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/pp_descriptions.json",
-        postprocessed_candidates = "{n_samples}_samples/{pp_components}_{translate_policy}/postprocessed_candidates_{extraction_method}.json"
+        pp_descriptions = generated_paths["pp_descriptions"],
+        postprocessed_candidates = generated_paths["postprocessed_candidates"],
     output:
-        "{n_samples}_samples/{pp_components}_{translate_policy}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json"
+        generated_paths["filtered_dcm"]
     threads: 1
     params:
         candidate_min_term_count = get_setting("CANDIDATE_MIN_TERM_COUNT"),
@@ -239,11 +243,11 @@ rule create_doc_cand_matrix:
 
 rule create_candidate_svm:
     input:
-        pp_descriptions = "{n_samples}_samples/{pp_components}_{translate_policy}/pp_descriptions.json",
-        filtered_dcm = "{n_samples}_samples/{pp_components}_{translate_policy}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json",
-        embedding = "{n_samples}_samples/{pp_components}_{translate_policy}/{quantification_measure}_{embed_algo}_{embed_dimensions}d/embedding.json"
+        pp_descriptions = generated_paths["pp_descriptions"],
+        filtered_dcm = generated_paths["filtered_dcm"],
+        embedding = generated_paths["embedding"]
     output:
-        "{n_samples}_samples/{pp_components}_{translate_policy}/{quantification_measure}_{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}/clusters.json"
+        generated_paths["clusters"]
     threads: 3
     params:
         prim_lambda = get_setting("PRIM_LAMBDA"),
@@ -257,22 +261,15 @@ rule create_candidate_svm:
 
 ########################################################################################################################
 
-def print_multicol(lst, line_len=220):
-    max_len = (max(len(i) for i in lst) + 1)
-    n_cols = max(line_len//max_len, 1)
-    divisions = list(zip(*[lst[i::n_cols] for i in range(n_cols)]))
-    for elems in zip(divisions):
-        print("".join([i.ljust(max_len) for i in elems[0]]))
 
-def input_all_for(wildcards):
-    all_rules = {k: v for k, v in rules.__dict__.items() if k not in ["all", "default", "all_for"]}
-    rl = all_rules.get(config.get("for_rule","preprocess_descriptions"))
-    if rl:
+def input_all_for(wildcards, rule_name=None):
+    if not rule_name:
+        all_rules = {k: v for k, v in rules.__dict__.items() if k not in ["all", "default", "all_for"]}
+        rule_name = all_rules.get(config.get("for_rule","preprocess_descriptions"))
+    if rule_name:
         inputs = [i for i in
-             expand(rl.output,
-                 pp_components=ALL_PP_COMPONENTS,translate_policy=ALL_TRANSLATE_POLICY,quantification_measure=ALL_QUANTIFICATION_MEASURE,
-                 embed_dimensions=ALL_EMBED_DIMENSIONS,extraction_method=ALL_EXTRACTION_METHOD,dcm_quant_measure=ALL_DCM_QUANT_MEASURE,
-                 embed_algo=ALL_EMBED_ALGO,n_samples=n_samples)
+             expand(rule_name.output,
+                    **{i[1]: settings.__dict__.get("ALL_"+i[1].upper(), get_setting(i[1].upper())) for i in Formatter().parse(os.sep.join(dir_struct+["clusters.json"])) if i[1]})
             if not any(j in i for j in FORBIDDEN_COMBIS)
         ]
         print("Running all rules for these inputs:")
@@ -280,6 +277,19 @@ def input_all_for(wildcards):
         return inputs
 
 
+rule all:
+    input:
+        partial(input_all_for, rule_name="create_candidate_svm")
+
+
 rule all_for:
     input:
         input_all_for
+
+
+rule default:
+    input:
+        expand(rules.create_candidate_svm.output,
+               **{i[1]:get_setting(i[1].upper()) for i in Formatter().parse(os.sep.join(dir_struct+["clusters.json"])) if i[1]})
+    output:
+        touch(".alldone")
