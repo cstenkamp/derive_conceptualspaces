@@ -189,9 +189,10 @@ class JsonPersister():
     #     candidate_terms["candidate_terms"] = postprocess_candidates(candidate_terms, descriptions)
     #     return model, candidate_terms
 
-    def __init__(self, in_dir, out_dir, ctx, forward_params, forward_meta_inf, dir_struct=None, add_relevantparams_to_filename=True, strict_metainf_checking=True):
-        self.forward_params = forward_params
-        self.forward_meta_inf = forward_meta_inf
+    def __init__(self, in_dir, out_dir, ctx, fname_params, assert_params, dir_struct=None, add_relevantparams_to_filename=True, strict_metainf_checking=True):
+        """which params to extract & forward is automatically detected from the dirstruct. those that are 'only' asserted is provided as assert_params"""
+        self.fname_params = fname_params
+        self.assert_params = assert_params
         #TODO the FORWARD_META_INF here is not used - I can use it to automatically add this in the save-method if the respective keys are in the ctx.obj, such that I don't need to
         # explitly specify them when saving!
         self.dir_struct = dir_struct or []
@@ -295,10 +296,11 @@ class JsonPersister():
     def get_path(self, basename):
         print()
 
-    def save(self, basename, /, relevant_params=None, relevant_metainf=None, force_overwrite=False, **kwargs):
+    def save(self, basename, /, force_overwrite=False, **kwargs):
         #TODO use get_path here
         basename, ext = splitext(basename)
         filename = basename
+        print({k: v for k,v in self.used_config.items() if k in self.fname_params})
         if relevant_params is not None:
             relevant_params += self.loaded_relevant_params
             assert len(set(relevant_params)) == len(relevant_params)

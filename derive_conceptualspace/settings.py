@@ -1,12 +1,33 @@
 from os.path import isfile, abspath
 import os
 
+
 ENV_PREFIX = "MA"
+########################################################################################################################
+################################ stuff necessary for loading & saving & architecture ###################################
+########################################################################################################################
+
+#I'm re-doing how a few things work regarding settings & the jsonPersistor. Previously, there was `all_params`, `forward_meta_inf` and `dir_struct`,
+# and `all_params` was simply all the settings that start with "ALL_" in settings.py. From now on, I have to explicitly list params. And what ARE params?
+# params = relevant configuration for a run, passed forward through the respective files, also making up filepath & filename.
+# -> stimmt nicht, es gibt nur ASSERT_PARAMS und DIR_STRUCT
+# und in snakemake generiert er die automatisch, und woimmer ein ALL_ existiert kann er das nehmen, ez
+
+STRICT_METAINF_CHECKING = True
+
+ASSERT_PARAMS = ["FASTER_KEYBERT", "CANDIDATE_MIN_TERM_COUNT"]
+DIR_STRUCT = ["debug_{debug}",
+              "{pp_components}_{translate_policy}_minwords{min_words_per_desc}",
+              "{quantification_measure}_{embed_algo}_{embed_dimensions}d",
+              "{extraction_method}_{dcm_quant_measure}"]
+FNAME_PARAMS = ["DEBUG", "PP_COMPONENTS", "TRANSLATE_POLICY", "MIN_WORDS_PER_DESC", "QUANTIFICATION_MEASURE", "EMBED_ALGO",
+                "EMBED_DIMENSIONS", "EXTRACTION_METHOD", "DCM_QUANT_MEASURE"]
+
+
+NORMALIFY_PARAMS = ["QUANTIFICATION_MEASURE", "EXTRACTON_METHOD", "EMBED_ALGO", "DCM_QUANT_MEASURE"] #for all params that are in this, eg `Tf-IdF` will become `tfidf`
 ########################################################################################################################
 ############################################## the important parameters ################################################
 ########################################################################################################################
-
-ADD_TO_NAME = "MIN_WORDS_PER_DESC"
 
 ALL_MIN_WORDS_PER_DESC = [50, 20]
 
@@ -19,15 +40,11 @@ ALL_EMBED_ALGO = ["mds", "tsne", "isomap"]                           # Actual Em
 ALL_EMBED_DIMENSIONS = [100, 3] #, 50, 200                           # Actual Embedding of the Descriptions
 ALL_DCM_QUANT_MEASURE = ["ppmi", "tfidf", "count", "binary"]         # Quantification for the Doc-Keyphrase-Matrix       #TODO tag-share
 
-FORBIDDEN_COMBIS = ["tsne_50d", "tsne_100d"]
-
 
 #set default-values for the ALL_... variables (always the first one)
 # `DEFAULT_PP_COMPONENTS = ALL_PP_COMPONENTS[0] \n ...`
 for k, v in {k[4:]: v[0] for k,v in dict(locals()).items() if isinstance(v, list) and k.startswith("ALL_")}.items():
     locals()["DEFAULT_"+k] = v
-
-NORMALIFY_PARAMS = ["QUANTIFICATION_MEASURE", "EXTRACTON_METHOD", "EMBED_ALGO", "DCM_QUANT_MEASURE"] #for all params that are in this, eg `Tf-IdF` will become `tfidf`
 ########################################################################################################################
 ################################################## other default values ################################################
 ########################################################################################################################
@@ -59,11 +76,6 @@ DEFAULT_QUANTEXTRACT_MINVAL = None
 DEFAULT_QUANTEXTRACT_MINVAL_PERC = 0.8
 DEFAULT_QUANTEXTRACT_MINPERDOC = 0
 DEFAULT_QUANTEXTRACT_FORCETAKE_PERC = 0.98
-
-
-#Settings regarding the architecture/platform
-DEFAULT_STRICT_METAINF_CHECKING = True
-
 
 ########################################################################################################################
 ######################################## set and get settings/env-vars #################################################
@@ -101,19 +113,30 @@ def notify_jsonpersister(fn):
     @wraps(fn)
     def wrapped(*args, **kwargs):
         res = fn(*args, **kwargs)
-        if not kwargs.get("silent"):
-            if hasattr(sys.stdout, "ctx"):  # TODO getting the json_serializer this way is dirty as fuck!
-                if "json_persister" in sys.stdout.ctx.obj:
-                    sys.stdout.ctx.obj["json_persister"].add_config(args[0], res)
+        if hasattr(sys.stdout, "ctx"):  # TODO getting the json_serializer this way is dirty as fuck!
+            if "json_persister" in sys.stdout.ctx.obj:
+                sys.stdout.ctx.obj["json_persister"].add_config(args[0], res)
         return res
     return wrapped
+
+
+normalify = lambda txt: "".join([i for i in txt.lower() if i.isalpha() or i in "_"])
+
+def cast_config(k, v):
+    if k.upper() in NORMALIFY_PARAMS:
+        v = normalify(v)
+    if isinstance(v, str) and v.isnumeric():
+        v = int(v)
+    if "DEFAULT_" + k.upper() in globals() and isinstance(globals()["DEFAULT_" + k.upper()], bool) and v in [0, 1]:
+        v = bool(v)
+    return v
 
 
 @notify_jsonpersister
 def get_setting(name, default_none=False, silent=False, set_env_from_default=False, stay_silent=False):
     suppress_further = True if not silent else True if stay_silent else False
     if get_envvar(ENV_PREFIX+"_"+name) is not None:
-        return get_envvar(ENV_PREFIX+"_"+name) if get_envvar(ENV_PREFIX+"_"+name) != "none" else None
+        return cast_config(get_envvar(ENV_PREFIX+"_"+name) if get_envvar(ENV_PREFIX+"_"+name) != "none" else None)
     if "DEFAULT_"+name in globals():
         if not silent and not get_envvar(ENV_PREFIX+"_"+name+"_shutup"):
             print(f"returning setting for {name} from default value: {globals()['DEFAULT_'+name]}")

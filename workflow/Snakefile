@@ -17,7 +17,6 @@ from functools import partial
 
 from snakemake.io import expand
 
-from derive_conceptualspace import settings
 from misc_util.pretty_print import pretty_print as print
 from misc_util.telegram_notifier import telegram_notify
 
@@ -52,15 +51,11 @@ from derive_conceptualspace.settings import (
     ENV_PREFIX,
     set_envvar,
     get_envvar,
-    NORMALIFY_PARAMS, FORBIDDEN_COMBIS
+    FORBIDDEN_COMBIS
 )
-from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
-from derive_conceptualspace.cli.run_pipeline import set_debug
+
 from derive_conceptualspace.pipeline import setup_json_persister, get_jsonpersister_args
-from derive_conceptualspace.util.desc_object import DescriptionList
-from misc_util.logutils import CustomIO
 from misc_util.pretty_print import print_multicol
-from derive_conceptualspace.load_data import dataset_specifics
 from derive_conceptualspace import settings
 
 ########################################################################################################################
@@ -70,7 +65,9 @@ from derive_conceptualspace import settings
 ########################################################################################################################
 
 overwritable = lambda param, value: get_envvar(envvarname = ENV_PREFIX + "_" + param.upper().replace("-","_")) or value
+flatten = lambda l: [item for sublist in l for item in sublist]
 
+LAST_RULE = "create_candidate_svm"
 
 def initialize_snakemake():
     if int(os.getenv(f"{ENV_PREFIX}_SNAKEMAKE_TELEGRAM", 0)):
@@ -80,10 +77,6 @@ def initialize_snakemake():
             if k.endswith("_base") and callable(v):
                 globals()[k] =  telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(globals()[k])
     ctx = Context(base_dir=os.path.join(os.getcwd(), ".."), dataset_name=get_setting("DATASET_NAME", silent=True))
-    ctx.obj["dataset_class"] = dataset_specifics.load_dataset_class(ctx.obj["dataset"])
-    CustomIO.init(ctx)
-    ctx.obj["json_persister"] = setup_json_persister(ctx, ignore_nsamples=True)
-    set_debug(ctx)
     os.environ[f"{ENV_PREFIX}_SMK_INITIALIZED"] = "1"
     return ctx, ctx.obj["json_persister"]
 
@@ -260,18 +253,22 @@ rule create_candidate_svm:
                             relevant_metainf={"prim_lambda": params.prim_lambda, "sec_lambda": params.sec_lambda})
 
 ########################################################################################################################
+########################################################################################################################
+########################################################################################################################
+
+def rule_by_name(name):
+    all_rules = {k: v for k, v in rules.__dict__.items() if k not in ["all", "default", "all_for", "trigger_default"]}
+    return all_rules.get(name)
+
+def expand_output(output, expand_all=False):
+    set_val = (lambda name: settings.__dict__.get("ALL_" + name.upper(), get_setting(name.upper()))) if expand_all else (lambda name: get_setting(name.upper()))
+    return [expand(out, **{i[1]: set_val(i[1]) for i in Formatter().parse(out) if i[1]}) for out in output]
 
 
 def input_all_for(wildcards, rule_name=None):
-    if not rule_name:
-        all_rules = {k: v for k, v in rules.__dict__.items() if k not in ["all", "default", "all_for"]}
-        rule_name = all_rules.get(config.get("for_rule","preprocess_descriptions"))
-    if rule_name:
-        inputs = [i for i in
-             expand(rule_name.output,
-                    **{i[1]: settings.__dict__.get("ALL_"+i[1].upper(), get_setting(i[1].upper())) for i in Formatter().parse(os.sep.join(dir_struct+["clusters.json"])) if i[1]})
-            if not any(j in i for j in FORBIDDEN_COMBIS)
-        ]
+    darule = rule_by_name(rule_name or config.get("for_rule", "preprocess_descriptions"))
+    if darule:
+        inputs = [i for i in flatten(expand_output(darule.output)) if not any(j in i for j in FORBIDDEN_COMBIS)]
         print("Running all rules for these inputs:")
         print_multicol(inputs)
         return inputs
@@ -279,7 +276,7 @@ def input_all_for(wildcards, rule_name=None):
 
 rule all:
     input:
-        partial(input_all_for, rule_name="create_candidate_svm")
+        partial(input_all_for, rule_name=LAST_RULE)
 
 
 rule all_for:
@@ -289,7 +286,6 @@ rule all_for:
 
 rule default:
     input:
-        expand(rules.create_candidate_svm.output,
-               **{i[1]:get_setting(i[1].upper()) for i in Formatter().parse(os.sep.join(dir_struct+["clusters.json"])) if i[1]})
+        expand_output(rule_by_name(LAST_RULE).output)
     output:
         touch(".alldone")
