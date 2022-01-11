@@ -1,7 +1,10 @@
+import os
 from os.path import join
+import random
 
 import numpy as np
 
+from misc_util.logutils import CustomIO
 from .settings import ENV_PREFIX, get_setting
 import derive_conceptualspace.settings
 from .util.base_changer import NDPlane
@@ -15,6 +18,17 @@ from misc_util.pretty_print import pretty_print as print
 ########################################################################################################################
 from .util.jsonloadstore import JsonPersister
 
+normalify = lambda txt: "".join([i for i in txt.lower() if i.isalpha() or i in "_"])
+
+def cast_config(k, v):
+    if k.upper() in derive_conceptualspace.settings.NORMALIFY_PARAMS:
+        v = normalify(v)
+    if isinstance(v, str) and v.isnumeric():
+        v = int(v)
+    if "DEFAULT_" + k.upper() in derive_conceptualspace.settings.__dict__ and isinstance(derive_conceptualspace.settings.__dict__["DEFAULT_" + k.upper()], bool) and v in [0, 1]:
+        v = bool(v)
+    return v
+
 
 def print_settings():
     all_params = {i: get_setting(i.upper(), stay_silent=True, silent=True) for i in get_jsonpersister_args()[0]}
@@ -26,29 +40,38 @@ def get_jsonpersister_args():
     import derive_conceptualspace.settings
     all_params = [k[4:].lower() for k in derive_conceptualspace.settings.__dict__ if k.startswith("ALL_")]
     forward_meta_inf = ["n_samples", "faster_keybert", "candidate_min_term_count"]
-    dir_struct = ["{n_samples}_samples", "{pp_components}_{translate_policy}","{quantification_measure}_{embed_algo}_{embed_dimensions}d", "{extraction_method}_{dcm_quant_measure}"]
-               # ["{n_samples}_samples", "preproc-{pp_components}_{translate_policy}", "{quantification_measure}_{embed_dimensions}dim",]
+    dir_struct = ["debug_{debug}",
+                  "{pp_components}_{translate_policy}_minwords{min_words_per_desc}",
+                  "{quantification_measure}_{embed_algo}_{embed_dimensions}d",
+                  "{extraction_method}_{dcm_quant_measure}"]
     return all_params, forward_meta_inf, dir_struct
 
-def setup_json_persister(ctx, ignore_nsamples=False):
+def setup_json_persister(ctx):
     all_params, forward_meta_inf, dir_struct = get_jsonpersister_args()
     json_persister = JsonPersister(join(ctx.obj["base_dir"], ctx.obj["dataset"]), join(ctx.obj["base_dir"], ctx.obj["dataset"]), ctx,
                                    forward_params = all_params, forward_meta_inf = forward_meta_inf, dir_struct = dir_struct,
                                    add_relevantparams_to_filename=ctx.obj.get("add_relevantparams_to_filename", True),
                                    strict_metainf_checking=ctx.obj["strict_metainf_checking"],
                                   )
-    if ignore_nsamples:
-        n_samples_getter = lambda: "ANY"
-        cand_ntc_getter = lambda: "ANY"
-    else:
-        n_samples_getter = lambda: get_setting("DEBUG_N_ITEMS", silent=True) if get_setting("DEBUG", silent=True) else ctx.obj["dataset_class"].N_ITEMS
-        cand_ntc_getter = lambda: get_setting("CANDIDATE_MIN_TERM_COUNT", silent=True)
-    json_persister.default_metainf_getters = {"n_samples": n_samples_getter,
-                                              "candidate_min_term_count": cand_ntc_getter,
+    json_persister.default_metainf_getters = {"n_samples": lambda: "ANY",
+                                              "candidate_min_term_count": lambda: "ANY",
                                               "prim_lambda": lambda: "ANY",
                                               "sec_lambda": lambda: "ANY",
                                               "max_ngram": lambda: get_setting("MAX_NGRAM", silent=True)}
     return json_persister
+
+def set_debug(ctx, use_auto_envvar_prefix=False):
+    env_prefix = ctx.auto_envvar_prefix if use_auto_envvar_prefix else ENV_PREFIX
+    if get_setting("DEBUG"):
+        if not os.getenv(env_prefix+"_DEBUG_SET"):
+            assert env_prefix+"_CANDIDATE_MIN_TERM_COUNT" not in os.environ
+            os.environ[env_prefix + "_CANDIDATE_MIN_TERM_COUNT"] = "1"
+            print(f"Debug is active! #Items for Debug: {get_setting('DEBUG_N_ITEMS')}")
+            if get_setting("RANDOM_SEED", default_none=True): print("Using a random seed!")
+        if get_setting("RANDOM_SEED", default_none=True):
+            random.seed(get_setting("RANDOM_SEED"))
+        assert os.environ[env_prefix + "_CANDIDATE_MIN_TERM_COUNT"] == "1"
+        os.environ[env_prefix+"_DEBUG_SET"] = "1"
 
 ########################################################################################################################
 ########################################################################################################################
@@ -66,6 +89,7 @@ class Context():
         clusters=cluster_loader,
         languages=lambda **kwargs: kwargs["langs"],
         title_languages=lambda **kwargs: kwargs["title_langs"],
+        raw_descriptions=None,
     )
     ignore_params_di = dict(
         pp_descriptions=["quantification_measure", "embed_dimensions"],
@@ -82,18 +106,25 @@ class Context():
                     "verbose": get_setting("VERBOSE"),
                     "strict_metainf_checking": get_setting("STRICT_METAINF_CHECKING")}
         self.auto_envvar_prefix = ENV_PREFIX
-        self.obj["dataset_class"] = dataset_specifics.load_dataset_class(self.obj["dataset"])
-        self.obj["json_persister"] = setup_json_persister(self)
+        init_context(self)
         if load_params:
             all_params = {i: get_setting(i.upper(), stay_silent=True, silent=True) for i in get_jsonpersister_args()[0]}
             for k, v in all_params.items():
                 self.obj[k.lower()] = v
 
 
-    def load(self, *whats):
+    def load(self, *whats, relevant_metainf=None):
         for what in whats:
-            self.obj[what] = self.obj["json_persister"].load(None, what, loader=self.autoloader_di.get(what, lambda **kwargs: kwargs[what]),
+            self.obj[what] = self.obj["json_persister"].load(None, what, relevant_metainf=relevant_metainf,
+                                                             loader=self.autoloader_di.get(what, lambda **kwargs: kwargs[what]),
                                                              ignore_params=self.ignore_params_di.get(what))
 
     def print_settings(self):
         return print_settings() #TODO Once I use this very context in click, I can put the print_settings() here
+
+
+def init_context(ctx): #works for both a click-Context and my custom one
+    ctx.obj["dataset_class"] = dataset_specifics.load_dataset_class(ctx.obj["dataset"])
+    CustomIO.init(ctx)
+    ctx.obj["json_persister"] = setup_json_persister(ctx)
+    set_debug(ctx)

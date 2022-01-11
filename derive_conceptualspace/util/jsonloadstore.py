@@ -218,7 +218,8 @@ class JsonPersister():
 
 
     def get_file_by_config(self, subdir, relevant_metainf, save_basename):
-        candidates = [join(path, name)[len(join(self.in_dir, subdir)) + 1:] for path, subdirs, files in
+        subdirlen = len(join(self.in_dir, subdir))+1 if str(subdir).endswith(os.sep) else len(join(self.in_dir, subdir))
+        candidates = [join(path, name)[subdirlen:] for path, subdirs, files in
                       os.walk(join(self.in_dir, subdir)) for name in files if name.startswith(save_basename)]
         assert candidates, f"No Candidate for {save_basename}! Subdir: {subdir}"
         if len(candidates) == 1:
@@ -228,12 +229,9 @@ class JsonPersister():
                 correct_cands = []
                 for cand in candidates:
                     tmp = json_load(join(self.in_dir, subdir, cand))
-                    if all(tmp.get("relevant_metainf", {}).get(k, v) == v or v == "ANY" for k, v in
-                           {**self.loaded_relevant_metainf, **relevant_metainf}.items()) and \
-                            all(tmp.get("relevant_params", {}).get(k) for k, v in
-                                self.loaded_relevant_params.items()) and \
-                            all(self.ctx.obj.get(k) == tmp["relevant_params"][k] for k in
-                                set(self.forward_params) & set(tmp.get("relevant_params", {}).keys())):
+                    if (all(tmp.get("relevant_metainf", {}).get(k, v) == v or v == "ANY" for k, v in {**self.loaded_relevant_metainf, **relevant_metainf}.items()) and
+                            # all(tmp.get("relevant_params", {}).get(k) for k, v in self.loaded_relevant_params.items()) and #TODO was this necessary
+                            all(self.ctx.obj.get(k) == tmp["relevant_params"][k] for k in set(self.forward_params) & set(tmp.get("relevant_params", {}).keys()))):
                         correct_cands.append(cand)
                 return correct_cands
 

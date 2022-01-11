@@ -73,6 +73,14 @@ def fmt(*args, isnotebook=False):
     return to_print
 
 
+def print_multicol(lst, line_len=220):
+    max_len = (max(len(i) for i in lst) + 1)
+    n_cols = max(line_len//max_len, 1)
+    divisions = list(zip(*[lst[i::n_cols] for i in range(n_cols)]))
+    for elems in zip(divisions):
+        print("".join([i.ljust(max_len) for i in elems[0]]))
+
+
 if __name__ == "__main__":
     pretty_print(
         "Hello this is **bold** and **this is too**, __and this underlined__, __**and this both**__ and *r*this is red*r*"

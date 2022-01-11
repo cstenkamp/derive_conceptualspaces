@@ -1,8 +1,8 @@
 import re
+import pandas as pd
 from derive_conceptualspace.load_data.dataset_specifics import BaseDataset
 
 class Dataset(BaseDataset):
-    N_ITEMS = 4074
 
     @staticmethod
     def preprocess_raw_file(df, min_desc_len=10):
@@ -10,6 +10,7 @@ class Dataset(BaseDataset):
             dropping duplicates"""
         #TODO in exploration I also played around with Levenhsthein-distance etc!
         #remove those for which the Name (exluding stuff in parantheses) is equal...
+        assert isinstance(df, pd.DataFrame)
         df['NameNoParanth'] = df['Name'].str.replace(re.compile(r'\([^)]*\)'), '')
         df = df.drop_duplicates(subset='NameNoParanth')
         #remove those with too short a description...
