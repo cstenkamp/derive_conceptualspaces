@@ -2,7 +2,7 @@ import os
 from os.path import join
 from types import ModuleType
 
-import src.static.classifier_config
+import fb_classifier.settings
 # from src.static.classifier_config import CLASSIFIER_CHECKPOINT_PATH, SUMMARY_PATH
 import subprocess
 
@@ -24,7 +24,7 @@ def get_all_debug_confs():
 
 
 def get_all_configs(as_string=True):
-    config = {i: eval('src.static.classifier_config.' + i) for i in dir(src.static.classifier_config) if not i.startswith('_')}
+    config = {i: eval('fb_classifier.settings.' + i) for i in dir(fb_classifier.settings) if not i.startswith('_')}
     config = {key: val for key, val in config.items() if
               not callable(val) and not isinstance(val, ModuleType) and key.isupper()}
     if not as_string:

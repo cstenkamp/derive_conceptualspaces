@@ -1,6 +1,7 @@
 import re
 import pandas as pd
 from derive_conceptualspace.load_data.dataset_specifics import BaseDataset
+from fb_classifier.preprocess_data import make_classifier_dict
 
 class Dataset(BaseDataset):
 
@@ -27,4 +28,7 @@ class Dataset(BaseDataset):
             print("There are courses with different VeranstaltungsNummer but equal Name!")
             for n, cont in dups.iterrows():
                 df.loc[n]["Name"] = f"{cont['Name']} ({cont['VeranstaltungsNummer']})"
+        fachbereich = make_classifier_dict(df.set_index("Name")["VeranstaltungsNummer"])
+        assert len(fachbereich) == len(df)
+        df["Fachbereich"] = fachbereich.values()
         return df

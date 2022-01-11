@@ -155,7 +155,7 @@ def rank_courses_saldirs(pp_descriptions, embedding, clusters, filtered_dcm):
 
     docfreq = {k: len(v["existinds"]) / n_items for k, v in metrics.items()}
     # TODO VISR12 have a "critique entropy", which is high for tags which seperate an entity from similar entities, isn't that useful?
-
+    print()
 
 ########################################################################################################################
 ########################################################################################################################

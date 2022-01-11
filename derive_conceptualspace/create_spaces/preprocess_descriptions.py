@@ -23,8 +23,9 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 ########################################################################################################################
 
 class PPComponents():
-    SKCOUNTVEC_SUPPORTS = ["add_coursetitle", "add_subtitle", "remove_stopwords", "convert_lower", "remove_diacritics"]
+    SKCOUNTVEC_SUPPORTS = ["add_coursetitle", "add_subtitle", "remove_stopwords", "convert_lower", "remove_diacritics", "add_fachbereich"]
     OPTION_LETTER = dict(
+        add_fachbereich="f",
         add_coursetitle="a",
         add_subtitle="u",
         sent_tokenize="t",
@@ -72,7 +73,8 @@ def preprocess_descriptions_full(raw_descriptions, dataset_specifics_module, pp_
         descriptions = pd.DataFrame([descriptions.iloc[key] for key in random.sample(range(len(descriptions)), k=get_setting("DEBUG_N_ITEMS"))])
     descriptions = create_bare_desclist(languages, translations, list(descriptions["Name"]), list(descriptions["Beschreibung"]),
                         [i if str(i) != "nan" else None for i in descriptions["Untertitel"]], translate_policy, title_languages, title_translations,
-                        add_coursetitle=pp_components.add_coursetitle, add_subtitle=pp_components.add_subtitle, assert_all_translated=True) #TODO only if translate?!
+                        add_coursetitle=pp_components.add_coursetitle, add_subtitle=pp_components.add_subtitle, assert_all_translated=True, #TODO only if translate?!
+                        additionals=list(descriptions["Fachbereich"]) if pp_components.add_fachbereich else None, additionals_names=["Fachbereich"] if pp_components.add_fachbereich else None)
     if pp_components.use_skcountvec:
         descriptions = pp_descriptions_countvec(descriptions, pp_components, max_ngram).filter_words(min_words=get_setting("MIN_WORDS_PER_DESC"))
         metainf = {"n_samples": len(descriptions), "ngrams_in_embedding": get_setting("NGRAMS_IN_EMBEDDING"), **({"pp_max_ngram": get_setting("MAX_NGRAM")} if get_setting("NGRAMS_IN_EMBEDDING") else {}),
@@ -87,25 +89,29 @@ def preprocess_descriptions_full(raw_descriptions, dataset_specifics_module, pp_
 
 
 def create_bare_desclist(languages, translations, names, descriptions, subtitles, translate_policy, title_languages, title_translations,
-                        assert_all_translated=True, add_coursetitle=False, add_subtitle=False):
+                        assert_all_translated=True, add_coursetitle=False, add_subtitle=False, additionals=None, additionals_names=None):
     """Creates the Bare Descriptions-List. This function handles the *translate_policy* and the pp_components *add_coursetitle* and *add_subtitle*.
     All Other Preprocessing-steps must be done after this step. After this step the Raw Descriptions are superflous."""
     title_languages = title_languages or languages
     orig_lans = [languages[i] for i in names]
-    desc_list = DescriptionList(add_title=add_coursetitle, add_subtitle=add_subtitle, translate_policy=translate_policy)
+    desc_list = DescriptionList(add_title=add_coursetitle, add_subtitle=add_subtitle, translate_policy=translate_policy, additionals_names=additionals_names)
 
     if translate_policy == "origlang":
         for i in range(len(descriptions)):
-            desc_list.add(Description(lang=orig_lans[i], text=descriptions[i], title=names[i], subtitle=subtitles[i], orig_textlang=orig_lans[i], orig_titlelang=title_languages[names[i]]))
+            desc_list.add(Description(lang=orig_lans[i], text=descriptions[i], title=names[i], subtitle=subtitles[i], orig_textlang=orig_lans[i],
+                                      orig_titlelang=title_languages[names[i]], additionals=additionals[i] if additionals is not None else None
+                                      ))
     elif translate_policy == "onlyeng":
         indices = [ind for ind, elem in enumerate(orig_lans) if elem == "en"]
         print(f"Dropped {len(names)-len(indices)} out of {len(names)} descriptions because I will take only the english ones")
         for i in indices:
-            desc_list.add(Description(lang="en", text=descriptions[i], title=names[i], subtitle=subtitles[i], orig_textlang="en", orig_titlelang=title_languages[names[i]]))
+            desc_list.add(Description(lang="en", text=descriptions[i], title=names[i], subtitle=subtitles[i], orig_textlang="en",
+                                      orig_titlelang=title_languages[names[i]], additionals=additionals[i] if additionals is not None else None
+                                      ))
     elif translate_policy == "translate":
         missing_translations = set()
-        for desc, title, subtitle in zip(descriptions, names, subtitles):
-            kwargs = dict(origlang_text=desc, lang="en")
+        for i, (desc, title, subtitle) in enumerate(zip(descriptions, names, subtitles)):
+            kwargs = dict(origlang_text=desc, lang="en", additionals=additionals[i] if additionals is not None else None)
             if languages[title] == "en" or title in translations:
                 if languages[title] == "en":
                     kwargs.update(dict(text=desc, orig_textlang="en", origlang_text=None))

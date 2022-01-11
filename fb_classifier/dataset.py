@@ -4,7 +4,7 @@ from os.path import dirname, join
 import tensorflow as tf
 
 
-from src.static.classifier_config import BATCH_SIZE, LABEL_NAME, DPOINT_NAME, DEBUG_TINY_DATASET
+from fb_classifier.settings import BATCH_SIZE, LABEL_NAME, DPOINT_NAME, DEBUG_TINY_DATASET
 
 
 # https://www.tensorflow.org/guide/data, https://www.tensorflow.org/tutorials/load_data/csv, https://www.tensorflow.org/api_docs/python/tf/data/Dataset,

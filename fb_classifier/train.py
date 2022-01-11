@@ -4,12 +4,12 @@ from datetime import datetime
 import pandas as pd
 from tqdm import tqdm
 
-from src.static.classifier_config import ANN_EPOCHS, CLASSIFIER_CHECKPOINT_PATH, CHECKPOINT_ALL_EPOCHS, LABEL_NAME, DPOINT_NAME, \
+from fb_classifier.settings import ANN_EPOCHS, CLASSIFIER_CHECKPOINT_PATH, CHECKPOINT_ALL_EPOCHS, LABEL_NAME, DPOINT_NAME, \
     DEBUG_SHOW_ANN_INPUT, SUMMARY_PATH, LOG_ALL_EPOCHS, CHECKPOINT_LOG_ALL_TIME, DOMINANT_METRIC
-from src.fb_classifier.model import FB_Classifier
-from src.fb_classifier.util.debug_tools import debug_tf_function
-from src.fb_classifier.dataset import get_dset_len
-from src.fb_classifier.util.misc import check_config, get_ann_configs
+from fb_classifier.model import FB_Classifier
+from fb_classifier.util.debug_tools import debug_tf_function
+from fb_classifier.dataset import get_dset_len
+from fb_classifier.util.misc import check_config, get_ann_configs
 
 flatten_dict = lambda data: dict((key,d[key]) for d in data for key in d)
 

@@ -221,6 +221,7 @@ class JsonPersister():
         subdirlen = len(join(self.in_dir, subdir))+1 if str(subdir).endswith(os.sep) else len(join(self.in_dir, subdir))
         candidates = [join(path, name)[subdirlen:] for path, subdirs, files in
                       os.walk(join(self.in_dir, subdir)) for name in files if name.startswith(save_basename)]
+        candidates = [i if not i.startswith(os.sep) else i[1:] for i in candidates]
         assert candidates, f"No Candidate for {save_basename}! Subdir: {subdir}"
         if len(candidates) == 1:
             return candidates

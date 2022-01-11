@@ -1,13 +1,9 @@
 import inspect
-from functools import wraps
-import os
-from os.path import join, dirname, basename, abspath
-import random
 import logging
-from datetime import datetime
-from time import sleep
 import sys
-import importlib.util
+from datetime import datetime
+from functools import wraps
+from os.path import join, dirname, basename, abspath
 
 if abspath(join(dirname(__file__), "../..")) not in sys.path:
     sys.path.append(abspath(join(dirname(__file__), "../..")))
@@ -16,16 +12,16 @@ from dotenv import load_dotenv
 import click
 
 from misc_util.telegram_notifier import telegram_notify
-from misc_util.logutils import setup_logging, CustomIO
+from misc_util.logutils import setup_logging
 from misc_util.pretty_print import pretty_print as print
 
+from derive_conceptualspace.pipeline import init_context
 from derive_conceptualspace.util.desc_object import DescriptionList
 from derive_conceptualspace.settings import (
-    ALL_TRANSLATE_POLICY, ALL_QUANTIFICATION_MEASURE, ALL_EXTRACTION_METHOD, ALL_DCM_QUANT_MEASURE, ALL_EMBED_ALGO, ALL_DCM_QUANT_MEASURE,
+    ALL_TRANSLATE_POLICY, ALL_QUANTIFICATION_MEASURE, ALL_EXTRACTION_METHOD, ALL_EMBED_ALGO, ALL_DCM_QUANT_MEASURE,
     ENV_PREFIX, NORMALIFY_PARAMS,
     get_setting, set_envvar, get_envvar,
 )
-from derive_conceptualspace.util.jsonloadstore import JsonPersister
 from derive_conceptualspace.create_spaces.translate_descriptions import (
     full_translate_titles as translate_titles_base,
     full_translate_descriptions as translate_descriptions_base,
@@ -51,8 +47,7 @@ from derive_conceptualspace.semantic_directions.create_candidate_svm import (
     create_candidate_svms as create_candidate_svms_base
 )
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
-from derive_conceptualspace.load_data import dataset_specifics
-from derive_conceptualspace.pipeline import setup_json_persister, print_settings, cluster_loader
+from derive_conceptualspace.pipeline import print_settings, cluster_loader, normalify
 
 logger = logging.getLogger(basename(__file__))
 flatten = lambda l: [item for sublist in l for item in sublist]
@@ -84,10 +79,6 @@ def loadstore_settings_envvars(ctx, use_auto_envvar_prefix=False):
             set_envvar(envvarname, ctx.obj[param])
 
 
-
-
-
-
 def click_pass_add_context(fn):
     @click.pass_context
     @wraps(fn)
@@ -110,8 +101,6 @@ def click_pass_add_context(fn):
     return wrapped
 
 
-
-
 @click.group()
 @click.argument("base-dir", type=str)
 @click.option("--env-file", callback=lambda ctx, param, value: load_dotenv(value) if param.human_readable_name == "env_file" and value else None,
@@ -129,6 +118,7 @@ def cli(ctx):
     print("Starting up at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
     setup_logging(ctx.obj["log"], ctx.obj["logfile"])
     init_context(ctx)
+
 
 @cli.resultcallback()
 def process_result(*args, **kwargs):

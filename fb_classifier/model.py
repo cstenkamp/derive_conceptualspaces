@@ -3,7 +3,7 @@ import tensorflow_text #necessary to use the model from tf-hub!
 from tensorflow.keras.layers import Dense, Flatten, Conv2D
 from tensorflow.keras import Model
 
-from src.static.classifier_config import PARAGRAPH_ENCODER, ENCODER_OUTDIM, TRAIN_ENCODER
+from fb_classifier.settings import PARAGRAPH_ENCODER, ENCODER_OUTDIM, TRAIN_ENCODER
 
 # embed = hub.KerasLayer(PARAGRAPH_ENCODER)
 # embeddings = embed(["A long sentence.", "single-word", "http://example.com"])

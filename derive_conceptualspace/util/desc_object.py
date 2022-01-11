@@ -25,11 +25,13 @@ from misc_util.pretty_print import fmt
 
 class Description():
     def __init__(self, text, lang, title,
-                 orig_textlang=None, origlang_text=None, subtitle=None, orig_titlelang=None, origlang_title=None, origlang_subtitle=None):
+                 orig_textlang=None, origlang_text=None, subtitle=None, orig_titlelang=None, origlang_title=None, origlang_subtitle=None,
+                 additionals=None):
         self.text = text
         self.lang = lang
         self.title = title
         self.subtitle = subtitle
+        self._additionals = additionals
 
         self._orig_textlang = orig_textlang
         self._origlang_text = origlang_text
@@ -163,10 +165,11 @@ class Description():
 ########################################################################################################################
 
 class DescriptionList():
-    def __init__(self, add_title, add_subtitle, translate_policy):
+    def __init__(self, add_title, add_subtitle, translate_policy, additionals_names):
         self.add_title = add_title
         self.add_subtitle = add_subtitle
         self.translate_policy = translate_policy
+        self.additionals_names = additionals_names
         self.proc_has_ngrams = False
         self.proc_steps = []
         self._descriptions: List[Description] = []

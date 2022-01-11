@@ -6,15 +6,15 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
 
-from src.fb_classifier.util.load_data import load_data
-import src.static.classifier_config
-from src.static.classifier_config import PP_TRAIN_PERCENTAGE
-from src.fb_classifier.util.misc import read_config, write_config
+from fb_classifier.util.load_data import load_data
+import fb_classifier.settings
+from fb_classifier.settings import PP_TRAIN_PERCENTAGE
+from fb_classifier.util.misc import read_config, write_config
 
 
 def get_pp_config():
     '''gets all configs from main.config that start with PP_ as dict.'''
-    pp_config = {i: eval('src.static.classifier_config.' + i) for i in dir(src.static.classifier_config) if i.startswith('PP_')}
+    pp_config = {i: eval('fb_classifier.settings.' + i) for i in dir(fb_classifier.settings) if i.startswith('PP_')}
     pp_config_str = '\n'.join(f'{key}: {val}' for key, val in pp_config.items())
     return pp_config_str
 
@@ -55,9 +55,9 @@ def preprocess_data(sources, dest_path: str, force_overwrite: bool = False): #so
     return {key: join(dest_path, key+'.csv') for key in sources.keys()}
 
 
-def make_classifier_class(dsetname, dset, plot_dropped=True, save_plot=None):
+def make_classifier_dict(df):
     new_dset = {}
-    for key, val in dset.items():
+    for key, val in df.items():
         if len(splits := val.split(".")) == 2 and splits[0].isnumeric() and splits[1].replace("_", "").isnumeric():
             while len(splits[0]) > 0 and splits[0].startswith("0"):
                 splits[0] = splits[0][1:]
@@ -74,8 +74,12 @@ def make_classifier_class(dsetname, dset, plot_dropped=True, save_plot=None):
                     new_dset[key] = res
         else:
             new_dset[key] = "other"
+    return new_dset
+
+def make_classifier_class(dsetname, dset, plot_dropped=True, save_plot=None):
+    new_dset = make_classifier_dict(dset)
     usables = {k:int(v)-1 for k,v in new_dset.items() if v != "other" and int(v) <=10}
-    print(f"{dsetname}: dropped {len(new_dset)-len(usables)} courses as they had no unamiguous Fachbereich")
+    print(f"{dsetname}: dropped {len(new_dset)-len(usables)} courses as they had no unambiguous Fachbereich")
     counter = {str(k): v for k, v in sorted(Counter([i+1 for i in usables.values()]).items(), key=lambda x:int(x[0]))}
     if plot_dropped:
         counter["Other"] = len(new_dset)-len(usables)
