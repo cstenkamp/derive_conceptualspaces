@@ -1,0 +1,9 @@
+# Preprocessing: remove stopwords, lower-case all, remove punctuation
+# Vector-Space:  MDS with angular differences between PPMI-Weighted BoWs of all Terms
+#                or PCA from PPMI Weighted BoWs or Doc2Vec, or thresholded averaged GloVe, or thresholded, ppmi-weighted-araged GLoVe
+#                (dimensions 50, 100, 200)
+# Candidates:    All sufficiently frequent 1-grams
+# Cand-Filter:
+# Cand-Merging:
+
+#TODO finish up

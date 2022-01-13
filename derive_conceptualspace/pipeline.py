@@ -31,7 +31,7 @@ def cast_config(k, v):
 
 
 def print_settings():
-    all_params = {i: get_setting(i.upper(), stay_silent=True, silent=True) for i in get_jsonpersister_args()[0]}
+    all_params = {i: get_setting(i.upper(), fordefault=True) for i in get_jsonpersister_args()[0]}
     default_params = {k[len("DEFAULT_"):].lower():v for k,v in derive_conceptualspace.settings.__dict__.items() if k in ["DEFAULT_"+i.upper() for i in all_params.keys()]}
     print("Running with the following settings:", ", ".join([f"{k}: *{'b' if v==default_params[k] else 'r'}*{v}*{'b' if v==default_params[k] else 'r'}*" for k, v in all_params.items()]))
 
@@ -128,3 +128,16 @@ def init_context(ctx): #works for both a click-Context and my custom one
     CustomIO.init(ctx)
     ctx.obj["json_persister"] = setup_json_persister(ctx)
     set_debug(ctx)
+
+
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
+
+def get_envvarname(config, assert_hasdefault=True, without_prefix=False):
+    config = config.upper()
+    if assert_hasdefault:
+        assert "DEFAULT_"+config in derive_conceptualspace.settings.__dict__
+    if without_prefix:
+        return config
+    return ENV_PREFIX+"_"+config

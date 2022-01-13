@@ -11,10 +11,10 @@ ALL_MIN_WORDS_PER_DESC = [10, 50, 100]
 #!! use singular for these (bzw the form you'd use if there wasn't the "ALL_" before)
 ALL_PP_COMPONENTS = ["faucsd2"]#, "autcsldp"] #,"tcsdp"                 # If in preprocessing it should add coursetitle, lemmatize, etc #TODO "autcsldp", "tcsldp" (gehen gerade nicht weil die nicht mit ngrams klarkommen)
 ALL_TRANSLATE_POLICY = ["translate"]#, "origlang", "onlyeng"]          # If non-english descriptions should be translated
-ALL_QUANTIFICATION_MEASURE = ["ppmi"]#, "tfidf", "count", "binary"]    # For the dissimiliarity Matrix of the Descripts
-ALL_EXTRACTION_METHOD = ["tfidf"]#, "pp_keybert", "ppmi"]              # How candidate-terms are getting extracted         #TODO keybert
 ALL_EMBED_ALGO = ["mds"]#, "tsne", "isomap"]                           # Actual Embedding of the Descriptions
 ALL_EMBED_DIMENSIONS = [100]#, 3] #, 50, 200                           # Actual Embedding of the Descriptions
+ALL_QUANTIFICATION_MEASURE = ["ppmi"]#, "tfidf", "count", "binary"]    # For the dissimiliarity Matrix of the Descripts
+ALL_EXTRACTION_METHOD = ["tfidf"]#, "pp_keybert", "ppmi"]              # How candidate-terms are getting extracted         #TODO keybert
 ALL_DCM_QUANT_MEASURE = ["ppmi"]#, "tfidf", "count", "binary"]         # Quantification for the Doc-Keyphrase-Matrix       #TODO tag-share
 
 FORBIDDEN_COMBIS = ["tsne_50d", "tsne_100d"]
@@ -98,7 +98,26 @@ def get_envvar(envvarname):
     return None
 
 
-def get_setting(name, default_none=False, silent=False, set_env_from_default=False, stay_silent=False):
+from functools import wraps
+import sys
+
+def notify_jsonpersister(fn):
+    @wraps(fn)
+    def wrapped(*args, **kwargs):
+        res = fn(*args, **kwargs)
+        if not kwargs.get("fordefault"):
+            if hasattr(sys.stdout, "ctx") and "json_persister" in sys.stdout.ctx.obj:  # TODO getting the json_serializer this way is dirty as fuck!
+                sys.stdout.ctx.obj["json_persister"].add_config(args[0].lower(), res)
+        return res
+    return wrapped
+
+
+@notify_jsonpersister
+def get_setting(name, default_none=False, silent=False, set_env_from_default=False, stay_silent=False, fordefault=True):
+    if fordefault: #fordefault is used for click's default-values. In those situations, it it should NOT notify the json-persister!
+        silent = True
+        stay_silent = False
+        set_env_from_default = False
     suppress_further = True if not silent else True if stay_silent else False
     if get_envvar(ENV_PREFIX+"_"+name) is not None:
         return get_envvar(ENV_PREFIX+"_"+name) if get_envvar(ENV_PREFIX+"_"+name) != "none" else None

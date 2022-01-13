@@ -4,6 +4,7 @@ import sys
 from datetime import datetime
 from functools import wraps
 from os.path import join, dirname, basename, abspath
+import yaml
 
 if abspath(join(dirname(__file__), "../..")) not in sys.path:
     sys.path.append(abspath(join(dirname(__file__), "../..")))
@@ -15,7 +16,7 @@ from misc_util.telegram_notifier import telegram_notify
 from misc_util.logutils import setup_logging
 from misc_util.pretty_print import pretty_print as print
 
-from derive_conceptualspace.pipeline import init_context
+from derive_conceptualspace.pipeline import init_context, get_envvarname
 from derive_conceptualspace.util.desc_object import DescriptionList
 from derive_conceptualspace.settings import (
     ALL_TRANSLATE_POLICY, ALL_QUANTIFICATION_MEASURE, ALL_EXTRACTION_METHOD, ALL_EMBED_ALGO, ALL_DCM_QUANT_MEASURE,
@@ -91,7 +92,11 @@ def click_pass_add_context(fn):
         loadstore_settings_envvars(ctx)
         nkw = {k:v for k,v in {**kwargs, **ctx.obj}.items() if k in set(inspect.getfullargspec(fn).args)-{"ctx", "context"}}
         if isinstance(ctx.command, click.Command) and not isinstance(ctx.command, click.Group):
-            print_settings() #TODO Once I use the other context here, I can use ctx.print_settings()
+            import derive_conceptualspace.settings
+            #ensure that those configs that can be set/overwritten in click are all added as config (it's important to know in which file they were first introduced)
+            for key, val in {k:v for k,v in ctx.obj.items() if "DEFAULT_"+k.upper() in derive_conceptualspace.settings.__dict__}.items():
+                ctx.obj["json_persister"].add_config(key, val)
+            print_settings()
         res = fn(*args, **nkw)
         if isinstance(ctx.command, click.Group):
             if ctx.obj["notify_telegram"] == True:
@@ -100,19 +105,28 @@ def click_pass_add_context(fn):
         return res
     return wrapped
 
+def read_config(path):
+    if path:
+        with open(path, "r") as rfile:
+            config = yaml.load(rfile, Loader=yaml.SafeLoader)
+        config = {k: v if not isinstance(v, list) else v[0] for k,v in config.items()}
+        for k, v in config.items():
+            set_envvar(get_envvarname(k), v)
 
 @click.group()
 @click.argument("base-dir", type=str)
-@click.option("--env-file", callback=lambda ctx, param, value: load_dotenv(value) if param.human_readable_name == "env_file" and value else None,
-              default=lambda: get_setting("ENV_FILE", default_none=True), type=click.Path(exists=True), is_eager=True,
+@click.option("--env-file", callback=lambda ctx, param, value: load_dotenv(value) if (param.human_readable_name == "env_file" and value) else None,
+              default=lambda: get_setting("ENV_FILE", default_none=True, fordefault=True), type=click.Path(exists=True), is_eager=True,
               help="If you want to provide environment-variables using .env-files you can provide the path to a .env-file here.")
-@click.option("--dataset", type=str, default=lambda: get_setting("DATASET_NAME"))
+@click.option("--conf-file", callback=lambda ctx, param, value: read_config(value) if (param.human_readable_name == "conf_file" and value) else None,
+              type=click.Path(exists=True), default=lambda: get_setting("CONF_FILE", fordefault=True, default_none=True), is_eager=True)
+@click.option("--dataset", type=str, default=lambda: get_setting("DATASET_NAME", fordefault=True))
 @click.option("--verbose/--no-verbose", default=True, help="default: True")
-@click.option("--debug/--no-debug", default=lambda: get_setting("DEBUG"), help=f"If True, many functions will only run on a few samples, such that everything should run really quickly. Default: {get_setting('DEBUG', silent=True)}")
+@click.option("--debug/--no-debug", default=lambda: get_setting("DEBUG", fordefault=True), help=f"If True, many functions will only run on a few samples, such that everything should run really quickly. Default: {get_setting('DEBUG', silent=True)}")
 @click.option("--log", type=str, default="INFO", help="log-level for logging-module. one of [DEBUG, INFO, WARNING, ERROR, CRITICAL]")
 @click.option("--logfile", type=str, default="", help="logfile to log to. If not set, it will be logged to standard stdout/stderr")
 @click.option("--notify-telegram/--no-notify-telegram", default=False, help="If you want to get telegram-notified of start & end of the command")
-@click.option("--strict-metainf-checking/--strict-metainf-checking", default=lambda: get_setting("STRICT_METAINF_CHECKING"), help=f"If True, all subsequent steps of the pipeline must excplitly state which meta-info of the previous steps they demand")
+@click.option("--strict-metainf-checking/--strict-metainf-checking", default=lambda: get_setting("STRICT_METAINF_CHECKING", fordefault=True), help=f"If True, all subsequent steps of the pipeline must excplitly state which meta-info of the previous steps they demand")
 @click_pass_add_context
 def cli(ctx):
     print("Starting up at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
@@ -136,8 +150,8 @@ def process_result(*args, **kwargs):
 #     return count_translations_base(ctx.obj["base_dir"], mds_basename=mds_basename, descriptions_basename=descriptions_basename)
 
 @cli.command()
-@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", silent=True))
-@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", silent=True))
+@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", fordefault=True))
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", fordefault=True))
 @click.option("--raw-descriptions-file", type=str, default="kurse-beschreibungen.csv")
 @click.option("--title-languages-file", type=str, default="title_languages.json")
 @click.option("--title-translations-file", type=str, default="translated_titles.json")
@@ -149,7 +163,7 @@ def translate_titles(ctx, pp_components, translate_policy, raw_descriptions_file
 
 
 @cli.command()
-@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", silent=True))
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", fordefault=True))
 @click.option("--raw-descriptions-file", type=str, default="kurse-beschreibungen.csv")
 @click.option("--languages-file", type=str, default="languages.json")
 @click.option("--translations-file", type=str, default="translated_descriptions.json")
@@ -161,14 +175,14 @@ def translate_descriptions(ctx, translate_policy, raw_descriptions_file, languag
 
 
 @cli.command()
-@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", silent=True))
-@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", silent=True))
+@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", fordefault=True))
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", fordefault=True))
 @click.option("--raw-descriptions-file", type=str, default="kurse-beschreibungen.csv")
 @click.option("--languages-file", type=str, default="languages.json")
 @click.option("--translations-file", type=str, default="translated_descriptions.json")
 @click.option("--title-languages-file", type=str, default="title_languages.json")
 @click.option("--title-translations-file", type=str, default="translated_titles.json")
-@click.option("--max-ngram", type=int, default=lambda: get_setting("MAX_NGRAM"))
+@click.option("--max-ngram", type=int, default=lambda: get_setting("MAX_NGRAM", fordefault=True))
 @click_pass_add_context
 def preprocess_descriptions(ctx, dataset_class, raw_descriptions_file, languages_file, translations_file, title_languages_file, title_translations_file):
     raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
@@ -193,9 +207,9 @@ def preprocess_descriptions(ctx, dataset_class, raw_descriptions_file, languages
 #create-spaces group
 
 @cli.group()
-@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", silent=True))
-@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", silent=True))
-@click.option("--quantification-measure", type=click.Choice(ALL_QUANTIFICATION_MEASURE, case_sensitive=False), default=lambda: get_setting("QUANTIFICATION_MEASURE", silent=True))
+@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", fordefault=True))
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", fordefault=True))
+@click.option("--quantification-measure", type=click.Choice(ALL_QUANTIFICATION_MEASURE, case_sensitive=False), default=lambda: get_setting("QUANTIFICATION_MEASURE", fordefault=True))
 @click_pass_add_context
 def create_spaces(ctx):
     """[group] CLI base to create the spaces from texts"""
@@ -211,8 +225,8 @@ def create_dissim_mat(ctx):
 
 
 @create_spaces.command()
-@click.option("--embed-dimensions", type=int, default=lambda: get_setting("EMBED_DIMENSIONS", silent=True))
-@click.option("--embed-algo", type=click.Choice(ALL_EMBED_ALGO, case_sensitive=False), default=lambda: get_setting("EMBED_ALGO", silent=True))
+@click.option("--embed-dimensions", type=int, default=lambda: get_setting("EMBED_DIMENSIONS", fordefault=True))
+@click.option("--embed-algo", type=click.Choice(ALL_EMBED_ALGO, case_sensitive=False), default=lambda: get_setting("EMBED_ALGO", fordefault=True))
 @click_pass_add_context
 def create_embedding(ctx):
     dissim_mat = ctx.obj["json_persister"].load(None, "dissim_mat", ignore_params=["embed_dimensions"], loader=dtm_dissimmat_loader)
@@ -227,9 +241,9 @@ def create_embedding(ctx):
 #prepare-candidateterms group
 
 @cli.group()
-@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", silent=True))
-@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", silent=True))
-@click.option("--extraction-method", type=click.Choice(ALL_EXTRACTION_METHOD, case_sensitive=False), default=lambda: get_setting("EXTRACTION_METHOD", silent=True))
+@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", fordefault=True))
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", fordefault=True))
+@click.option("--extraction-method", type=click.Choice(ALL_EXTRACTION_METHOD, case_sensitive=False), default=lambda: get_setting("EXTRACTION_METHOD", fordefault=True))
 @click_pass_add_context
 def prepare_candidateterms(ctx):
     """[group] CLI base to extract candidate-terms from texts"""
@@ -246,8 +260,8 @@ def extract_candidateterms_stanfordlp(ctx):
 
 
 @prepare_candidateterms.command()
-@click.option("--faster-keybert/--no-faster-keybert", default=lambda: get_setting("FASTER_KEYBERT"))
-@click.option("--max-ngram", default=lambda: get_setting("MAX_NGRAM"))
+@click.option("--faster-keybert/--no-faster-keybert", default=lambda: get_setting("FASTER_KEYBERT", fordefault=True))
+@click.option("--max-ngram", default=lambda: get_setting("MAX_NGRAM", fordefault=True))
 @click_pass_add_context
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
 def extract_candidateterms(ctx, max_ngram):
@@ -265,9 +279,9 @@ def postprocess_candidateterms(ctx):
 
 
 @prepare_candidateterms.command()
-@click.option("--candidate-min-term-count", type=int, default=lambda: get_setting("CANDIDATE_MIN_TERM_COUNT"))
-@click.option("--dcm-quant-measure", type=click.Choice(ALL_DCM_QUANT_MEASURE, case_sensitive=False), default=lambda: get_setting("DCM_QUANT_MEASURE", silent=True))
-@click.option("--use-ndocs-count/--no-use-ndocs-count", default=lambda: get_setting("CANDS_USE_NDOCS_COUNT"))
+@click.option("--candidate-min-term-count", type=int, default=lambda: get_setting("CANDIDATE_MIN_TERM_COUNT", fordefault=True))
+@click.option("--dcm-quant-measure", type=click.Choice(ALL_DCM_QUANT_MEASURE, case_sensitive=False), default=lambda: get_setting("DCM_QUANT_MEASURE", fordefault=True))
+@click.option("--use-ndocs-count/--no-use-ndocs-count", default=lambda: get_setting("CANDS_USE_NDOCS_COUNT", fordefault=True))
 @click_pass_add_context
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
 def create_filtered_doc_cand_matrix(ctx, candidate_min_term_count, use_ndocs_count):
@@ -286,13 +300,13 @@ def create_filtered_doc_cand_matrix(ctx, candidate_min_term_count, use_ndocs_cou
 
 
 @cli.group()
-@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", silent=True))
-@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", silent=True))
-@click.option("--quantification-measure", type=click.Choice(ALL_QUANTIFICATION_MEASURE, case_sensitive=False), default=lambda: get_setting("QUANTIFICATION_MEASURE", silent=True))
-@click.option("--embed-dimensions", type=int, default=lambda: get_setting("EMBED_DIMENSIONS", silent=True))
-@click.option("--embed-algo", type=click.Choice(ALL_EMBED_ALGO, case_sensitive=False), default=lambda: get_setting("EMBED_ALGO", silent=True))
-@click.option("--extraction-method", type=click.Choice(ALL_EXTRACTION_METHOD, case_sensitive=False), default=lambda: get_setting("EXTRACTION_METHOD", silent=True))
-@click.option("--dcm-quant-measure", type=click.Choice(ALL_DCM_QUANT_MEASURE, case_sensitive=False), default=lambda: get_setting("DCM_QUANT_MEASURE", silent=True))
+@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", fordefault=True))
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", fordefault=True))
+@click.option("--quantification-measure", type=click.Choice(ALL_QUANTIFICATION_MEASURE, case_sensitive=False), default=lambda: get_setting("QUANTIFICATION_MEASURE", fordefault=True))
+@click.option("--embed-dimensions", type=int, default=lambda: get_setting("EMBED_DIMENSIONS", fordefault=True))
+@click.option("--embed-algo", type=click.Choice(ALL_EMBED_ALGO, case_sensitive=False), default=lambda: get_setting("EMBED_ALGO", fordefault=True))
+@click.option("--extraction-method", type=click.Choice(ALL_EXTRACTION_METHOD, case_sensitive=False), default=lambda: get_setting("EXTRACTION_METHOD", fordefault=True))
+@click.option("--dcm-quant-measure", type=click.Choice(ALL_DCM_QUANT_MEASURE, case_sensitive=False), default=lambda: get_setting("DCM_QUANT_MEASURE", fordefault=True))
 @click_pass_add_context
 def generate_conceptualspace(ctx):
     """[group] CLI base to create the actual conceptual spaces"""
@@ -303,8 +317,8 @@ def generate_conceptualspace(ctx):
 
 
 @generate_conceptualspace.command()
-@click.option("--prim-lambda", type=float, default=lambda: get_setting("PRIM_LAMBDA"))
-@click.option("--sec-lambda", type=float, default=lambda: get_setting("SEC_LAMBDA"))
+@click.option("--prim-lambda", type=float, default=lambda: get_setting("PRIM_LAMBDA", fordefault=True))
+@click.option("--sec-lambda", type=float, default=lambda: get_setting("SEC_LAMBDA", fordefault=True))
 @click_pass_add_context
 def create_candidate_svm(ctx):
     clusters, cluster_directions, decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"],

@@ -1,0 +1,18 @@
+# Preprocessing: remove stopwords, lower-case all, remove diacritics, remove punctuation
+# Vector-Space:  MDS with angular differences between PPMI-Weighted BoWs of all Terms (dimensions 20, 50, 100, 200)
+# Candidates:    Frequent Nouns, Adjectives, Nounphrases, Adjectivephrases (doc-freq >= 100 for movies-dataset)
+# Cand-Filter:   binary linear SVM with pos/neg-count-ratio as instance cost, then select all for which kappa(svm_rank, count(t,e)) >= 0.1
+# Cand-Merging:  Custom
+
+pp_components:          faucsdp
+translate_policy:       translate
+quantification_measure: ppmi
+embed_algo:             ["mds", "isomap"]
+embed_dimensions:       [20, 50, 100, 200]
+extraction_method:      pp_keybert
+prim_lambda:            0.5
+sec_lambda:             0.1
+
+#TODO eine config für die distance measure between entities (what's called 'angular difference' here)
+#TODO alles ab cand-filter fehlt noch...
+

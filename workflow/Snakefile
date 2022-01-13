@@ -6,12 +6,14 @@ ALL Combis:    `ma_cont snakemake --cores 1 -p  --directory /opt/data all --keep
 ALL for 1 rule `(export $(cat $MA_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR all_for --config for_rule=create_embedding)`
 Plot DAG:      `PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -np --directory $MA_DATA_DIR --dag | grep -A99999 "digraph" | dot -Tsvg > dag.svg`
 Get results:   `rsync -az --progress $MA_DATA_DIR etlpipelines:~/data --exclude .snakemake`
-UPDATE: ` (export $(cat $MA_SELECT_ENV_FILE | xargs) && export $(cat $MA_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR/$MA_DATASET_NAME)`
+UPDATE: `(export $(cat $MA_SELECT_ENV_FILE | xargs) && export $(cat $MA_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR/$MA_DATASET_NAME)`
+from config:   `(export $(cat $MA_SELECT_ENV_FILE | xargs) && export $(cat $MA_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR/$MA_DATASET_NAME by_config --configfile ./config/derrac2015.yml)`
 """
 
 #TODO before writing about it: have a way of not having to set the PYTHONPATH as cmd-arg
 
 import os
+import itertools
 from string import Formatter
 from functools import partial
 
@@ -54,7 +56,7 @@ from derive_conceptualspace.settings import (
     FORBIDDEN_COMBIS
 )
 
-from derive_conceptualspace.pipeline import setup_json_persister, get_jsonpersister_args
+from derive_conceptualspace.pipeline import setup_json_persister, get_jsonpersister_args, get_envvarname
 from misc_util.pretty_print import print_multicol
 from derive_conceptualspace import settings
 
@@ -257,8 +259,10 @@ def rule_by_name(name):
     all_rules = {k: v for k, v in rules.__dict__.items() if k not in ["all", "default", "all_for", "trigger_default"]}
     return all_rules.get(name)
 
-def expand_output(output, expand_all=False):
-    set_val = (lambda name: settings.__dict__.get("ALL_" + name.upper(), get_setting(name.upper()))) if expand_all else (lambda name: get_setting(name.upper()))
+def expand_output(output, expand_all=False, overwriter_di=None):
+    set_val = bkp = (lambda name: settings.__dict__.get("ALL_" + name.upper(), get_setting(name.upper()))) if expand_all else (lambda name: get_setting(name.upper()))
+    if overwriter_di:
+        set_val = lambda name: overwriter_di[name] if name in overwriter_di else bkp(name)
     return [expand(out, **{i[1]: set_val(i[1]) for i in Formatter().parse(out) if i[1]}) for out in output]
 
 
@@ -271,19 +275,40 @@ def input_all_for(wildcards, rule_name=None):
             print_multicol(inputs)
         return inputs
 
-
 rule all:
     input:
         partial(input_all_for, rule_name=LAST_RULE)
 
-
 rule all_for:
     input:
         input_all_for
-
 
 rule default:
     input:
         expand_output(rule_by_name(LAST_RULE).output)
     output:
         touch(".alldone")
+
+def set_envvars_generate_input_from_config(cnf):
+    """the by_config rule which allows to provide a yaml with a configuration. This reads out this configuration and
+    sets the correct environment-variables for the demanded settings and lists the required output-files. It is possible
+    to generate multiple outputs, so those settings that are reflected in the filenames can have lists as value, such that
+    all combination of these will be tried, however those settings that must be set as env-vars cannot be lists and must
+    be equal for all combinations."""
+    lkeys, lvals = zip(*[(k,v) for k,v in cnf.items() if isinstance(v, list)])
+    othervals = {k: v for k,v in cnf.items() if k not in lkeys}
+    configs_in_filename = flatten([[i[1] for i in Formatter().parse(out) if i[1]] for out in rule_by_name(LAST_RULE).output])
+    assert all(i in configs_in_filename for i in lkeys), "You can only have multiple values for configs that are reflected in the filename"
+    for k, v in othervals.items():
+        if k not in configs_in_filename:
+            os.environ.setdefault(get_envvarname(k), str(v))
+            os.environ[get_envvarname(k)] = str(v)
+    outputs = []
+    for multival_comb in itertools.product(*lvals):
+        all_vals = {**dict(zip(lkeys,multival_comb)), **othervals}
+        outputs.append(expand_output(rule_by_name(LAST_RULE).output, overwriter_di=all_vals))
+    return outputs
+
+rule by_config:
+    input:
+        set_envvars_generate_input_from_config(config)
