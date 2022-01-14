@@ -1,11 +1,12 @@
 from os.path import isfile, abspath
 import os
 
+
 ENV_PREFIX = "MA"
 ########################################################################################################################
 ############################################## the important parameters ################################################
 ########################################################################################################################
-ALL_MIN_WORDS_PER_DESC = [10, 50, 100]
+# ALL_MIN_WORDS_PER_DESC = [10, 50, 100]
 
 
 #!! use singular for these (bzw the form you'd use if there wasn't the "ALL_" before)
@@ -15,7 +16,8 @@ ALL_EMBED_ALGO = ["mds"]#, "tsne", "isomap"]                           # Actual 
 ALL_EMBED_DIMENSIONS = [100]#, 3] #, 50, 200                           # Actual Embedding of the Descriptions
 ALL_QUANTIFICATION_MEASURE = ["ppmi"]#, "tfidf", "count", "binary"]    # For the dissimiliarity Matrix of the Descripts
 ALL_EXTRACTION_METHOD = ["tfidf"]#, "pp_keybert", "ppmi"]              # How candidate-terms are getting extracted         #TODO keybert
-ALL_DCM_QUANT_MEASURE = ["ppmi"]#, "tfidf", "count", "binary"]         # Quantification for the Doc-Keyphrase-Matrix       #TODO tag-share
+ALL_DCM_QUANT_MEASURE = ["count"]#, "tfidf", "count", "binary"]         # Quantification for the Doc-Keyphrase-Matrix       #TODO tag-share
+#TODO do I even need the distinction between DCM_QUANT_MEASURE and CLASSIFIER_COMPARETO_RANKING ???
 
 FORBIDDEN_COMBIS = ["tsne_50d", "tsne_100d"]
 
@@ -25,7 +27,8 @@ FORBIDDEN_COMBIS = ["tsne_50d", "tsne_100d"]
 for k, v in {k[4:]: v[0] for k,v in dict(locals()).items() if isinstance(v, list) and k.startswith("ALL_")}.items():
     locals()["DEFAULT_"+k] = v
 
-NORMALIFY_PARAMS = ["QUANTIFICATION_MEASURE", "EXTRACTON_METHOD", "EMBED_ALGO", "DCM_QUANT_MEASURE"] #for all params that are in this, eg `Tf-IdF` will become `tfidf`
+NORMALIFY_PARAMS = ["QUANTIFICATION_MEASURE", "EXTRACTON_METHOD", "EMBED_ALGO", "DCM_QUANT_MEASURE", "CLASSIFIER_COMPARETO_RANKING"]
+#for all params that are in this, eg `Tf-IdF` will become `tfidf`
 ########################################################################################################################
 ################################################## other default values ################################################
 ########################################################################################################################
@@ -38,10 +41,11 @@ DEFAULT_VERBOSE = True
 DEFAULT_RIG_ASSERTS = True
 
 #Settings that influence the algorithm
+DEFAULT_DISSIM_MEASURE = "norm_ang_dist"  #can be: ["cosine", "norm_ang_dist"]
 DEFAULT_CANDIDATE_MIN_TERM_COUNT = 25
 DEFAULT_FASTER_KEYBERT = False
 DEFAULT_PRIM_LAMBDA = 0.45
-DEFAULT_SEC_LAMBDA = 0.3
+DEFAULT_SEC_LAMBDA = 0.1
 DEFAULT_STANFORDNLP_VERSION = "4.2.2" #whatever's newest at https://stanfordnlp.github.io/CoreNLP/history.html
 DEFAULT_COURSE_TYPES = ["colloquium", "seminar", "internship", "practice", "lecture"]
 DEFAULT_CUSTOM_STOPWORDS = ["one", "also", "take"]
@@ -56,8 +60,10 @@ DEFAULT_QUANTEXTRACT_MAXPERDOC_REL = 0.1
 DEFAULT_QUANTEXTRACT_MINVAL = None
 DEFAULT_QUANTEXTRACT_MINVAL_PERC = 0.8
 DEFAULT_QUANTEXTRACT_MINPERDOC = 0
-DEFAULT_QUANTEXTRACT_FORCETAKE_PERC = 0.98
+DEFAULT_QUANTEXTRACT_FORCETAKE_PERC = 0.99
 
+DEFAULT_CLASSIFIER_COMPARETO_RANKING = "count"  #so far: one of ["count", "ppmi"]
+DEFAULT_CLASSIFIER_SUCCMETRIC = "cohen_kappa"
 
 #Settings regarding the architecture/platform
 DEFAULT_STRICT_METAINF_CHECKING = True
@@ -119,20 +125,28 @@ def get_setting(name, default_none=False, silent=False, set_env_from_default=Fal
         stay_silent = False
         set_env_from_default = False
     suppress_further = True if not silent else True if stay_silent else False
-    if get_envvar(ENV_PREFIX+"_"+name) is not None:
-        return get_envvar(ENV_PREFIX+"_"+name) if get_envvar(ENV_PREFIX+"_"+name) != "none" else None
-    if "DEFAULT_"+name in globals():
-        if not silent and not get_envvar(ENV_PREFIX+"_"+name+"_shutup"):
+    if get_envvar(get_envvarname(name, assert_hasdefault=False)) is not None:
+        return get_envvar(get_envvarname(name, assert_hasdefault=False)) if get_envvar(get_envvarname(name, assert_hasdefault=False)) != "none" else None
+    if "DEFAULT_"+get_envvarname(name, assert_hasdefault=False, without_prefix=True) in globals():
+        if not silent and not get_envvar(get_envvarname(name, assert_hasdefault=False)+"_shutup"):
             print(f"returning setting for {name} from default value: {globals()['DEFAULT_'+name]}")
-        if suppress_further and not get_envvar(ENV_PREFIX + "_" + name + "_shutup"):
-            set_envvar(ENV_PREFIX+"_"+name+"_shutup", True)
+        if suppress_further and not get_envvar(get_envvarname(name, assert_hasdefault=False) + "_shutup"):
+            set_envvar(get_envvarname(name, assert_hasdefault=False)+"_shutup", True)
         if set_env_from_default:
-            set_envvar(ENV_PREFIX+"_"+name, globals()['DEFAULT_'+name])
+            set_envvar(get_envvarname(name, assert_hasdefault=False)+name, globals()['DEFAULT_'+name])
         return globals()["DEFAULT_"+name]
     if default_none:
         return None
     assert False, f"Couldn't get setting {name}"
 
+
+def get_envvarname(config, assert_hasdefault=True, without_prefix=False):
+    config = config.upper()
+    if assert_hasdefault:
+        assert "DEFAULT_"+config in globals(), f"there is no default value for {config}!"
+    if without_prefix:
+        return config
+    return ENV_PREFIX+"_"+config
 
 ########################################################################################################################
 ########################################### KEEP THIS AT THE BOTTOM! ###################################################

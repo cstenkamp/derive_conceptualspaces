@@ -320,5 +320,5 @@ class JsonPersister():
         self.created_data[title] = json.dumps(data, cls=NumpyEncoder)
 
     def add_config(self, key, val):
-        assert self.used_config.get(key, val) == val
+        assert self.used_config.get(key, val) == val, f"{key} was {self.used_config[key]} and is now {val}"
         self.used_config[key] = val

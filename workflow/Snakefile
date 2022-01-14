@@ -49,6 +49,7 @@ from derive_conceptualspace.semantic_directions.create_candidate_svm import (
 from derive_conceptualspace.pipeline import Context, cast_config
 
 from derive_conceptualspace.settings import (
+    get_envvarname,
     get_setting,
     ENV_PREFIX,
     set_envvar,
@@ -56,7 +57,7 @@ from derive_conceptualspace.settings import (
     FORBIDDEN_COMBIS
 )
 
-from derive_conceptualspace.pipeline import setup_json_persister, get_jsonpersister_args, get_envvarname
+from derive_conceptualspace.pipeline import setup_json_persister, get_jsonpersister_args
 from misc_util.pretty_print import print_multicol
 from derive_conceptualspace import settings
 
@@ -88,6 +89,7 @@ def add_to_ctx(wildcards, ctx):
     for k, v in wildcards.items():
         v = cast_config(k,v)
         ctx.obj[k] = v
+        json_persister.add_config(k, v)
         set_envvar(ENV_PREFIX+"_"+k.upper().replace("-","_"), v)
 
 
@@ -196,10 +198,11 @@ rule extract_candidate_terms:
         generated_paths["candidate_terms"]
     threads: 1
     params:
-        faster_keybert=get_setting("FASTER_KEYBERT")
+        faster_keybert=get_setting("FASTER_KEYBERT"),
+        max_ngram=get_setting("MAX_NGRAM")
     run:
         autoload_context_inputs(ctx, input, wildcards, params)
-        candidateterms, relevant_metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.obj["extraction_method"], ctx.obj["faster_keybert"], verbose=ctx.obj["verbose"])
+        candidateterms, relevant_metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.obj["extraction_method"], params.max_ngram, ctx.obj["faster_keybert"], verbose=ctx.obj["verbose"])
         json_persister.save("candidate_terms.json", candidateterms=candidateterms, relevant_metainf=relevant_metainf)
 
 
@@ -241,15 +244,14 @@ rule create_candidate_svm:
     output:
         generated_paths["clusters"]
     threads: 3
-    params:
-        prim_lambda = get_setting("PRIM_LAMBDA"),
-        sec_lambda = get_setting("SEC_LAMBDA")
+    # params:
+    #     prim_lambda = get_setting("PRIM_LAMBDA"),
+    #     sec_lambda = get_setting("SEC_LAMBDA")
     run:
-        autoload_context_inputs(ctx, input, wildcards, params=params)
-        clusters, cluster_directions, decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"],
-                                                                        prim_lambda=ctx.obj["prim_lambda"], sec_lambda=ctx.obj["sec_lambda"], verbose=ctx.obj["verbose"])
-        json_persister.save("clusters.json", clusters=clusters, cluster_directions=cluster_directions, decision_planes=decision_planes, metrics=metrics,
-                            relevant_metainf={"prim_lambda": params.prim_lambda, "sec_lambda": params.sec_lambda})
+        autoload_context_inputs(ctx, input, wildcards)
+        decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"])
+        json_persister.save("clusters.json", decision_planes=decision_planes, metrics=metrics)
+                            # relevant_metainf={"prim_lambda": params.prim_lambda, "sec_lambda": params.sec_lambda})
 
 ########################################################################################################################
 ########################################################################################################################
@@ -260,7 +262,7 @@ def rule_by_name(name):
     return all_rules.get(name)
 
 def expand_output(output, expand_all=False, overwriter_di=None):
-    set_val = bkp = (lambda name: settings.__dict__.get("ALL_" + name.upper(), get_setting(name.upper()))) if expand_all else (lambda name: get_setting(name.upper()))
+    set_val = bkp = (lambda name: settings.__dict__.get("ALL_" + name.upper(), get_setting(name.upper(), fordefault=True))) if expand_all else (lambda name: get_setting(name.upper(), fordefault=True))
     if overwriter_di:
         set_val = lambda name: overwriter_di[name] if name in overwriter_di else bkp(name)
     return [expand(out, **{i[1]: set_val(i[1]) for i in Formatter().parse(out) if i[1]}) for out in output]

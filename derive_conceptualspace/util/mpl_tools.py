@@ -37,10 +37,10 @@ def show_hist(x, title="", xlabel="Data", ylabel="Count", cutoff_percentile=95, 
         bin_width = 2 * (q75 - q25) * len(x) ** (-1 / 3)
         bins = round((x.max() - x.min()) / bin_width)
         bins = min(bins, (x.max() - x.min()))
-        kwargs["bins"] = bins
+        kwargs["bins"] = round(bins)
     elif x.max() - x.min() < 30:
         bins = x.max() - x.min()
-        kwargs["bins"] = bins
+        kwargs["bins"] = round(bins)
     full_data = dict(type="hist", x=x, kwargs=kwargs, xlim=(0, max_val), cutoff_percentile=cutoff_percentile, xlabel=xlabel,
                      ylabel=ylabel, title=title, max_val=max_val, old_max=old_max)
     prepare_fig(full_data, title)

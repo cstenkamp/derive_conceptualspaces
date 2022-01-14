@@ -21,26 +21,30 @@ cos_to_normangdiff = lambda cosine: 2/math.pi*(np.arccos(-cosine+1))
 # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.cosine.html -> it's 2/math.pi*(np.arccos(-cosine+1)
 # it WOULD be squareform(np.apply_along_axis(cos_to_normangdiff, 0, pdist(arr, metric="cosine"))), but this way we don't have a progressbar
 
-def create_dissimilarity_matrix(arr, full=False):
+def create_dissimilarity_matrix(arr, dissim_measure):
     """returns the dissimilarity matrix, needed as input for the MDS. Input is the dataframe
     that contains all ppmi's of all entities (entities are rows, columns are terms, cells are then the
     ppmi(e,t) for all entity-term-combinations. Output is the normalized angular difference between
     all entities ei,ej --> an len(e)*len(e) matrix. This is needed as input for the MDS.
     See [DESC15] section 3.4."""
-    #TODO why is it only 1 minute for 1000*1000 but >40 hours for 8000*8000?! it should be factor 64, not factor 2400
+    assert dissim_measure in ["cosine", "norm_ang_dist"]
     if isinstance(arr, scipy.sparse.csr.csr_matrix):
         arr = arr.toarray().T
     assert arr.shape[0] < arr.shape[1], "I cannot believe your Doc-Term-Matrix has less distinct words then documents."
     assert arr.max(axis=1).min() > 0, "If one of the vectors is zero the calculation will fail!"
     # return squareform(np.apply_along_axis(cos_to_normangdiff, 0, pdist(arr, metric="cosine")))
     # assert np.allclose(np.hstack([cdist(arr, arr[i*10:(i+1)*10], "cosine") for i in range(10)]), squareform(tmp))
+    if dissim_measure in ["cosine", "norm_ang_dist"]:
+        dist_func = "cosine"
     tmp = []
     N_CHUNKS = 200
     for chunk in tqdm(np.array_split(arr, N_CHUNKS), desc="Creating dissimilarity matrix"):
-        tmp.append(cdist(arr, chunk, "cosine"))
+        tmp.append(cdist(arr, chunk, dist_func))
     assert np.allclose(np.hstack(tmp), np.hstack(tmp).T), "The matrix must be symmetric!"
-    flat = squareform(np.hstack(tmp), checks=False) #I check in the line above, dunno why this one fails if the upper works..
-    res = squareform(np.apply_along_axis(cos_to_normangdiff, 0, flat))
+    res = np.hstack(tmp)
+    if dissim_measure == "norm_ang_dist":
+        flat = squareform(np.hstack(tmp), checks=False) #dunno why this one fails though np.hstack(tmp) == np.hstack(tmp).T
+        res = squareform(np.apply_along_axis(cos_to_normangdiff, 0, flat))
     return res
 
 

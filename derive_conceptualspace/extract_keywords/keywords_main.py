@@ -5,17 +5,17 @@ import logging
 from tqdm import tqdm
 from gensim import corpora
 import numpy as np
+from sklearn.feature_extraction.text import TfidfTransformer
 
 from .get_candidates_keybert import KeyBertExtractor
 from .get_candidates_rules import extract_coursetype
 
 from derive_conceptualspace.util.text_tools import tf_idf, get_stopwords, ppmi
-from derive_conceptualspace.create_spaces.spaces_main import apply_quant
 
 
 from misc_util.pretty_print import pretty_print as print
 from ..settings import get_setting
-from ..util.dtm_object import DocTermMatrix
+from ..util.dtm_object import DocTermMatrix, csr_to_list
 
 logger = logging.getLogger(basename(__file__))
 
@@ -37,7 +37,7 @@ def extract_candidateterms(pp_descriptions, extraction_method, max_ngram, faster
         candidateterms, metainf = extract_candidateterms_quantific(pp_descriptions, max_ngram, quantific="ppmi", verbose=verbose)
     else:
         raise NotImplementedError()
-    print("Terms I found: ", ", ".join([f"{k+1}-grams: {v}" for k, v in sorted(Counter([i.count(" ") for i in flatten(candidateterms)]).items(), key=lambda x:x[0])]))
+    print("Terms I found: ", ", ".join([f"{k+1}-grams: {v}" for k, v in sorted(Counter([i.count(" ") for i in flatten(candidateterms)]).items(), key=lambda x:x[0])]), "| sum:", len(flatten(candidateterms)))
     return candidateterms, metainf
 
 def extract_candidateterms_keybert_nopp(pp_descriptions, faster_keybert=False, verbose=False):
@@ -90,7 +90,8 @@ def extract_candidateterms_quantific(descriptions, max_ngram, quantific, verbose
     dtm = descriptions.generate_DocTermMatrix(min_df=get_setting("CANDIDATE_MIN_TERM_COUNT"), max_ngram=max_ngram)
     #Now I'm filtering here, I originally didn't want to do that but it makes the processing incredibly much faster
     if quantific == "tfidf":
-        quant = tf_idf(dtm, verbose=verbose, descriptions=descriptions)
+        # quant = tf_idf(dtm, verbose=verbose, descriptions=descriptions)
+        quant = csr_to_list(TfidfTransformer().fit_transform(dtm.as_csr().T))
     elif quantific == "ppmi":
         quant = ppmi(dtm, verbose=verbose, descriptions=descriptions)
     else:
@@ -128,7 +129,7 @@ def create_doc_cand_matrix(postprocessed_candidates, descriptions, verbose=False
     dictionary = corpora.Dictionary([all_phrases])
     dtm = [sorted([(nphrase, desc.count_phrase(phrase)) for nphrase, phrase in enumerate(all_phrases) if phrase in desc], key=lambda x:x[0]) for ndesc, desc in enumerate(tqdm(descriptions._descriptions, desc="Creating Doc-Cand-Matrix"))]
     #TODO statt dem ^ kann ich wieder SkLearn nehmen
-    doc_term_matrix = DocTermMatrix(dtm=dtm, all_terms=all_phrases, verbose=verbose)
+    doc_term_matrix = DocTermMatrix(dtm=dtm, all_terms=all_phrases, verbose=verbose, quant_name="count")
     #TODO why do I even need to filter this uhm err
     if verbose:
         print("The 25 terms that are most often detected as candidate terms (incl. their #detections):",
@@ -143,5 +144,5 @@ def filter_keyphrases(doc_cand_matrix, descriptions, min_term_count, dcm_quant_m
     assert all(i[1] > 0 for doc in doc_cand_matrix.dtm for i in doc)
     filtered_dcm = DocTermMatrix.filter(doc_cand_matrix, min_count=min_term_count, use_n_docs_count=use_n_docs_count, verbose=verbose, descriptions=descriptions)
     #TODO: drop those documents without any keyphrase?!
-    filtered_dcm = DocTermMatrix(dtm=apply_quant(dcm_quant_measure, filtered_dcm, verbose=False, descriptions=None), all_terms=filtered_dcm.all_terms)
+    filtered_dcm = filtered_dcm.apply_quant(dcm_quant_measure)
     return filtered_dcm

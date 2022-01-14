@@ -83,7 +83,7 @@ def preprocess_descriptions_full(raw_descriptions, dataset_specifics_module, pp_
         assert max_ngram == 1, "Cannot deal with n-grams without SKLearn!"
         descriptions = preprocess_descriptions(descriptions, pp_components).filter_words(min_words=get_setting("MIN_WORDS_PER_DESC"))
         metainf = {"n_samples": len(descriptions), "ngrams_in_embedding": False, "min_words": get_setting("MIN_WORDS_PER_DESC")}
-    show_hist([len(i.processed_text) for i in descriptions._descriptions], "Words per Description", xlabel="Number of Words")
+    show_hist([i.n_words() for i in descriptions._descriptions], "Words per Description", xlabel="Number of Words")
     return descriptions, metainf
 
 

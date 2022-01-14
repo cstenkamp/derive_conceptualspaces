@@ -4,6 +4,7 @@ from tqdm import tqdm
 import sklearn.svm
 import numpy as np
 from sklearn.metrics import confusion_matrix, cohen_kappa_score
+from scipy.stats import rankdata
 
 from derive_conceptualspace.settings import get_setting
 from derive_conceptualspace.util.base_changer import NDPlane, ThreeDPlane
@@ -13,31 +14,34 @@ norm = lambda vec: vec/np.linalg.norm(vec)
 vec_cos = lambda v1, v2: np.arccos(np.clip(np.dot(norm(v1), norm(v2)), -1.0, 1.0))  #https://stackoverflow.com/a/13849249/5122790
 
 
-def create_candidate_svms(dcm, embedding, descriptions, prim_lambda, sec_lambda, verbose):
+def create_candidate_svms(dcm, embedding, descriptions, verbose):
     metrics = {}
     decision_planes = {}
-    for term, exist_indices in tqdm(dcm.term_existinds(use_index=False).items(), desc="Creating Candidate SVMs"):
-        if not get_setting("DEBUG"):
-            assert len(exist_indices) >= get_setting("CANDIDATE_MIN_TERM_COUNT") #TODO this is relevant-metainf!!
-        cand_mets, decision_plane = create_candidate_svm(embedding, term, exist_indices, descriptions)
+    compareto_ranking = get_setting("classifier_compareto_ranking")
+    if dcm.quant_name != compareto_ranking and dcm.quant_name == "count":
+        dcm = dcm.apply_quant(compareto_ranking)
+    elif dcm.quant_name != compareto_ranking:
+        # Ensure that regardless of quant_measure `np.array(quants, dtype=bool)` are correct binary classification labels
+        raise NotImplementedError()
+    for term in tqdm(dcm.all_terms.values(), desc="Creating Candidate SVMs"):
+        cand_mets, decision_plane = create_candidate_svm(embedding, term, dcm.term_quants(term))
         metrics[term] = cand_mets
         decision_planes[term] = decision_plane
     if verbose:
         for metricname in list(metrics.values())[0].keys():
-            print(f"\nAverage {metricname}: {sum(i[metricname] for i in metrics.values())/len(metrics)*100:.3f}%")
+            print(f"\nAverage {metricname}: {sum(i[metricname] for i in metrics.values())/len(metrics):.5f}")
             sorted_by = sorted([[k,v] for k,v in metrics.items()], key=lambda x:x[1][metricname], reverse=True)[:10]
             strings = [f"{term.ljust(max(len(i[0]) for i in sorted_by))}: "+
-                       ", ".join(f"{k}: {v*100:5.2f}%" for k,v in metrics.items() if k != "kappa")+
-                       f", kappa: {metrics['kappa']:.4f}"+f", samples: {len(dcm.term_existinds(use_index=False)[term])}"
-                       for term, metrics in sorted_by[:20]]
+                        ", ".join(f"{k}: {v:7.4f}" for k,v in metrics.items())+f", samples: {len(dcm.term_existinds(use_index=False)[term])}"
+                        for term, metrics in sorted_by[:10]]
             print("  "+"\n  ".join(strings))
-    sorted_kappa = [(i[0], i[1]["kappa"]) for i in sorted(metrics.items(), key=lambda x:x[1]["kappa"], reverse=True)]
     if verbose and embedding.embedding_.shape[1] == 3:
-        create_candidate_svm(embedding, sorted_kappa[0][0], dcm.term_existinds(use_index=False)[sorted_kappa[0][0]], descriptions, plot_svm=True)
+        best_elem = max(metrics.items(), key=lambda x:x[1]["f_one"])
+        create_candidate_svm(embedding, best_elem[0], dcm.term_quants[best_elem[0]], plot_svm=True, descriptions=descriptions)
         while (another := input("Another one to display: ").strip()) != "" and another not in dcm.term_existinds(use_index=False):
-            create_candidate_svm(embedding, another, dcm.term_existinds(use_index=False)[another], descriptions, plot_svm=True)
-    clusters, cluster_directions = select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda)
-    return clusters, cluster_directions, decision_planes, metrics
+            create_candidate_svm(embedding, another, dcm.term_quants[another], plot_svm=True, descriptions=descriptions)
+    # clusters, cluster_directions = select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda)
+    return decision_planes, metrics
 
 class Comparer():
     def __init__(self, decision_planes, compare_fn):
@@ -51,12 +55,14 @@ class Comparer():
             self.already_compared[v1+","+v2] = self.compare_fn(self.decision_planes[v1].normal, self.decision_planes[v2].normal)
         return self.already_compared[v1+","+v2]
 
-def select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda):
+
+def select_salient_terms(metrics, decision_planes, prim_lambda, sec_lambda):
     #TODO waitwaitwait. Am I 100% sure that the intercepts of the decision_planes are irrelevant?!
-    get_tlambda = lambda sorted_kappa, lamb: [i[0] for i in sorted_kappa if i[1] > lamb]
+    which_metric = "kappa_rank2rank"
+    get_tlambda = lambda sorted_kappa, lamb: [i[0] for i in metrics.items() if i[1][which_metric] > prim_lambda]
     get_tlambda2 = lambda sorted_kappa, primlamb, seclamb: list(set(get_tlambda(sorted_kappa, seclamb))-set(get_tlambda(sorted_kappa, primlamb)))
-    candidates = get_tlambda(sorted_kappa, prim_lambda)
-    salient_directions = [sorted_kappa[0][0],]
+    candidates = get_tlambda(metrics, prim_lambda)
+    salient_directions = [max(metrics.items(), key=lambda x: x[1][which_metric])[0],]
     n_terms = min(len(candidates), 2*len(decision_planes[salient_directions[0]].coef)) #from [DESC15]
     comparer = Comparer(decision_planes, vec_cos)
     for nterm in tqdm(range(1, n_terms), desc="Merging Salient Directions"):
@@ -67,7 +73,7 @@ def select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda)
     compare_vecs = [decision_planes[term].normal for term in salient_directions]
     clusters = {term: [] for term in salient_directions}
     #TODO instead do the cluster-assignment with k-means!
-    for term in tqdm(get_tlambda2(sorted_kappa, prim_lambda, sec_lambda), desc="Associating Clusters"):
+    for term in tqdm(get_tlambda2(metrics, prim_lambda, sec_lambda), desc="Associating Clusters"):
         # "we then associate with each term d_i a Cluster C_i containing all terms from T^{0.1} which are more similar to d_i than to any of the
         # other directions d_j." TODO: experiment with thresholds, if it's extremely unsimilar to ALL just effing discard it!
         clusters[salient_directions[np.argmin([vec_cos(decision_planes[term].normal, vec2) for vec2 in compare_vecs])]].append(term)
@@ -76,32 +82,34 @@ def select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda)
     return clusters, cluster_directions
 
 
-def create_candidate_svm(embedding, term, exist_indices, descriptions, plot_svm=False):
+def create_candidate_svm(embedding, term, quants, plot_svm=False, descriptions=None):
     #TODO [DESC15]: "we adapted the costs of the training instances to deal with class imbalance (using the ratio between entities with/without the term as cost)"
     # TODO figure out if there's a reason to choose LinearSVC over SVC(kernel=linear) or vice versa!
-    labels = [False] * embedding.embedding_.shape[0]
-    for i in exist_indices:
-        labels[i] = True
+    bin_labels = np.array(quants, dtype=bool) # Ensure that regardless of quant_measure this is correct binary classification labels
+    # (tmp := len(quants)/(2*np.bincount(bin_labels)))[0]/tmp[1] is roughly equal to bin_labels.mean() so balancing is good
     svm = sklearn.svm.LinearSVC(dual=False, class_weight="balanced")
-    svm.fit(embedding.embedding_, np.array(labels, dtype=int))
+    svm.fit(embedding.embedding_, bin_labels)
     svm_results = svm.decision_function(embedding.embedding_)
-    tn, fp, fn, tp = confusion_matrix(labels, [i > 0 for i in svm_results]).ravel()
-    precision = tp / (tp + fp); recall = tp / (tp + fn); accuracy = (tp + tn) / len(labels)
+    tn, fp, fn, tp = confusion_matrix(bin_labels, [i > 0 for i in svm_results]).ravel()
+    precision = tp / (tp + fp); recall = tp / (tp + fn); accuracy = (tp + tn) / len(quants)
+    f_one = 2*(precision*recall)/(precision+recall)
+    res = {"accuracy": accuracy, "precision": precision, "recall": recall, "f_one": f_one}
     # print(f"accuracy: {accuracy:.2f} | precision: {precision:.2f} | recall: {recall:.2f}")
     #now, in [DESC15:4.2.1], they compare the "ranking induced by \vec{v_t} with the number of times the term occurs in the entity's documents" with Cohen's Kappa.
-    num_occurances = [descriptions._descriptions[ind].count_phrase(term) if occurs else 0 for ind, occurs in enumerate(labels)]
+
     #see notebooks/proof_of_concept/get_svm_decisionboundary.ipynb#Checking-projection-methods-&-distance-measures-from-point-to-projection for the ranking
-    decision_plane = NDPlane(svm.coef_[0], svm.intercept_[0])
-    dist = lambda x, plane: np.dot(plane.normal, x) + plane.intercept #TODO don't even need plane for this, just svm's stuff
+    decision_plane = NDPlane(svm.coef_[0], svm.intercept_[0])  #don't even need the plane class here
+    dist = lambda x, plane: np.dot(plane.normal, x) + plane.intercept
     distances = [dist(point, decision_plane) for point in embedding.embedding_]
-    argsort = sorted(enumerate(distances), key=lambda x:x[1])
-    pos_rank = {item: rank for rank, item in enumerate([i[0] for i in argsort if i[1] > 0])}
-    # compared = [(elem, pos_rank.get(ind)) for ind, elem in enumerate(num_occurances)]
-    kappa = cohen_kappa_score(num_occurances, [pos_rank.get(ind, 0) for ind in range(len(num_occurances))])
-    # print(f"Kappa-Score: {kappa}")
-    if plot_svm:
-        display_svm(embedding.embedding_, np.array(labels, dtype=int), svm, term=term, descriptions=descriptions, name=f"{term}: accuracy: {accuracy:.2f} | precision: {precision:.2f} | recall: {recall:.2f} | kappa: {kappa:.4f}")
-    return {"accuracy": accuracy, "precision": precision, "recall": recall, "kappa": kappa}, decision_plane
+    #sanity check: do most of the points with label=0 have the same sign `np.count_nonzero(np.sign(np.array(distances)[bin_labels])+1)`
+    # quant_ranking = np.zeros(quants.shape); quant_ranking[np.where(quants > 0)] = np.argsort(quants[quants > 0])
+    res["kappa_rank2rank"]  = cohen_kappa_score(rankdata(quants, method="dense"), rankdata(distances, method="dense"))
+    res["kappa_rank2rank2"] = cohen_kappa_score(rankdata(quants, method="min"), rankdata(distances, method="dense"))
+    res["kappa_bin2bin"]    = cohen_kappa_score(bin_labels, [i > 0 for i in distances])
+    res["kappa_digitized"]  = cohen_kappa_score(np.digitize(quants, np.histogram_bin_edges(quants)[1:]), np.digitize(distances, np.histogram_bin_edges(distances)[1:]))
+    if plot_svm and descriptions is not None:
+        display_svm(embedding.embedding_, np.array(bin_labels, dtype=int), svm, term=term, descriptions=descriptions, name=f"{term}: accuracy: {accuracy:.2f} | precision: {precision:.2f} | recall: {recall:.2f} | kappa: {kappa:.4f}")
+    return res, decision_plane
 
 
 

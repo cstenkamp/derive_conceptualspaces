@@ -27,6 +27,10 @@ def cast_config(k, v):
         v = int(v)
     if "DEFAULT_" + k.upper() in derive_conceptualspace.settings.__dict__ and isinstance(derive_conceptualspace.settings.__dict__["DEFAULT_" + k.upper()], bool) and v in [0, 1]:
         v = bool(v)
+    if v == "True":
+        v = True
+    if v == "False":
+        v = False
     return v
 
 
@@ -77,8 +81,7 @@ def set_debug(ctx, use_auto_envvar_prefix=False):
 ########################################################################################################################
 ########################################################################################################################
 
-cluster_loader = lambda **di: dict(clusters=di["clusters"], cluster_directions=di["cluster_directions"],
-                                   decision_planes={k: NDPlane(np.array(v[1][0]),v[1][1]) for k, v in di["decision_planes"].items()}, metrics=di["metrics"])
+cluster_loader = lambda **di: dict(decision_planes={k: NDPlane(np.array(v[1][0]),v[1][1]) for k, v in di["decision_planes"].items()}, metrics=di["metrics"])
 
 class Context():
     """In the Click-CLI there is a context that gets passed, this class mocks the relevant stuff for snakemake/jupyter notebooks"""
@@ -133,11 +136,3 @@ def init_context(ctx): #works for both a click-Context and my custom one
 ########################################################################################################################
 ########################################################################################################################
 ########################################################################################################################
-
-def get_envvarname(config, assert_hasdefault=True, without_prefix=False):
-    config = config.upper()
-    if assert_hasdefault:
-        assert "DEFAULT_"+config in derive_conceptualspace.settings.__dict__
-    if without_prefix:
-        return config
-    return ENV_PREFIX+"_"+config

@@ -2,6 +2,7 @@ import sys
 from datetime import datetime
 from itertools import combinations
 import logging
+from os.path import basename
 
 from gensim import corpora
 from gensim.models import LsiModel
@@ -14,7 +15,6 @@ from scipy.spatial.distance import cosine, cdist
 
 from derive_conceptualspace.settings import get_setting
 from misc_util.logutils import CustomIO
-from derive_conceptualspace.util.base_changer import NDPlane
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 logger = logging.getLogger(basename(__file__))
@@ -113,12 +113,15 @@ def merge_streams(s1, s2, for_):
 
 def rank_courses_saldirs(pp_descriptions, embedding, clusters, filtered_dcm):
     pp_descriptions.add_embeddings(embedding.embedding_)
-    _, _, decision_planes, metrics = clusters.values()
+    decision_planes, metrics = clusters.values()
     existinds = {k: set(v) for k, v in filtered_dcm.term_existinds(use_index=False).items()}
     for k, v in metrics.items():
         metrics[k]["existinds"] = existinds[k]
         metrics[k]["decision_plane"] = decision_planes[k]
     n_items = len(pp_descriptions)
+
+    from derive_conceptualspace.semantic_directions.create_candidate_svm import select_salient_terms
+    select_salient_terms(metrics, decision_planes, get_setting("PRIM_LAMBDA"), get_setting("SEC_LAMBDA"))
 
     # TODO this is only bc in debug i set the min_existinds to 1
     metrics = {k: v for k, v in metrics.items() if len(v["existinds"]) >= 25}

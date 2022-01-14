@@ -9,7 +9,7 @@ import logging
 from sklearn.feature_extraction.text import CountVectorizer
 from tqdm import tqdm
 
-from .dtm_object import DocTermMatrix
+from .dtm_object import DocTermMatrix, csr_to_list
 from .jsonloadstore import Struct
 from ..settings import get_setting
 
@@ -87,6 +87,8 @@ class Description():
 
 
     def process(self, procresult, procname):
+        if isinstance(procresult, list):
+            procresult = [i for i in procresult if i]
         self.processing_steps.append((procresult, procname))
 
     @property
@@ -159,6 +161,14 @@ class Description():
             else:
                 self._bow = Counter(self.processed_text)
         return self._bow
+
+    def n_words(self):
+        if isinstance(self.processed_text, str):
+            return self.processed_text.count(" ")+1
+        elif isinstance(self.processed_text[0], str):
+            return len(self.processed_text)
+        elif isinstance(self.processed_text[0][0], str):
+            return len(flatten(self.processed_text))
 
 ########################################################################################################################
 ########################################################################################################################
@@ -244,19 +254,17 @@ class DescriptionList():
                 max_ngram = max_ngram or int(self.recover_settings["max_ngram"])
                 cnt = get_countvec(pp_components, max_ngram, min_df)
                 X = cnt.fit_transform(self.unprocessed_texts)
-                aslist = [list(sorted(zip((tmp := X.getrow(nrow).tocoo()).col, tmp.data), key=lambda x:x[0])) for nrow in range(X.shape[0])]
-                all_words = {v: k for k, v in cnt.vocabulary_.items()}
-                return DocTermMatrix(dtm=aslist, all_terms=all_words)
+                aslist, all_words = csr_to_list(X, cnt.vocabulary_)
+                return DocTermMatrix(dtm=aslist, all_terms=all_words, quant_name="count")
         else:
-            if (max_ngram or 1) != self.proc_ngram_range[1] or (max_ngram not in [None, 1] and not self.prog_has_ngrams):
+            if (max_ngram or 1) != self.proc_ngram_range[1] or (max_ngram not in [None, 1] and not self.proc_has_ngrams):
                 logger.warning(f"The Preprocessing had max-ngrams={self.proc_ngram_range[1]}, now you require {max_ngram or 1}!")
                 if (max_ngram or 1) < self.proc_ngram_range[1]:
                     raise NotImplementedError()
                 cnt = CountVectorizer(strip_accents=None, lowercase=False, stop_words=None, ngram_range=(1, max_ngram), min_df=min_df)
                 X = cnt.fit_transform(self.iter("processed_as_string"))
-                aslist = [list(sorted(zip((tmp := X.getrow(nrow).tocoo()).col, tmp.data), key=lambda x:x[0])) for nrow in range(X.shape[0])]
-                all_words = {v: k for k, v in cnt.vocabulary_.items()}
-                return DocTermMatrix(dtm=aslist, all_terms=all_words)
+                aslist, all_words = csr_to_list(X, cnt.vocabulary_)
+                return DocTermMatrix(dtm=aslist, all_terms=all_words, quant_name="count")
             return DocTermMatrix.from_descriptions(self, min_df=min_df)
 
 
@@ -269,9 +277,7 @@ class DescriptionList():
             yield getattr(desc, func)()
 
     def filter_words(self, min_words):
-        tmp = [i for i in self._descriptions if len(i.processed_text) >= min_words] \
-                if isinstance(self._descriptions[0].processed_text[0], str) \
-                else [i for i in self._descriptions if len(flatten(i.processed_text)) >= min_words]
+        tmp = [i for i in self._descriptions if i.n_words() >= min_words]
         print(f"Removed {len(self)-len(tmp)} of {len(self)} Descriptions because they are less than {min_words} words")
         self._descriptions = tmp
         return self

@@ -4,15 +4,20 @@
 # Cand-Filter:   binary linear SVM with pos/neg-count-ratio as instance cost, then select all for which kappa(svm_rank, count(t,e)) >= 0.1
 # Cand-Merging:  Custom
 
-pp_components:          faucsdp
-translate_policy:       translate
-quantification_measure: ppmi
-embed_algo:             ["mds", "isomap"]
-embed_dimensions:       [20, 50, 100, 200]
-extraction_method:      pp_keybert
-prim_lambda:            0.5
-sec_lambda:             0.1
+pp_components:                fautcsdp
+translate_policy:             translate
+quantification_measure:       ppmi
+dissim_measure:               norm_ang_dist
+embed_algo:                   "mds"
+embed_dimensions:             [20, 50, 100, 200]
+extraction_method:            tfidf               # TODO pp_keybert is more fitting
+max_ngram:                    5                   # not explicitly, but it takes adjective phrases so it's something >=3
 
-#TODO eine config für die distance measure between entities (what's called 'angular difference' here)
+classifier_compareto_ranking: ppmi        #TODO IS COUNT!!! (außerdem: the ranking induced by count, or the baremetal count?)
+classifier_succmetric:        cohen_kappa
+prim_lambda:                  0.5
+sec_lambda:                   0.1
+
+
 #TODO alles ab cand-filter fehlt noch...
 

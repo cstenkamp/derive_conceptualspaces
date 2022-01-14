@@ -231,6 +231,7 @@ ppmi = partial(pmi, positive=True)
 #TODO use tf-idf as alternative keyword-detection! (erst mit gensim.dictionary alle Wörter holen, dann tf-idf drauffwerfen)
 def tf_idf(doc_term_matrix, verbose=False, descriptions=None):
     """see https://towardsdatascience.com/3-basic-approaches-in-bag-of-words-which-are-better-than-word-embeddings-c2cbc7398016"""
+    assert False, "Different result than sklearn!"
     n_docs = len(doc_term_matrix.dtm)
     quantifications = [[[term, count * log(n_docs/doc_term_matrix.doc_freqs[term])] for term, count in doc] for doc in doc_term_matrix.dtm]
     if verbose:
@@ -254,3 +255,6 @@ def print_quantification(dtm, quantifications, descriptions):
     print("Keyphrases with the lowest average score:", ", ".join(worst_phrases))
     #TODO maybe have an option to sort these out? But on the other hand, if half the courses contain the words `basic` or `introduction`, that's worth something
     #TODO alternatively also remove those terms with a high document frequency? important for LDA (aber dann brauch ich ne manuelle liste an to-keep (ich pack ja "seminar" explicitly rein))
+
+
+

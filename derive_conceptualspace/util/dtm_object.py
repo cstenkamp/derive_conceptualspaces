@@ -19,7 +19,7 @@ class DocTermMatrix():
     @staticmethod
     def fromstruct(struct):
         assert not struct["includes_pseudodocs"], "TODO"
-        return DocTermMatrix(dtm=struct["dtm"], all_terms={int(k): v for k, v in struct["all_terms"].items()})
+        return DocTermMatrix(dtm=struct["dtm"], all_terms={int(k): v for k, v in struct["all_terms"].items()}, quant_name=struct["quant_name"])
 
     @staticmethod
     def from_descriptions(descriptions, **kwargs):
@@ -37,12 +37,13 @@ class DocTermMatrix():
             dtm.append([[reverse_term_dict[k], v] for k,v in desc.bow().items()])
         if min_df > 1:
             return DocTermMatrix.filter(dtm, min_df, use_n_docs_count=True, verbose=verbose, descriptions=descriptions, all_terms=all_terms) #TODO make use_n_docs_count an arg
-        return DocTermMatrix(dtm, all_terms)
+        return DocTermMatrix(dtm, all_terms, quant_name="count")
 
-    def __init__(self, dtm, all_terms, verbose=False, **kwargs):
+    def __init__(self, dtm, all_terms, quant_name, verbose=False, **kwargs):
         self.includes_pseudodocs = False
         self.dtm = dtm
         self.all_terms = {n: elem for n, elem in enumerate(all_terms)} if isinstance(all_terms, list) else all_terms
+        self.quant_name = quant_name
         # if len(args) == 1 and isinstance(args[0], dict):
         #     assert "doc_term_matrix" in args[0] and "all_terms" in args[0]
         #     assert not kwargs
@@ -171,7 +172,7 @@ class DocTermMatrix():
             if verbose:
                 print("Documents without any keyphrase:", [descriptions._descriptions[i] for i, e in enumerate(doc_term_matrix) if len(e) < 1][:5])
                 print("Documents with just 1 keyphrase:", [[descriptions._descriptions[i], all_terms[e[0][0]]] for i, e in enumerate(doc_term_matrix) if len(e) == 1][:5])
-        return DocTermMatrix(dtm=doc_term_matrix, all_terms=all_terms)
+        return DocTermMatrix(dtm=doc_term_matrix, all_terms=all_terms, quant_name="count")
 
 
     def doc_freq(self, keyword, rel=False, supress=False):
@@ -179,8 +180,38 @@ class DocTermMatrix():
             return len(self.term_existinds(use_index=False).get(keyword, [])) / (self.n_docs if rel else 1)
         return len(self.term_existinds(use_index=False)[keyword]) / (self.n_docs if rel else 1)
 
+    def apply_quant(self, quant_name):
+        return DocTermMatrix(dtm=apply_quant(quant_name, self), all_terms=self.all_terms, quant_name=quant_name)
 
 
+    def term_quants(self, term): #returns a list of the quantification (count or whatever it is) for the term
+        existinds = self.term_existinds(use_index=False)[term]
+        return [0 if i not in existinds else dict(self.dtm[i])[self.reverse_term_dict[term]] for i in range(len(self.dtm))]
+
+
+
+
+def apply_quant(quant, dtm, verbose=False, descriptions=None):
+    from derive_conceptualspace.util.text_tools import tf_idf, ppmi
+    if quant == "tfidf":
+        quantification = tf_idf(dtm, verbose=verbose, descriptions=descriptions)
+    elif quant == "ppmi":
+        quantification = ppmi(dtm, verbose=verbose, descriptions=descriptions)
+    elif quant == "count":
+        quantification = dtm.dtm
+    elif quant == "binary":
+        quantification = [[[j[0],min(j[1],1)] for j in i] for i in dtm.dtm]
+    else:
+        raise NotImplementedError()
+    return quantification
+
+
+
+def csr_to_list(csr, vocab=None):
+    aslist = [list(sorted(zip((tmp := csr.getrow(nrow).tocoo()).col, tmp.data), key=lambda x:x[0])) for nrow in range(csr.shape[0])]
+    if not vocab:
+        return aslist
+    return aslist, {v: k for k, v in vocab.items()}
 
 
 
@@ -190,5 +221,5 @@ def dtm_dissimmat_loader(quant_dtm, dissim_mat):
 def dtm_loader(doc_term_matrix):
     dtm = DocTermMatrix.fromstruct(doc_term_matrix[1][1])
     if get_setting("DEBUG"):
-        assert len(dtm.dtm) == get_setting("DEBUG_N_ITEMS") #TODO if not
+        assert len(dtm.dtm) <= get_setting("DEBUG_N_ITEMS")
     return dtm

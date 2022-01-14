@@ -16,12 +16,12 @@ from misc_util.telegram_notifier import telegram_notify
 from misc_util.logutils import setup_logging
 from misc_util.pretty_print import pretty_print as print
 
-from derive_conceptualspace.pipeline import init_context, get_envvarname
+from derive_conceptualspace.pipeline import init_context
 from derive_conceptualspace.util.desc_object import DescriptionList
 from derive_conceptualspace.settings import (
     ALL_TRANSLATE_POLICY, ALL_QUANTIFICATION_MEASURE, ALL_EXTRACTION_METHOD, ALL_EMBED_ALGO, ALL_DCM_QUANT_MEASURE,
     ENV_PREFIX, NORMALIFY_PARAMS,
-    get_setting, set_envvar, get_envvar,
+    get_setting, set_envvar, get_envvar, get_envvarname
 )
 from derive_conceptualspace.create_spaces.translate_descriptions import (
     full_translate_titles as translate_titles_base,
@@ -46,6 +46,9 @@ from derive_conceptualspace.create_spaces.create_embedding import (
 )
 from derive_conceptualspace.semantic_directions.create_candidate_svm import (
     create_candidate_svms as create_candidate_svms_base
+)
+from derive_conceptualspace.unfinished_commands import (
+    rank_courses_saldirs as rank_courses_saldirs_base
 )
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
 from derive_conceptualspace.pipeline import print_settings, cluster_loader, normalify
@@ -72,7 +75,8 @@ def loadstore_settings_envvars(ctx, use_auto_envvar_prefix=False):
         ctx.obj[param] = val
         envvarname = env_prefix+"_"+param.upper().replace("-","_")
         # https://github.com/pallets/click/issues/714#issuecomment-651389598
-        if (envvar := get_envvar(envvarname)) is not None and envvar != ctx.params[param]:
+        eagers = set(i.human_readable_name for i in ctx.command.params if i.is_eager)
+        if (envvar := get_envvar(envvarname)) is not None and envvar != ctx.params[param] and param not in eagers:
             print(f"The param {param} used to be *r*{ctx.params[param]}*r*, but is overwritten by an env-var to *b*{envvar}*b*")
             ctx.params[param] = envvar
             ctx.obj[param] = envvar
@@ -317,14 +321,11 @@ def generate_conceptualspace(ctx):
 
 
 @generate_conceptualspace.command()
-@click.option("--prim-lambda", type=float, default=lambda: get_setting("PRIM_LAMBDA", fordefault=True))
-@click.option("--sec-lambda", type=float, default=lambda: get_setting("SEC_LAMBDA", fordefault=True))
 @click_pass_add_context
 def create_candidate_svm(ctx):
-    clusters, cluster_directions, decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"],
-                                                                                        prim_lambda=ctx.obj["prim_lambda"], sec_lambda=ctx.obj["sec_lambda"])
-    ctx.obj["json_persister"].save("clusters.json", clusters=clusters, cluster_directions=cluster_directions, decision_planes=decision_planes, metrics=metrics,
-                                   relevant_metainf={"prim_lambda": ctx.obj["prim_lambda"], "sec_lambda": ctx.obj["sec_lambda"]})
+    #TODO here, the descriptions are also only needed for visualization
+    decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"])
+    ctx.obj["json_persister"].save("clusters.json", decision_planes=decision_planes, metrics=metrics)
     #TODO hier war dcm = DocTermMatrix(json_load(join(ctx.obj["base_dir"], dcm_filename), assert_meta=("CANDIDATE_MIN_TERM_COUNT", "STANFORDNLP_VERSION"))), krieg ich das wieder hin?
 
 #TODO I can do something like autodetect_relevant_params und metainf im json_persister
@@ -338,10 +339,13 @@ def show_data_info(ctx):
 
 
 @generate_conceptualspace.command()
+# @click.option("--prim-lambda", type=float, default=lambda: get_setting("PRIM_LAMBDA", fordefault=True))
+# @click.option("--sec-lambda", type=float, default=lambda: get_setting("SEC_LAMBDA", fordefault=True))
 @click_pass_add_context
 def rank_courses_saldirs(ctx):
     ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, "clusters", loader=cluster_loader)
     rank_courses_saldirs_base(ctx.obj["pp_descriptions"], ctx.obj["embedding"], ctx.obj["clusters"], ctx.obj["filtered_dcm"])
+    #relevant_metainf={"prim_lambda": ctx.obj["prim_lambda"], "sec_lambda": ctx.obj["sec_lambda"]}
 
 
 @generate_conceptualspace.command()

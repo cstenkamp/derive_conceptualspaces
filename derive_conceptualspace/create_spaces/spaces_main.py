@@ -21,32 +21,19 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 ########################################################################################################################
 # pipeline to the MDS representation from course descriptions
 
-def apply_quant(quant, dtm, verbose=False, descriptions=None):
-    if quant == "tfidf":
-        quantification = tf_idf(dtm, verbose=verbose, descriptions=descriptions)
-    elif quant == "ppmi":
-        quantification = ppmi(dtm, verbose=verbose, descriptions=descriptions)
-    elif quant == "count":
-        quantification = dtm.dtm
-    elif quant == "binary":
-        quantification = [[[j[0],min(j[1],1)] for j in i] for i in dtm.dtm]
-    else:
-        raise NotImplementedError()
-    return quantification
-
 def create_dissim_mat(descriptions: DescriptionList, quantification_measure, verbose=False):
     #Options here: get_setting("NGRAMS_IN_EMBEDDING"), get_setting("DISSIM_MAT_ONLY_PARTNERED")
     dtm = descriptions.generate_DocTermMatrix(min_df=2 if get_setting("DISSIM_MAT_ONLY_PARTNERED") else 1)
     assert any(" " in i for i in dtm.all_terms.values()) == get_setting("NGRAMS_IN_EMBEDDING")
-    quantification = DocTermMatrix(dtm=apply_quant(quantification_measure, dtm), all_terms=dtm.all_terms)
+    quantification = dtm.apply_quant(quantification_measure)
     # das ist jetzt \textbf{v}_e with all e's as rows
     #cannot use ppmis directly, because a) too sparse, and b) we need a geometric representation with euclidiean props (betweeness, parallism,..)
     assert all(len(set((lst := [i[0] for i in dtm]))) == len(lst) for dtm in quantification.dtm)
-    dissim_mat = create_dissimilarity_matrix(quantification.as_csr())
+    dissim_mat = create_dissimilarity_matrix(quantification.as_csr(), dissim_measure=get_setting("dissim_measure"))
     if verbose:
-        #TODO this can get more than 2 entries and looks shitty if it does
-        closest_entries = list(np.where(dissim_mat==min(dissim_mat[dissim_mat>0]))[0])
-        print(f"Closest Nonequal Descriptions: *b*", "*b* & *b*".join([descriptions._descriptions[i].title for i in closest_entries])), "*b*"
+        closest_entries = list(zip(*np.where(dissim_mat==min(dissim_mat[dissim_mat>0]))))
+        closest_entries = set(tuple(sorted(i)) for i in closest_entries)
+        print(f"Closest Nonequal Descriptions: \n", "\n".join(["*b*"+("*b* & *b*".join([descriptions._descriptions[i].title for i in j]))+"*b*" for j in closest_entries]))
     return quantification, dissim_mat, {"ngrams_in_embedding": get_setting("NGRAMS_IN_EMBEDDING")}
 
 
