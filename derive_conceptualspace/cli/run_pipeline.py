@@ -98,6 +98,7 @@ class CustomContext(ObjectWrapper):
         self.toset_configs.append([key, val, source])
 
     def pre_actualcommand_ops(self):
+        #TODO: finalize configs!!
         warnings.warn("pre_actualcommand_ops TODO overhaul 16.1.2022")
         # import derive_conceptualspace.settings
         # # ensure that those configs that can be set/overwritten in click are all added as config (it's important to know in which file they were first introduced)
@@ -118,7 +119,14 @@ class CustomContext(ObjectWrapper):
             self.used_configs[key] = final_conf[0]
         return self.used_configs[key]
 
-
+    def read_configfile(self):
+        if self.get_config("conf_file"):
+            with open(self.get_config("conf_file"), "r") as rfile:
+                config = yaml.load(rfile, Loader=yaml.SafeLoader)
+            # config = {k: v if not isinstance(v, list) else v[0] for k, v in config.items()}
+            # TODO statt v[0], wenn v eine liste ist und wenn ein cmd-arg bzw env-var einen wert hat der damit consistent ist, nimm das arg
+            for k, v in config.items():
+                self.set_config(k, v, "conf_file")
 
 
 def click_pass_add_context(fn):
@@ -135,7 +143,6 @@ def click_pass_add_context(fn):
         click_args = {k: v for k, v in kwargs.items() if k not in eager_params}
         for param, val in click_args.items():
             ctx.set_config(param, val, "cmd_args" if val is not None else "defaults")
-            #TODO what about env-vars, env-file and conf-file now? Did they already overwrite somethign?!
         if isinstance(ctx.command, click.Command) and not isinstance(ctx.command, click.Group):
             ctx.pre_actualcommand_ops()
         nkw = {k: ctx.get_config(k) for k in kwargs.keys() if k in set(inspect.getfullargspec(fn).args)-{"ctx", "context"}} #only give the function those args that it lists
@@ -147,29 +154,18 @@ def click_pass_add_context(fn):
     return wrapped
 
 
-def read_config(path):
-    if path:
-        with open(path, "r") as rfile:
-            config = yaml.load(rfile, Loader=yaml.SafeLoader)
-        config = {k: v if not isinstance(v, list) else v[0] for k,v in config.items()}
-        #TODO statt v[0], wenn v eine liste ist und wenn ein cmd-arg bzw env-var einen wert hat der damit consistent ist, nimm das arg
-        for k, v in config.items():
-            set_envvar(get_envvarname(k), v)
-
 
 @click.group()
 #TODO even prior to evaluating this, save the old env-vars somewhere.
+#TODO overhaul 16.01.2022: should env-file have a default-value from get_setting?!
 @click.option("--env-file", callback=lambda ctx, param, value: load_dotenv(value) if (param.name == "env_file" and value) else None,
               default=lambda: get_setting("ENV_FILE", default_none=True, fordefault=True), type=click.Path(exists=True), is_eager=True,
               help="If you want to provide environment-variables using .env-files you can provide the path to a .env-file here.")
-@click.option("--conf-file", callback=lambda ctx, param, value: read_config(value) if (param.name == "conf_file" and value) else None,
-              default=lambda: get_setting("CONF_FILE", fordefault=True, default_none=True), type=click.Path(exists=True), is_eager=True,
-              help="You can also pass a yaml-file containing values for some of the settings")
-@click.option("--base-dir", type=str, default=None)
-@click.option("--dataset", type=str, default=None,
-              help="The dataset you're solving here. Makes for the subfolder in base_dir where your data is stored and which of the classes in `load_data/dataset_specifics` will be used.")
+@click.option("--conf-file", default=None, type=click.Path(exists=True), help="You can also pass a yaml-file containing values for some of the settings")
+@click.option("--base-dir", type=click.Path(exists=True), default=None)
+@click.option("--dataset", type=str, default=None, help="The dataset you're solving here. Makes for the subfolder in base_dir where your data is stored and which of the classes in `load_data/dataset_specifics` will be used.")
 @click.option("--verbose/--no-verbose", default=None)
-@click.option("--debug/--no-debug", default=None, help=f"If True, many functions will only run on a few samples, such that everything should run really quickly. Default: {get_setting('DEBUG', silent=True)}")
+@click.option("--debug/--no-debug", default=None, help=f"If True, many functions will only run on a few samples, such that everything should run really quickly.")
 @click.option("--log", type=str, default=None, help="log-level for logging-module. one of [DEBUG, INFO, WARNING, ERROR, CRITICAL]")
 @click.option("--logfile", type=str, default=None, help="logfile to log to. If not set, it will be logged to standard stdout/stderr")
 @click.option("--notify-telegram/--no-notify-telegram", default=None, help="If you want to get telegram-notified of start & end of the command")
@@ -181,8 +177,7 @@ def cli(ctx):
     values for settings are given, precedence-order is command-line-args > env-vars (--env-file > pre-existing) > conf-file > dataset_class > defaults
     """
     print("Starting up at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
-    # setup_logging(ctx.obj["log"], ctx.obj["logfile"])  #TODO overhaul 16.01.2022 add this back
-    init_context(ctx)
+    init_context(ctx) #after this point, no new env-vars should be set anymore (are not considered)
 
 
 @cli.resultcallback()
@@ -201,8 +196,8 @@ def process_result(*args, **kwargs):
 #     return count_translations_base(ctx.obj["base_dir"], mds_basename=mds_basename, descriptions_basename=descriptions_basename)
 
 @cli.command()
-@click.option("--raw-descriptions-file", type=str, default="kurse-beschreibungen.csv")
-@click.option("--languages-file", type=str, default="languages.json")
+@click.option("--raw-descriptions-file", type=str, default=None)
+@click.option("--languages-file", type=str, default=None)
 @click_pass_add_context
 def check_languages(ctx, raw_descriptions_file, languages_file):
     raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
@@ -212,11 +207,11 @@ def check_languages(ctx, raw_descriptions_file, languages_file):
 
 
 @cli.command()
-@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", fordefault=True))
-@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", fordefault=True))
-@click.option("--raw-descriptions-file", type=str, default="kurse-beschreibungen.csv")
-@click.option("--title-languages-file", type=str, default="title_languages.json")
-@click.option("--title-translations-file", type=str, default="translated_titles.json")
+@click.option("--pp-components", type=str, default=None)
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=None)
+@click.option("--raw-descriptions-file", type=str, default=None)
+@click.option("--title-languages-file", type=str, default=None)
+@click.option("--title-translations-file", type=str, default=None)
 @click_pass_add_context
 def translate_titles(ctx, pp_components, translate_policy, raw_descriptions_file, title_languages_file, title_translations_file):
     raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
@@ -225,10 +220,10 @@ def translate_titles(ctx, pp_components, translate_policy, raw_descriptions_file
 
 
 @cli.command()
-@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", fordefault=True))
-@click.option("--raw-descriptions-file", type=str, default="kurse-beschreibungen.csv")
-@click.option("--languages-file", type=str, default="languages.json")
-@click.option("--translations-file", type=str, default="translated_descriptions.json")
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=None)
+@click.option("--raw-descriptions-file", type=str, default=None)
+@click.option("--languages-file", type=str, default=None)
+@click.option("--translations-file", type=str, default=None)
 @click_pass_add_context
 def translate_descriptions(ctx, translate_policy, raw_descriptions_file, languages_file, translations_file):
     raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
@@ -250,17 +245,17 @@ def preprocess_descriptions(ctx, json_persister, dataset_class, raw_descriptions
     raw_descriptions = json_persister.load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
     languages = json_persister.load(languages_file, "languages", ignore_params=["pp_components", "translate_policy"], loader=lambda langs: langs)
     try:
-        title_languages = ctx.obj["json_persister"].load(title_languages_file, "title_languages", ignore_params=["pp_components", "translate_policy"], loader=lambda title_langs: title_langs)
+        title_languages = json_persister.load(title_languages_file, "title_languages", ignore_params=["pp_components", "translate_policy"], loader=lambda title_langs: title_langs)
     except FileNotFoundError:
         title_languages = languages
-    if ctx.obj["translate_policy"] == "translate":
-        translations = ctx.obj["json_persister"].load(translations_file, "translated_descriptions", ignore_params=["pp_components", "translate_policy"], force_overwrite=True, loader=lambda **kwargs: kwargs["translations"])
-        title_translations = ctx.obj["json_persister"].load(title_translations_file, "translated_titles", ignore_params=["pp_components", "translate_policy"], force_overwrite=True, loader=lambda **kwargs: kwargs["title_translations"])
+    if ctx.get_config("translate_policy") == "translate":
+        translations = json_persister.load(translations_file, "translated_descriptions", ignore_params=["pp_components", "translate_policy"], force_overwrite=True, loader=lambda **kwargs: kwargs["translations"])
+        title_translations = json_persister.load(title_translations_file, "translated_titles", ignore_params=["pp_components", "translate_policy"], force_overwrite=True, loader=lambda **kwargs: kwargs["title_translations"])
         # TODO[e] depending on pp_compoments, title_languages etc may still allowed to be empty
     else:
         translations, title_translations = None, None
-    descriptions, metainf = preprocess_descriptions_base(raw_descriptions, dataset_class, ctx.obj["pp_components"], ctx.obj["translate_policy"], languages, translations, title_languages, title_translations)
-    ctx.obj["json_persister"].save("pp_descriptions.json", descriptions=descriptions, relevant_metainf=metainf)
+    descriptions, metainf = preprocess_descriptions_base(raw_descriptions, dataset_class, ctx.get_config("pp_components"), ctx.get_config("translate_policy"), languages, translations, title_languages, title_translations)
+    json_persister.save("pp_descriptions.json", descriptions=descriptions, relevant_metainf=metainf)
 
 
 ########################################################################################################################
@@ -269,26 +264,26 @@ def preprocess_descriptions(ctx, json_persister, dataset_class, raw_descriptions
 #create-spaces group
 
 @cli.group()
-@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", fordefault=True))
-@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", fordefault=True))
-@click.option("--quantification-measure", type=click.Choice(ALL_QUANTIFICATION_MEASURE, case_sensitive=False), default=lambda: get_setting("QUANTIFICATION_MEASURE", fordefault=True))
+@click.option("--pp-components", type=str, default=None)
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=None)
+@click.option("--quantification-measure", type=click.Choice(ALL_QUANTIFICATION_MEASURE, case_sensitive=False), default=None)
 @click_pass_add_context
-def create_spaces(ctx):
+def create_spaces(ctx, json_persister):
     """[group] CLI base to create the spaces from texts"""
     pass
 
 
 @create_spaces.command()
 @click_pass_add_context
-def create_dissim_mat(ctx):
-    pp_descriptions = ctx.obj["json_persister"].load(None, "pp_descriptions", ignore_params=["quantification_measure"], loader=DescriptionList.from_json)
+def create_dissim_mat(ctx, json_persister):
+    pp_descriptions = json_persister.load(None, "pp_descriptions", ignore_params=["quantification_measure"], loader=DescriptionList.from_json)
     quant_dtm, dissim_mat, metainf = create_dissim_mat_base(pp_descriptions, ctx.obj["quantification_measure"], ctx.obj["verbose"])
     ctx.obj["json_persister"].save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat, relevant_metainf=metainf)
 
 
 @create_spaces.command()
-@click.option("--embed-dimensions", type=int, default=lambda: get_setting("EMBED_DIMENSIONS", fordefault=True))
-@click.option("--embed-algo", type=click.Choice(ALL_EMBED_ALGO, case_sensitive=False), default=lambda: get_setting("EMBED_ALGO", fordefault=True))
+@click.option("--embed-dimensions", type=int, default=None)
+@click.option("--embed-algo", type=click.Choice(ALL_EMBED_ALGO, case_sensitive=False), default=None)
 @click_pass_add_context
 def create_embedding(ctx):
     dissim_mat = ctx.obj["json_persister"].load(None, "dissim_mat", ignore_params=["embed_dimensions"], loader=dtm_dissimmat_loader)

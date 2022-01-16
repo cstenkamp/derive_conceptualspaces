@@ -1,10 +1,10 @@
 import os
 from os.path import join
-import random
+import yaml
 
 import numpy as np
 
-from misc_util.logutils import CustomIO
+from misc_util.logutils import CustomIO, setup_logging
 from .settings import ENV_PREFIX, get_setting
 import derive_conceptualspace.settings
 from .util.base_changer import NDPlane
@@ -17,19 +17,6 @@ from misc_util.pretty_print import pretty_print as print
 ########################################################################################################################
 ########################################################################################################################
 from .util.jsonloadstore import JsonPersister
-
-def cast_config(k, v):
-    if k.upper() in derive_conceptualspace.settings.NORMALIFY_PARAMS:
-        v = normalify(v)
-    if isinstance(v, str) and v.isnumeric():
-        v = int(v)
-    if "DEFAULT_" + k.upper() in derive_conceptualspace.settings.__dict__ and isinstance(derive_conceptualspace.settings.__dict__["DEFAULT_" + k.upper()], bool) and v in [0, 1]:
-        v = bool(v)
-    if v == "True":
-        v = True
-    if v == "False":
-        v = False
-    return v
 
 
 def print_settings():
@@ -120,8 +107,20 @@ class Context():
         return print_settings() #TODO Once I use this very context in click, I can put the print_settings() here
 
 
-#TODO overhaul 16.01.2022: make this a method of the CustomContext
+
+
+
+
+#TODO overhaul 16.01.2022: make this a method of the CustomContext (and use the same for snakemake and jupyter)
 def init_context(ctx): #works for both a click-Context and my custom one
+    #first of all, load settings from env-vars and, if you have it by then, from config-file
+    relevant_envvars = {k[len(ENV_PREFIX)+1:]: v for k, v in os.environ.items() if k.startswith(ENV_PREFIX+"_")}
+    for param, val in relevant_envvars.items():
+        ctx.set_config(param, val, "env_vars")
+    if ctx.get_config("conf_file"):
+        ctx.read_configfile()
+    #/that
+    setup_logging(ctx.get_config("log"), ctx.get_config("logfile"))
     ctx.obj["dataset_class"] = dataset_specifics.load_dataset_class(ctx.get_config("dataset"))
     if hasattr(ctx.obj["dataset_class"], "configs"):
         for param, val in ctx.obj["dataset_class"].configs.items():

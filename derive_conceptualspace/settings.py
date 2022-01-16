@@ -66,7 +66,7 @@ DEFAULT_CLASSIFIER_COMPARETO_RANKING = "count"  #so far: one of ["count", "ppmi"
 DEFAULT_CLASSIFIER_SUCCMETRIC = "cohen_kappa"
 
 #Settings regarding the architecture/platform
-CONF_PRIORITY = ["cmd_args", "env_file", "env_vars", "conf_file", "dataset_class", "defaults"]
+CONF_PRIORITY = ["cmd_args", "env_vars", "conf_file", "dataset_class", "defaults"] #no distinction between env_file and env_var bc load_dotenv is executed eagerly and just overwrites envvars from envfile
 DEFAULT_BASE_DIR = abspath(join(dirname(__file__), "..", "..", ENV_PREFIX+"_data"))
 DEFAULT_NOTIFY_TELEGRAM = False
 
@@ -75,6 +75,8 @@ DEFAULT_LANGUAGES_FILE = "languages.json"
 DEFAULT_TRANSLATIONS_FILE = "translated_descriptions.json"
 DEFAULT_TITLE_LANGUAGES_FILE = "title_languages.json"
 DEFAULT_TITLE_TRANSLATIONS_FILE = "translated_titles.json"
+DEFAULT_LOG = "Info"
+DEFAULT_LOGFILE = ""
 
 ########################################################################################################################
 ######################################## set and get settings/env-vars #################################################
@@ -128,11 +130,11 @@ def notify_jsonpersister(fn):
 @notify_jsonpersister
 def get_setting(name, default_none=False, silent=False, set_env_from_default=False, stay_silent=False, fordefault=True):
     if fordefault: #fordefault is used for click's default-values. In those situations, it it should NOT notify the json-persister!
-        # silent = True
-        # stay_silent = False
-        # set_env_from_default = False
-        # default_none = True
-        return "default" #("default", globals().get("DEFAULT_"+name, "NO_DEFAULT"))
+        silent = True
+        stay_silent = False
+        set_env_from_default = False
+        default_none = True
+        # return "default" #("default", globals().get("DEFAULT_"+name, "NO_DEFAULT"))
     suppress_further = True if not silent else True if stay_silent else False
     if get_envvar(get_envvarname(name, assert_hasdefault=False)) is not None:
         return get_envvar(get_envvarname(name, assert_hasdefault=False)) if get_envvar(get_envvarname(name, assert_hasdefault=False)) != "none" else None
@@ -160,13 +162,26 @@ def get_envvarname(config, assert_hasdefault=True, without_prefix=False):
 ########################################################################################################################
 # as of 16.01.2022
 
+def cast_config(k, v):
+    if isinstance(v, str) and v.isnumeric():
+        v = int(v)
+    if "DEFAULT_" + k in globals() and isinstance(globals()["DEFAULT_" + k], bool) and v in [0, 1]:
+        v = bool(v)
+    if v == "True":
+        v = True
+    if v == "False":
+        v = False
+    if v != None and "DEFAULT_" + k in globals() and type(globals()["DEFAULT_" + k]) != type(v):
+        assert False, "TODO overhaul 16.01.2022"
+    return v
+
 def standardize_config_name(configname):
     return configname.upper().replace("-","_")
 
 def standardize_config_val(configname, configval):
-    if isinstance(configval, str):
-        if configname in NORMALIFY_PARAMS:
-            configval = "".join([i for i in configval.lower() if i.isalpha() or i in "_"])
+    if configname in NORMALIFY_PARAMS and configval is not None:
+        configval = "".join([i for i in configval.lower() if i.isalpha() or i in "_"])
+    configval = cast_config(configname, configval)
     return configval
 
 def standardize_config(configname, configval):
@@ -178,6 +193,8 @@ def standardize_config(configname, configval):
 ########################################### KEEP THIS AT THE BOTTOM! ###################################################
 ########################################################################################################################
 
+
+#TODO overhaul 16.01.2022: do this in Context.pre_actualcommand_ops
 STARTUP_ENVVARS = {k:v for k,v in os.environ.items() if k.startswith(ENV_PREFIX+"_")}
 
 #actually make all defined directories (global vars that end in "_PATH")
