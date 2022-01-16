@@ -18,8 +18,6 @@ from misc_util.pretty_print import pretty_print as print
 ########################################################################################################################
 from .util.jsonloadstore import JsonPersister
 
-normalify = lambda txt: "".join([i for i in txt.lower() if i.isalpha() or i in "_"])
-
 def cast_config(k, v):
     if k.upper() in derive_conceptualspace.settings.NORMALIFY_PARAMS:
         v = normalify(v)
@@ -52,30 +50,26 @@ def get_jsonpersister_args():
 
 def setup_json_persister(ctx):
     all_params, forward_meta_inf, dir_struct = get_jsonpersister_args()
-    json_persister = JsonPersister(join(ctx.obj["base_dir"], ctx.obj["dataset"]), join(ctx.obj["base_dir"], ctx.obj["dataset"]), ctx,
-                                   forward_params = all_params, forward_meta_inf = forward_meta_inf, dir_struct = dir_struct,
-                                   add_relevantparams_to_filename=ctx.obj.get("add_relevantparams_to_filename", True),
-                                   strict_metainf_checking=ctx.obj["strict_metainf_checking"],
-                                  )
-    json_persister.default_metainf_getters = {"n_samples": lambda: "ANY",
-                                              "candidate_min_term_count": lambda: "ANY",
-                                              "prim_lambda": lambda: "ANY",
-                                              "sec_lambda": lambda: "ANY",
-                                              "max_ngram": lambda: get_setting("MAX_NGRAM", silent=True)}
-    return json_persister
+    return JsonPersister(join(ctx.get_config("base_dir"), ctx.get_config("dataset")),
+                         join(ctx.get_config("base_dir"), ctx.get_config("dataset")), ctx,
+                         forward_params = all_params, forward_meta_inf = forward_meta_inf, dir_struct = dir_struct,
+                         add_relevantparams_to_filename=ctx.obj.get("add_relevantparams_to_filename", True),
+                         )
 
 def set_debug(ctx, use_auto_envvar_prefix=False):
     env_prefix = ctx.auto_envvar_prefix if use_auto_envvar_prefix else ENV_PREFIX
-    if get_setting("DEBUG"):
-        if not os.getenv(env_prefix+"_DEBUG_SET"):
-            assert env_prefix+"_CANDIDATE_MIN_TERM_COUNT" not in os.environ
-            os.environ[env_prefix + "_CANDIDATE_MIN_TERM_COUNT"] = "1"
-            print(f"Debug is active! #Items for Debug: {get_setting('DEBUG_N_ITEMS')}")
-            if get_setting("RANDOM_SEED", default_none=True): print("Using a random seed!")
-        if get_setting("RANDOM_SEED", default_none=True):
-            random.seed(get_setting("RANDOM_SEED"))
-        assert os.environ[env_prefix + "_CANDIDATE_MIN_TERM_COUNT"] == "1"
-        os.environ[env_prefix+"_DEBUG_SET"] = "1"
+    return
+    #TODO overhaul 16.01.2022
+    # if get_setting("DEBUG"):
+    #     if not os.getenv(env_prefix+"_DEBUG_SET"):
+    #         assert env_prefix+"_CANDIDATE_MIN_TERM_COUNT" not in os.environ
+    #         os.environ[env_prefix + "_CANDIDATE_MIN_TERM_COUNT"] = "1"
+    #         print(f"Debug is active! #Items for Debug: {get_setting('DEBUG_N_ITEMS')}")
+    #         if get_setting("RANDOM_SEED", default_none=True): print("Using a random seed!")
+    #     if get_setting("RANDOM_SEED", default_none=True):
+    #         random.seed(get_setting("RANDOM_SEED"))
+    #     assert os.environ[env_prefix + "_CANDIDATE_MIN_TERM_COUNT"] == "1"
+    #     os.environ[env_prefix+"_DEBUG_SET"] = "1"
 
 ########################################################################################################################
 ########################################################################################################################
@@ -126,10 +120,12 @@ class Context():
         return print_settings() #TODO Once I use this very context in click, I can put the print_settings() here
 
 
+#TODO overhaul 16.01.2022: make this a method of the CustomContext
 def init_context(ctx): #works for both a click-Context and my custom one
-    ctx.obj["dataset_class"] = dataset_specifics.load_dataset_class(ctx.obj["dataset"])
-    if hasattr(ctx.obj["dataset_class"], "raw_descriptions_file_name"):
-        ctx.obj["raw_descriptions_file"] = ctx.obj["dataset_class"].raw_descriptions_file_name
+    ctx.obj["dataset_class"] = dataset_specifics.load_dataset_class(ctx.get_config("dataset"))
+    if hasattr(ctx.obj["dataset_class"], "configs"):
+        for param, val in ctx.obj["dataset_class"].configs.items():
+            ctx.set_config(param, val, "dataset_class")
     CustomIO.init(ctx)
     ctx.obj["json_persister"] = setup_json_persister(ctx)
     set_debug(ctx)

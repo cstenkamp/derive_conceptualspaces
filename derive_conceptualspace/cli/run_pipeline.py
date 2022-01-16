@@ -1,3 +1,4 @@
+import warnings
 import inspect
 import logging
 import sys
@@ -16,12 +17,13 @@ from misc_util.telegram_notifier import telegram_notify
 from misc_util.logutils import setup_logging
 from misc_util.pretty_print import pretty_print as print
 
+from derive_conceptualspace import settings
 from derive_conceptualspace.pipeline import init_context
 from derive_conceptualspace.util.desc_object import DescriptionList
 from derive_conceptualspace.settings import (
     ALL_TRANSLATE_POLICY, ALL_QUANTIFICATION_MEASURE, ALL_EXTRACTION_METHOD, ALL_EMBED_ALGO, ALL_DCM_QUANT_MEASURE,
     ENV_PREFIX, NORMALIFY_PARAMS,
-    get_setting, set_envvar, get_envvar, get_envvarname
+    get_setting, set_envvar, get_envvar, get_envvarname, standardize_config, standardize_config_name
 )
 from derive_conceptualspace.create_spaces.translate_descriptions import (
     full_translate_titles as translate_titles_base,
@@ -52,7 +54,8 @@ from derive_conceptualspace.unfinished_commands import (
     rank_courses_saldirs as rank_courses_saldirs_base
 )
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
-from derive_conceptualspace.pipeline import print_settings, cluster_loader, normalify
+from derive_conceptualspace.pipeline import print_settings, cluster_loader
+from misc_util.object_wrapper import ObjectWrapper
 
 logger = logging.getLogger(basename(__file__))
 flatten = lambda l: [item for sublist in l for item in sublist]
@@ -64,52 +67,85 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 #TODO putt the stuff from here in ../pipeline.py
 
 
-def loadstore_settings_envvars(ctx, use_auto_envvar_prefix=False):
-    """auto_envvar_prefix only works for options, not for arguments. So this function overwrites ctx.params & ctx.obj
-       from env-vars (if they have the correct prefix), and also SETS these env-vars from the cmd-args such that they
-       can be accessed using get_setting() """
-    env_prefix = ctx.auto_envvar_prefix if use_auto_envvar_prefix else ENV_PREFIX
-    #the auto_envvar_prefix always gets appended the subcommand, I don't want that generally though.
-    for param, val in ctx.params.items():
-        if param.upper() in NORMALIFY_PARAMS:
-            val = normalify(val)
-        ctx.obj[param] = val
-        envvarname = env_prefix+"_"+param.upper().replace("-","_")
-        # https://github.com/pallets/click/issues/714#issuecomment-651389598
-        eagers = set(i.human_readable_name for i in ctx.command.params if i.is_eager)
-        if (envvar := get_envvar(envvarname)) is not None and envvar != ctx.params[param] and param not in eagers:
-            print(f"The param {param} used to be *r*{ctx.params[param]}*r*, but is overwritten by an env-var to *b*{envvar}*b*")
-            ctx.params[param] = envvar
-            ctx.obj[param] = envvar
-        else:
-            set_envvar(envvarname, ctx.obj[param])
+# def incorporate_settings(source_dict, ctx, source):
+#     """yes there is click's auto_envvar_prefix, but that messes with what I want to do (and doesn't work for arguments).
+#        So this function overwrites ctx.params & ctx.obj from env-vars (if they have the correct prefix), and also SETS
+#        these env-vars from the cmd-args such that they can be accessed using get_setting(). ALSO, we don't use the
+#        ctx.auto_envvar_prefix which builds up the prefix hierachically for subcommands."""
+#     for param, val in source_dict.items():
+#         param, val = standardize_config(param, val)
+#         ctx.set_config(param, val, source) #does basically ctx.obj[param] = val
+#         # envvarname = env_prefix+"_"+param.upper().replace("-","_")
+#         # # https://github.com/pallets/click/issues/714#issuecomment-651389598
+#         # eagers = set(i.human_readable_name for i in ctx.command.params if i.is_eager)
+#         # if (envvar := get_envvar(envvarname)) is not None and envvar != ctx.params[param] and param not in eagers:
+#         #     print(f"The param {param} used to be *r*{ctx.params[param]}*r*, but is overwritten by an env-var to *b*{envvar}*b*")
+#         #     ctx.params[param] = envvar
+#         #     ctx.obj[param] = envvar
+#         # else:
+#         #     set_envvar(envvarname, ctx.obj[param])
+
+
+class CustomContext(ObjectWrapper):
+    def __init__(self, click_ctx):
+        assert isinstance(click_ctx, click.Context)
+        super(CustomContext, self).__init__(click_ctx)
+        self.toset_configs = []
+        self.used_configs = {}
+
+    def set_config(self, key, val, source): #this is only a suggestion, it will only be finally set once it's accessed!
+        key, val = standardize_config(key, val)
+        self.toset_configs.append([key, val, source])
+
+    def pre_actualcommand_ops(self):
+        warnings.warn("pre_actualcommand_ops TODO overhaul 16.1.2022")
+        # import derive_conceptualspace.settings
+        # # ensure that those configs that can be set/overwritten in click are all added as config (it's important to know in which file they were first introduced)
+        # for key, val in {k: v for k, v in ctx.obj.items() if "DEFAULT_" + k.upper() in derive_conceptualspace.settings.__dict__}.items():
+        #     ctx.obj["json_persister"].add_config(key, val)
+        # print_settings()
+
+    def get_config(self, key):
+        key = standardize_config_name(key)
+        if key not in self.used_configs:
+            conf_suggestions = [i[1:] for i in self.toset_configs if i[0] == key]
+            assert len(conf_suggestions) > 0, "TODO what now?!"
+            final_conf = min([i for i in conf_suggestions], key=lambda x: settings.CONF_PRIORITY.index(x[1]))
+            if final_conf[1] == "defaults": #TODO overhaul 16.01.2022: does that mean I can get rid of get_setting?!
+                if "DEFAULT_"+key not in settings.__dict__:
+                    raise ValueError(f"You didn't provide a value for {key} and there is no default-value!")
+                final_conf[0] = settings.__dict__["DEFAULT_"+key]
+            self.used_configs[key] = final_conf[0]
+        return self.used_configs[key]
+
+
 
 
 def click_pass_add_context(fn):
     @click.pass_context
     @wraps(fn)
-    def wrapped(*args, **kwargs):
-        assert isinstance(args[0], click.Context)
-        for k, v in kwargs.items():
-            assert k not in args[0].obj
-            args[0].obj[k] = v
-            #TODO loadstore_settings_envvars just overwrites the ctx anway again
-        ctx = args[0]
-        loadstore_settings_envvars(ctx)
-        nkw = {k:v for k,v in {**kwargs, **ctx.obj}.items() if k in set(inspect.getfullargspec(fn).args)-{"ctx", "context"}}
+    def wrapped(ctx, *args, **kwargs):  #kwargs are cli-args, default-vals None
+        if not isinstance(ctx, CustomContext): #ensure I always have my CustomContext
+            if "actual_context" in ctx.obj:
+                ctx = ctx.obj["actual_context"]
+            else:
+                ctx = CustomContext(ctx)
+                ctx._wrapped.obj["actual_context"] = ctx
+        eager_params = set(i.name for i in ctx.command.params if i.is_eager)
+        click_args = {k: v for k, v in kwargs.items() if k not in eager_params}
+        for param, val in click_args.items():
+            ctx.set_config(param, val, "cmd_args" if val is not None else "defaults")
+            #TODO what about env-vars, env-file and conf-file now? Did they already overwrite somethign?!
         if isinstance(ctx.command, click.Command) and not isinstance(ctx.command, click.Group):
-            import derive_conceptualspace.settings
-            #ensure that those configs that can be set/overwritten in click are all added as config (it's important to know in which file they were first introduced)
-            for key, val in {k:v for k,v in ctx.obj.items() if "DEFAULT_"+k.upper() in derive_conceptualspace.settings.__dict__}.items():
-                ctx.obj["json_persister"].add_config(key, val)
-            print_settings()
-        res = fn(*args, **nkw)
-        if isinstance(ctx.command, click.Group):
-            if ctx.obj["notify_telegram"] == True:
-                if not isinstance(cli.get_command(ctx, ctx.invoked_subcommand), click.Group):
-                    ctx.command.get_command(ctx, ctx.invoked_subcommand).callback = telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(ctx.command.get_command(ctx, ctx.invoked_subcommand).callback)
+            ctx.pre_actualcommand_ops()
+        nkw = {k: ctx.get_config(k) for k in kwargs.keys() if k in set(inspect.getfullargspec(fn).args)-{"ctx", "context"}} #only give the function those args that it lists
+        nkw.update({k: ctx.obj[k] for k in set(inspect.getfullargspec(fn).args)-{"ctx", "context"}-nkw.keys()}) #this adds the OBJECTS, the line above the CONFs
+        res = fn(ctx, *args, **nkw)
+        if ctx.get_config("notify_telegram") and isinstance(ctx.command, click.Group) and not isinstance(cli.get_command(ctx, ctx.invoked_subcommand), click.Group):
+            ctx.command.get_command(ctx, ctx.invoked_subcommand).callback = telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(ctx.command.get_command(ctx, ctx.invoked_subcommand).callback)
         return res
     return wrapped
+
 
 def read_config(path):
     if path:
@@ -120,24 +156,32 @@ def read_config(path):
         for k, v in config.items():
             set_envvar(get_envvarname(k), v)
 
+
 @click.group()
-@click.argument("base-dir", type=str)
-@click.option("--env-file", callback=lambda ctx, param, value: load_dotenv(value) if (param.human_readable_name == "env_file" and value) else None,
+#TODO even prior to evaluating this, save the old env-vars somewhere.
+@click.option("--env-file", callback=lambda ctx, param, value: load_dotenv(value) if (param.name == "env_file" and value) else None,
               default=lambda: get_setting("ENV_FILE", default_none=True, fordefault=True), type=click.Path(exists=True), is_eager=True,
               help="If you want to provide environment-variables using .env-files you can provide the path to a .env-file here.")
-@click.option("--conf-file", callback=lambda ctx, param, value: read_config(value) if (param.human_readable_name == "conf_file" and value) else None,
-              type=click.Path(exists=True), default=lambda: get_setting("CONF_FILE", fordefault=True, default_none=True), is_eager=True)
-@click.option("--dataset", type=str, default=lambda: get_setting("DATASET_NAME", fordefault=True))
-@click.option("--verbose/--no-verbose", default=True, help="default: True")
-@click.option("--debug/--no-debug", default=lambda: get_setting("DEBUG", fordefault=True), help=f"If True, many functions will only run on a few samples, such that everything should run really quickly. Default: {get_setting('DEBUG', silent=True)}")
-@click.option("--log", type=str, default="INFO", help="log-level for logging-module. one of [DEBUG, INFO, WARNING, ERROR, CRITICAL]")
-@click.option("--logfile", type=str, default="", help="logfile to log to. If not set, it will be logged to standard stdout/stderr")
-@click.option("--notify-telegram/--no-notify-telegram", default=False, help="If you want to get telegram-notified of start & end of the command")
-@click.option("--strict-metainf-checking/--strict-metainf-checking", default=lambda: get_setting("STRICT_METAINF_CHECKING", fordefault=True), help=f"If True, all subsequent steps of the pipeline must excplitly state which meta-info of the previous steps they demand")
+@click.option("--conf-file", callback=lambda ctx, param, value: read_config(value) if (param.name == "conf_file" and value) else None,
+              default=lambda: get_setting("CONF_FILE", fordefault=True, default_none=True), type=click.Path(exists=True), is_eager=True,
+              help="You can also pass a yaml-file containing values for some of the settings")
+@click.option("--base-dir", type=str, default=None)
+@click.option("--dataset", type=str, default=None,
+              help="The dataset you're solving here. Makes for the subfolder in base_dir where your data is stored and which of the classes in `load_data/dataset_specifics` will be used.")
+@click.option("--verbose/--no-verbose", default=None)
+@click.option("--debug/--no-debug", default=None, help=f"If True, many functions will only run on a few samples, such that everything should run really quickly. Default: {get_setting('DEBUG', silent=True)}")
+@click.option("--log", type=str, default=None, help="log-level for logging-module. one of [DEBUG, INFO, WARNING, ERROR, CRITICAL]")
+@click.option("--logfile", type=str, default=None, help="logfile to log to. If not set, it will be logged to standard stdout/stderr")
+@click.option("--notify-telegram/--no-notify-telegram", default=None, help="If you want to get telegram-notified of start & end of the command")
 @click_pass_add_context
 def cli(ctx):
+    """
+    You can call this pipeline in many ways: With correct env-vars already set, with a provided `--env-file`, with a
+    provided `--conf-file`, with command-line args (at the appropriate sub-command), or with default-values. If a multiple
+    values for settings are given, precedence-order is command-line-args > env-vars (--env-file > pre-existing) > conf-file > dataset_class > defaults
+    """
     print("Starting up at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
-    setup_logging(ctx.obj["log"], ctx.obj["logfile"])
+    # setup_logging(ctx.obj["log"], ctx.obj["logfile"])  #TODO overhaul 16.01.2022 add this back
     init_context(ctx)
 
 
@@ -193,18 +237,18 @@ def translate_descriptions(ctx, translate_policy, raw_descriptions_file, languag
 
 
 @cli.command()
-@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", fordefault=True))
-@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", fordefault=True))
-@click.option("--raw-descriptions-file", type=str, default="kurse-beschreibungen.csv")
-@click.option("--languages-file", type=str, default="languages.json")
-@click.option("--translations-file", type=str, default="translated_descriptions.json")
-@click.option("--title-languages-file", type=str, default="title_languages.json")
-@click.option("--title-translations-file", type=str, default="translated_titles.json")
-@click.option("--max-ngram", type=int, default=lambda: get_setting("MAX_NGRAM", fordefault=True))
+@click.option("--pp-components", type=str, default=None)
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=None)
+@click.option("--raw-descriptions-file", type=str, default=None)
+@click.option("--languages-file", type=str, default=None)
+@click.option("--translations-file", type=str, default=None)
+@click.option("--title-languages-file", type=str, default=None)
+@click.option("--title-translations-file", type=str, default=None)
+@click.option("--max-ngram", type=int, default=None)
 @click_pass_add_context
-def preprocess_descriptions(ctx, dataset_class, raw_descriptions_file, languages_file, translations_file, title_languages_file, title_translations_file):
-    raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
-    languages = ctx.obj["json_persister"].load(languages_file, "languages", ignore_params=["pp_components", "translate_policy"], loader=lambda langs: langs)
+def preprocess_descriptions(ctx, json_persister, dataset_class, raw_descriptions_file, languages_file, translations_file, title_languages_file, title_translations_file):
+    raw_descriptions = json_persister.load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
+    languages = json_persister.load(languages_file, "languages", ignore_params=["pp_components", "translate_policy"], loader=lambda langs: langs)
     try:
         title_languages = ctx.obj["json_persister"].load(title_languages_file, "title_languages", ignore_params=["pp_components", "translate_policy"], loader=lambda title_langs: title_langs)
     except FileNotFoundError:

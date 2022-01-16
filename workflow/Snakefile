@@ -79,7 +79,7 @@ def initialize_snakemake():
         for k, v in dict(globals()).items():
             if k.endswith("_base") and callable(v):
                 globals()[k] =  telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(globals()[k])
-    ctx = Context(base_dir=os.path.join(os.getcwd(), ".."), dataset_name=get_setting("DATASET_NAME", silent=True))
+    ctx = Context(base_dir=os.path.join(os.getcwd(), ".."), dataset=get_setting("DATASET", silent=True))
     os.environ[f"{ENV_PREFIX}_SMK_INITIALIZED"] = "1"
     return ctx, ctx.obj["json_persister"]
 
@@ -90,7 +90,7 @@ def add_to_ctx(wildcards, ctx):
         v = cast_config(k,v)
         ctx.obj[k] = v
         json_persister.add_config(k, v)
-        set_envvar(ENV_PREFIX+"_"+k.upper().replace("-","_"), v)
+        set_envvar(ENV_PREFIX+"_"+k.upper().replace("-","_"), v) #TODO use the one function for this
 
 
 def autoload_context_inputs(ctx, inputs, wildcards, params=None, input_kwargs=None):

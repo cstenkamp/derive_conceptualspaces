@@ -4,6 +4,9 @@ from derive_conceptualspace.load_data.dataset_specifics import BaseDataset
 from fb_classifier.preprocess_data import make_classifier_dict
 
 class Dataset(BaseDataset):
+    configs = dict(
+        raw_descriptions_file = "kurse-beschreibungen.csv"
+    )
 
     @staticmethod
     def preprocess_raw_file(df, min_desc_len=10):

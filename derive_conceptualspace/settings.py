@@ -1,6 +1,5 @@
-from os.path import isfile, abspath
+from os.path import isfile, abspath, dirname, join
 import os
-
 
 ENV_PREFIX = "MA"
 ########################################################################################################################
@@ -67,8 +66,15 @@ DEFAULT_CLASSIFIER_COMPARETO_RANKING = "count"  #so far: one of ["count", "ppmi"
 DEFAULT_CLASSIFIER_SUCCMETRIC = "cohen_kappa"
 
 #Settings regarding the architecture/platform
-DEFAULT_STRICT_METAINF_CHECKING = True
+CONF_PRIORITY = ["cmd_args", "env_file", "env_vars", "conf_file", "dataset_class", "defaults"]
+DEFAULT_BASE_DIR = abspath(join(dirname(__file__), "..", "..", ENV_PREFIX+"_data"))
+DEFAULT_NOTIFY_TELEGRAM = False
 
+DEFAULT_RAW_DESCRIPTIONS_FILE = "kurse-beschreibungen.csv"
+DEFAULT_LANGUAGES_FILE = "languages.json"
+DEFAULT_TRANSLATIONS_FILE = "translated_descriptions.json"
+DEFAULT_TITLE_LANGUAGES_FILE = "title_languages.json"
+DEFAULT_TITLE_TRANSLATIONS_FILE = "translated_titles.json"
 
 ########################################################################################################################
 ######################################## set and get settings/env-vars #################################################
@@ -122,9 +128,11 @@ def notify_jsonpersister(fn):
 @notify_jsonpersister
 def get_setting(name, default_none=False, silent=False, set_env_from_default=False, stay_silent=False, fordefault=True):
     if fordefault: #fordefault is used for click's default-values. In those situations, it it should NOT notify the json-persister!
-        silent = True
-        stay_silent = False
-        set_env_from_default = False
+        # silent = True
+        # stay_silent = False
+        # set_env_from_default = False
+        # default_none = True
+        return "default" #("default", globals().get("DEFAULT_"+name, "NO_DEFAULT"))
     suppress_further = True if not silent else True if stay_silent else False
     if get_envvar(get_envvarname(name, assert_hasdefault=False)) is not None:
         return get_envvar(get_envvarname(name, assert_hasdefault=False)) if get_envvar(get_envvarname(name, assert_hasdefault=False)) != "none" else None
@@ -138,7 +146,7 @@ def get_setting(name, default_none=False, silent=False, set_env_from_default=Fal
         return globals()["DEFAULT_"+name]
     if default_none:
         return None
-    assert False, f"Couldn't get setting {name}"
+    raise ValueError(f"There is no default-value for setting {name}, you have to explicitly pass it!")
 
 
 def get_envvarname(config, assert_hasdefault=True, without_prefix=False):
@@ -148,6 +156,23 @@ def get_envvarname(config, assert_hasdefault=True, without_prefix=False):
     if without_prefix:
         return config
     return ENV_PREFIX+"_"+config
+
+########################################################################################################################
+# as of 16.01.2022
+
+def standardize_config_name(configname):
+    return configname.upper().replace("-","_")
+
+def standardize_config_val(configname, configval):
+    if isinstance(configval, str):
+        if configname in NORMALIFY_PARAMS:
+            configval = "".join([i for i in configval.lower() if i.isalpha() or i in "_"])
+    return configval
+
+def standardize_config(configname, configval):
+    configname = standardize_config_name(configname)
+    return configname, standardize_config_val(configname, configval)
+
 
 ########################################################################################################################
 ########################################### KEEP THIS AT THE BOTTOM! ###################################################
