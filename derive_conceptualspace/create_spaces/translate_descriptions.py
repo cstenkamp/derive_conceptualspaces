@@ -106,19 +106,21 @@ def full_translate_titles(raw_descriptions, pp_components, translate_policy, tit
     return None, None
 
 
+def create_languages_file(languages_file, json_persister, raw_descriptions, dataset_class):
+    try:
+        languages = json_persister.load(languages_file, "languages", ignore_params=["translate_policy"], loader=lambda langs: langs)
+    except FileNotFoundError:
+        descriptions = dataset_class.preprocess_raw_file(raw_descriptions)
+        langs = get_langs(descriptions["Beschreibung"], assert_len=False)
+        langs = {i["Name"]: langs[i["Beschreibung"]] for _,i in descriptions.iterrows()}
+        json_persister.save(languages_file, langs=langs, relevant_params=[])
+        languages = json_persister.load(languages_file, "languages", ignore_params=["translate_policy"], loader=lambda langs: langs)
+    return languages
 
 
 def full_translate_descriptions(raw_descriptions, translate_policy, languages_file, translations_file, json_persister):
     if translate_policy == "translate": #TODO parts of this also needs to be done for onlyeng
-        try:
-            languages = json_persister.load(languages_file, "languages", ignore_params=["translate_policy"], loader=lambda langs: langs)
-        except FileNotFoundError:
-            descriptions = preprocess_raw_course_file(raw_descriptions)
-            langs = get_langs(descriptions["Beschreibung"], assert_len=False)
-            langs = {i["Name"]: langs[i["Beschreibung"]] for _,i in descriptions.iterrows()}
-            json_persister.save(languages_file, langs=langs, relevant_params=[])
-            languages = json_persister.load(languages_file, "languages", ignore_params=["translate_policy"], loader=lambda langs: langs)
-
+        languages = create_languages_file(languages_file, json_persister, raw_descriptions, dataset_class)
         try:
             translations = json_persister.load(translations_file, "translated_descriptions", ignore_params=["translate_policy"], force_overwrite=True)
         except FileNotFoundError:

@@ -128,6 +128,8 @@ class Context():
 
 def init_context(ctx): #works for both a click-Context and my custom one
     ctx.obj["dataset_class"] = dataset_specifics.load_dataset_class(ctx.obj["dataset"])
+    if hasattr(ctx.obj["dataset_class"], "raw_descriptions_file_name"):
+        ctx.obj["raw_descriptions_file"] = ctx.obj["dataset_class"].raw_descriptions_file_name
     CustomIO.init(ctx)
     ctx.obj["json_persister"] = setup_json_persister(ctx)
     set_debug(ctx)

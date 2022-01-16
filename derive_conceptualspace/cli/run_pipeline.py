@@ -26,6 +26,7 @@ from derive_conceptualspace.settings import (
 from derive_conceptualspace.create_spaces.translate_descriptions import (
     full_translate_titles as translate_titles_base,
     full_translate_descriptions as translate_descriptions_base,
+    create_languages_file as create_languages_file_base,
     # count_translations as count_translations_base
 )
 from derive_conceptualspace.extract_keywords.postprocess_candidates import (
@@ -92,6 +93,7 @@ def click_pass_add_context(fn):
         for k, v in kwargs.items():
             assert k not in args[0].obj
             args[0].obj[k] = v
+            #TODO loadstore_settings_envvars just overwrites the ctx anway again
         ctx = args[0]
         loadstore_settings_envvars(ctx)
         nkw = {k:v for k,v in {**kwargs, **ctx.obj}.items() if k in set(inspect.getfullargspec(fn).args)-{"ctx", "context"}}
@@ -114,6 +116,7 @@ def read_config(path):
         with open(path, "r") as rfile:
             config = yaml.load(rfile, Loader=yaml.SafeLoader)
         config = {k: v if not isinstance(v, list) else v[0] for k,v in config.items()}
+        #TODO statt v[0], wenn v eine liste ist und wenn ein cmd-arg bzw env-var einen wert hat der damit consistent ist, nimm das arg
         for k, v in config.items():
             set_envvar(get_envvarname(k), v)
 
@@ -152,6 +155,17 @@ def process_result(*args, **kwargs):
 # @click_pass_add_context
 # def count_translations(ctx, ...):
 #     return count_translations_base(ctx.obj["base_dir"], mds_basename=mds_basename, descriptions_basename=descriptions_basename)
+
+@cli.command()
+@click.option("--raw-descriptions-file", type=str, default="kurse-beschreibungen.csv")
+@click.option("--languages-file", type=str, default="languages.json")
+@click_pass_add_context
+def check_languages(ctx, raw_descriptions_file, languages_file):
+    raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
+    create_languages_file_base(languages_file, ctx.obj["json_persister"], raw_descriptions, ctx.obj["dataset_class"])
+    #no need to save, that's done inside the function.
+
+
 
 @cli.command()
 @click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", fordefault=True))

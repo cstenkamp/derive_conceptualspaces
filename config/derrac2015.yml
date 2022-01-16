@@ -9,8 +9,10 @@ translate_policy:             translate
 quantification_measure:       ppmi
 dissim_measure:               norm_ang_dist
 embed_algo:                   "mds"
-embed_dimensions:             [20, 50, 100, 200]
+embed_dimensions:             100 #[20, 50, 100, 200]
 extraction_method:            tfidf               # TODO pp_keybert is more fitting
+#TODO: DESC15 hat darauf abgezielt ~22k keywords zu haben => mit meinen params dafür sorgen dass ich auch auf sowas komme, mit den aktuellen ists nur 2402!
+candidate_min_term_count:     25 #movies has samples-to-threshold value of 100, placetypes has 35, 20newsgrups has 614, so for 8000 courses any threshold from 2 to 25 seems reasonable (BUT see above, I get too little)!!
 max_ngram:                    5                   # not explicitly, but it takes adjective phrases so it's something >=3
 
 classifier_compareto_ranking: ppmi        #TODO IS COUNT!!! (außerdem: the ranking induced by count, or the baremetal count?)

@@ -61,6 +61,7 @@ DEFAULT_QUANTEXTRACT_MINVAL = None
 DEFAULT_QUANTEXTRACT_MINVAL_PERC = 0.8
 DEFAULT_QUANTEXTRACT_MINPERDOC = 0
 DEFAULT_QUANTEXTRACT_FORCETAKE_PERC = 0.99
+#TODO statt dieser settings kann ich auch ne number an demanded candidateterms vorgeben, und die candidates kriegen alle einn wert wie gut sie sind und der standard wird so lange gelowert bis die #demandedterms ungefähr erreicht sind
 
 DEFAULT_CLASSIFIER_COMPARETO_RANKING = "count"  #so far: one of ["count", "ppmi"]
 DEFAULT_CLASSIFIER_SUCCMETRIC = "cohen_kappa"
