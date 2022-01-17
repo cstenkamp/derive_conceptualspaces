@@ -62,7 +62,6 @@ class CustomContext(ObjectWrapper):
             if "cwd" in self.obj: #TODO overhaul 16.01. das geht doch locker eleganter!!
                 self.set_config("base_dir", self.obj["cwd"], "smk_args")
             # setup_logging(self.get_config("log"), self.get_config("logfile")) #TODO overhaul 16.01.2022: this looks shitty AF in snakemake (but add back for click!!)
-            print("Is it here?!")
             self.obj["dataset_class"] = dataset_specifics.load_dataset_class(self.get_config("dataset"))
             if hasattr(self.obj["dataset_class"], "configs"):
                 for param, val in self.obj["dataset_class"].configs.items():
@@ -100,7 +99,7 @@ class CustomContext(ObjectWrapper):
     def print_important_settings(self):
         params = {standardize_config_name(i): self.get_config(i, silent=True) for i in self.important_settings if self.has_config(i)}
         default_params = {k[len("DEFAULT_"):]:v for k,v in settings.__dict__.items() if k in ["DEFAULT_"+i for i in params.keys()]}
-        print("Running with the following settings:", ", ".join([f"{k}: *{'b' if v==default_params[k] else 'r'}*{v}*{'b' if v==default_params[k] else 'r'}*" for k, v in params.items()]))
+        print("Running with the following settings:", ", ".join([f"{k}: *{'b' if v==default_params.get(k) else 'r'}*{v}*{'b' if v==default_params.get(k) else 'r'}*" for k, v in params.items()]))
 
     def has_config(self, key, include_default=True): #if there is a click-arg with "default=None", it will be EXPLICITLY set by default, ONLY that is included if include_default
         return key in self.used_configs or bool([i for i in self.toset_configs if i[0]==standardize_config_name(key) and (include_default or i[2] != "defaults")])
@@ -121,10 +120,16 @@ class CustomContext(ObjectWrapper):
         if self.get_config("conf_file"):
             with open(self.get_config("conf_file"), "r") as rfile:
                 config = yaml.load(rfile, Loader=yaml.SafeLoader)
-            # config = {k: v if not isinstance(v, list) else v[0] for k, v in config.items()}
-            # TODO statt v[0], wenn v eine liste ist und wenn ein cmd-arg bzw env-var einen wert hat der damit consistent ist, nimm das arg
             for k, v in config.items():
-                self.set_config(k, v, "conf_file")
+                if isinstance(v, list): #IDEA: wenn v eine liste ist und wenn ein cmd-arg bzw env-var einen wert hat der damit consistent ist, nimm das arg
+                    overwriters = [i[1:] for i in self.toset_configs if i[0]==standardize_config_name(k) and CONF_PRIORITY.index(i[2]) < CONF_PRIORITY.index("conf_file")]
+                    if overwriters:
+                        assert len(overwriters) == 1 and overwriters[0][0] in v, "TODO: do this"
+                        self.set_config(k, overwriters[0][0], "conf_file")
+                    else:
+                        self.set_config(k, v[0], "conf_file")
+                else:
+                    self.set_config(k, v, "conf_file")
 
     def used_influential_confs(self):
         tmp = {k: v for k, v in self.used_configs.items() if k not in settings.NON_INFLUENTIAL_CONFIGS}
@@ -141,7 +146,8 @@ def get_jsonpersister_args():
     import derive_conceptualspace.settings
     all_params = [k[4:].lower() for k in derive_conceptualspace.settings.__dict__ if k.startswith("ALL_")]
     forward_meta_inf = ["n_samples", "faster_keybert", "candidate_min_term_count"]
-    dir_struct = ["debug_{debug}",
+    dir_struct = ["{dataset}",
+                  "debug_{debug}",
                   "{pp_components}_{translate_policy}_minwords{min_words_per_desc}",
                   "embedding_{quantification_measure}",
                   "{embed_algo}_{embed_dimensions}d",
@@ -150,9 +156,8 @@ def get_jsonpersister_args():
 
 def setup_json_persister(ctx):
     all_params, forward_meta_inf, dir_struct = get_jsonpersister_args()
-    print("Is it here?asdf")
     return JsonPersister(join(ctx.get_config("base_dir")),
-                         join(ctx.get_config("base_dir"), ctx.get_config("dataset")), ctx,
+                         join(ctx.get_config("base_dir")), ctx,
                          forward_params = all_params, forward_meta_inf = forward_meta_inf, dir_struct = dir_struct,
                          )
 
@@ -181,6 +186,16 @@ class SnakeContext():
         title_languages=lambda **kwargs: kwargs["langs"],
         raw_descriptions=None,
     )
+
+    @staticmethod
+    def loader_context(load_envfile=True, config=None):
+        ctx = CustomContext(SnakeContext(cwd=os.getcwd()))
+        for k, v in (config or {}).items():
+            ctx.set_config(k, v, "force")
+        ctx.init_context(load_envfile=load_envfile)
+        ctx.print_important_settings()
+        return ctx
+
     # ignore_params_di = dict(
     #     pp_descriptions=["quantification_measure", "embed_dimensions"],
     #     filtered_dcm=["quantification_measure", "embed_dimensions"],
@@ -197,11 +212,9 @@ class SnakeContext():
         #         self.obj[k.lower()] = v
 
 
-    # def load(self, *whats, relevant_metainf=None):
-    #     for what in whats:
-    #         self.obj[what] = self.obj["json_persister"].load(None, what, relevant_metainf=relevant_metainf,
-    #                                                          loader=self.autoloader_di.get(what, lambda **kwargs: kwargs[what]),
-    #                                                          ignore_params=self.ignore_params_di.get(what))
+    def load(self, *whats):
+        for what in whats:
+            self.obj[what] = self.obj["json_persister"].load(None, what, loader=self.autoloader_di.get(what, lambda **kwargs: kwargs[what]))
 
 
 

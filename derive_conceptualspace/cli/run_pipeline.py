@@ -19,7 +19,6 @@ from misc_util.logutils import setup_logging
 from misc_util.pretty_print import pretty_print as print
 
 from derive_conceptualspace import settings
-from derive_conceptualspace.pipeline import init_context
 from derive_conceptualspace.util.desc_object import DescriptionList
 from derive_conceptualspace.settings import (
     ALL_TRANSLATE_POLICY, ALL_QUANTIFICATION_MEASURE, ALL_EXTRACTION_METHOD, ALL_EMBED_ALGO, ALL_DCM_QUANT_MEASURE,
@@ -58,6 +57,7 @@ from derive_conceptualspace.unfinished_commands import (
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
 from derive_conceptualspace.pipeline import cluster_loader
 from misc_util.object_wrapper import ObjectWrapper
+from derive_conceptualspace.pipeline import CustomContext
 
 logger = logging.getLogger(basename(__file__))
 flatten = lambda l: [item for sublist in l for item in sublist]
@@ -136,7 +136,7 @@ def cli(ctx):
     values for settings are given, precedence-order is command-line-args > env-vars (--env-file > pre-existing) > conf-file > dataset_class > defaults
     """
     print("Starting up at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
-    init_context(ctx) #after this point, no new env-vars should be set anymore (are not considered)
+    ctx.init_context() #after this point, no new env-vars should be set anymore (are not considered)
 
 
 @cli.resultcallback()

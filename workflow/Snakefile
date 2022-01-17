@@ -115,7 +115,7 @@ generated_paths = dict(
 
 rule get_languages:
     input:
-        raw_descriptions = "{dataset}/" + ctx.get_config("raw_descriptions_file"),
+        raw_descriptions = "{dataset}/"+ctx.get_config("raw_descriptions_file"),
     output:
         languages        = "{dataset}/"+ctx.get_config("languages_file"),
         title_languages  = "{dataset}/"+ctx.get_config("title_languages_file"),

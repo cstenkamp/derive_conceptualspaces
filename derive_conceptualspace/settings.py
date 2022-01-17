@@ -213,7 +213,9 @@ def get_defaultsetting(key, silent=False):
         raise ValueError(f"You didn't provide a value for {key} and there is no default-value!")
     default = globals()["DEFAULT_"+key]
     if key not in NON_INFLUENTIAL_CONFIGS and not silent:
-        print(f"returning setting for {key} from default value: {default}")
+        if not os.getenv(f"{ENV_PREFIX}shutups_{key}"):
+            print(f"returning {key} from default: *b*{default}*b*")
+        os.environ[f"{ENV_PREFIX}shutups_{key}"] = "1"
     return default
 
 ########################################################################################################################

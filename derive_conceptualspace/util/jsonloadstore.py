@@ -16,6 +16,7 @@ from sklearn.manifold import MDS, TSNE, Isomap
 from derive_conceptualspace import settings
 from derive_conceptualspace.settings import standardize_config_name, standardize_config_val
 from misc_util.logutils import CustomIO
+from misc_util.pretty_print import pretty_print as print
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
@@ -217,8 +218,8 @@ class JsonPersister():
         #TODO the FORWARD_META_INF here is not used - I can use it to automatically add this in the save-method if the respective keys are in the ctx.obj, such that I don't need to
         # explitly specify them when saving!
         self.dir_struct = dir_struct or []
-        self.in_dir = in_dir
-        self.out_dir = out_dir
+        self.in_dir = in_dir if in_dir.endswith(os.sep) else in_dir+os.sep
+        self.out_dir = out_dir if out_dir.endswith(os.sep) else out_dir+os.sep
         self.ctx = ctx
         self.loaded_objects = {} #dict: {save_basename of loaded file: [object (None if loaded), filepath, [save_basename_of_file_that_needed_it_1, save_basename_of_file_that_needed_it_2,..]
         # self.loaded_relevant_params = {}
@@ -283,13 +284,15 @@ class JsonPersister():
         """If no filename specified, recursively search for files whose name startswith save_basename, and then from
            the paths of the results, reverse-engineer the demanded configs of these files and then match them up"""
         correct_cands = []
-        candidates = [join(path, name)[len(self.in_dir)+1:] for path, subdirs, files in os.walk(join(self.in_dir, subdir)) for name in files if name.startswith(save_basename)]
+        candidates = [join(path, name)[len(self.in_dir):] for path, subdirs, files in os.walk(join(self.in_dir, subdir)) for name in files if name.startswith(save_basename)]
         for cand in candidates: #ich muss nicht reverse-matchen, ich kann die required confs nehmen, anwenden und schauen ob's gleich ist!
             demanded_confs = self.dirname_vars(cand.count(os.sep))
             dirstruct, _, _, nonapplied_args = self.get_subdir({standardize_config_name(i): self.ctx.get_config(i) for i in demanded_confs})
             if dirname(cand) == dirstruct:
                 correct_cands.append(cand)
         if not correct_cands:
+            print(f"You may need the file *b*{join(dirstruct, save_basename+'.json')}*b*")
+            #command is then `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR filepath)`
             raise FileNotFoundError(f"There is no candidate for {save_basename} with the current config!")
         assert len(correct_cands) == 1
         return correct_cands[0]
