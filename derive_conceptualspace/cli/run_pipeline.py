@@ -23,7 +23,7 @@ from derive_conceptualspace.util.desc_object import DescriptionList
 from derive_conceptualspace.settings import (
     ALL_TRANSLATE_POLICY, ALL_QUANTIFICATION_MEASURE, ALL_EXTRACTION_METHOD, ALL_EMBED_ALGO, ALL_DCM_QUANT_MEASURE,
     ENV_PREFIX, NORMALIFY_PARAMS,
-    get_setting, set_envvar, get_envvar, get_envvarname, standardize_config, standardize_config_name
+    get_setting, set_envvar, get_envvar, get_envvarname, standardize_config, standardize_config_name, get_defaultsetting
 )
 from derive_conceptualspace.create_spaces.translate_descriptions import (
     full_translate_titles as translate_titles_base,
@@ -96,6 +96,10 @@ class CustomContext(ObjectWrapper):
     def set_config(self, key, val, source): #this is only a suggestion, it will only be finally set once it's accessed!
         key, val = standardize_config(key, val)
         self.toset_configs.append([key, val, source])
+        existing_configs = list(zip(*[i[1:] for i in self.toset_configs if i[0] == key and i[2] != "defaults"]))
+        if existing_configs and "dependency" in existing_configs[1]:
+            assert len(set(existing_configs[0])) <= 1, "A config of a dependency is inconsistent with a config set here!"
+
 
     def pre_actualcommand_ops(self):
         #TODO: finalize configs!!
@@ -106,16 +110,16 @@ class CustomContext(ObjectWrapper):
         #     ctx.obj["json_persister"].add_config(key, val)
         # print_settings()
 
-    def get_config(self, key):
+    def get_config(self, key, silent=False):
+        #TODO overhaul 16.01.2022: warn if multiple non-defaults are conflicting!
         key = standardize_config_name(key)
         if key not in self.used_configs:
             conf_suggestions = [i[1:] for i in self.toset_configs if i[0] == key]
-            assert len(conf_suggestions) > 0, "TODO what now?!"
-            final_conf = min([i for i in conf_suggestions], key=lambda x: settings.CONF_PRIORITY.index(x[1]))
-            if final_conf[1] == "defaults": #TODO overhaul 16.01.2022: does that mean I can get rid of get_setting?!
-                if "DEFAULT_"+key not in settings.__dict__:
-                    raise ValueError(f"You didn't provide a value for {key} and there is no default-value!")
-                final_conf[0] = settings.__dict__["DEFAULT_"+key]
+            final_conf = min([i for i in conf_suggestions], key=lambda x: settings.CONF_PRIORITY.index(x[1])) if len(conf_suggestions) > 0 else [None, "defaults"]
+            if final_conf[1] == "defaults":
+                final_conf[0] = get_defaultsetting(key)
+            if silent:
+                return final_conf[0]
             self.used_configs[key] = final_conf[0]
         return self.used_configs[key]
 
@@ -127,6 +131,12 @@ class CustomContext(ObjectWrapper):
             # TODO statt v[0], wenn v eine liste ist und wenn ein cmd-arg bzw env-var einen wert hat der damit consistent ist, nimm das arg
             for k, v in config.items():
                 self.set_config(k, v, "conf_file")
+
+    def used_influential_confs(self):
+        tmp = {k: v for k, v in self.used_configs.items() if k not in settings.NON_INFLUENTIAL_CONFIGS}
+        if not tmp.get("DEBUG") and "DEBUG_N_ITEMS" in tmp:
+            del tmp["DEBUG_N_ITEMS"]
+        return tmp
 
 
 def click_pass_add_context(fn):
@@ -198,10 +208,12 @@ def process_result(*args, **kwargs):
 @cli.command()
 @click.option("--raw-descriptions-file", type=str, default=None)
 @click.option("--languages-file", type=str, default=None)
+@click.option("--title-languages-file", type=str, default=None)
 @click_pass_add_context
-def check_languages(ctx, raw_descriptions_file, languages_file):
-    raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
-    create_languages_file_base(languages_file, ctx.obj["json_persister"], raw_descriptions, ctx.obj["dataset_class"])
+def check_languages(ctx, raw_descriptions_file, languages_file, title_languages_file):
+    raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions")
+    create_languages_file_base(languages_file, "languages", "Beschreibung", ctx.obj["json_persister"], raw_descriptions, ctx.obj["dataset_class"])
+    create_languages_file_base(title_languages_file, "title_languages", "Name", ctx.obj["json_persister"], raw_descriptions, ctx.obj["dataset_class"])
     #no need to save, that's done inside the function.
 
 
@@ -214,8 +226,8 @@ def check_languages(ctx, raw_descriptions_file, languages_file):
 @click.option("--title-translations-file", type=str, default=None)
 @click_pass_add_context
 def translate_titles(ctx, pp_components, translate_policy, raw_descriptions_file, title_languages_file, title_translations_file):
-    raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
-    translate_titles_base(raw_descriptions, pp_components, translate_policy, title_languages_file, title_translations_file, ctx.obj["json_persister"])
+    raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions")
+    translate_titles_base(raw_descriptions, pp_components, translate_policy, title_languages_file, title_translations_file, ctx.obj["json_persister"], ctx.obj["dataset_class"])
     #no need to save, that's done inside the function.
 
 
@@ -242,20 +254,20 @@ def translate_descriptions(ctx, translate_policy, raw_descriptions_file, languag
 @click.option("--max-ngram", type=int, default=None)
 @click_pass_add_context
 def preprocess_descriptions(ctx, json_persister, dataset_class, raw_descriptions_file, languages_file, translations_file, title_languages_file, title_translations_file):
-    raw_descriptions = json_persister.load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
-    languages = json_persister.load(languages_file, "languages", ignore_params=["pp_components", "translate_policy"], loader=lambda langs: langs)
+    raw_descriptions = json_persister.load(raw_descriptions_file, "raw_descriptions")
+    languages = json_persister.load(languages_file, "languages", loader=lambda langs: langs)
     try:
-        title_languages = json_persister.load(title_languages_file, "title_languages", ignore_params=["pp_components", "translate_policy"], loader=lambda title_langs: title_langs)
+        title_languages = json_persister.load(title_languages_file, "title_languages", loader=lambda langs: langs)
     except FileNotFoundError:
         title_languages = languages
     if ctx.get_config("translate_policy") == "translate":
-        translations = json_persister.load(translations_file, "translated_descriptions", ignore_params=["pp_components", "translate_policy"], force_overwrite=True, loader=lambda **kwargs: kwargs["translations"])
-        title_translations = json_persister.load(title_translations_file, "translated_titles", ignore_params=["pp_components", "translate_policy"], force_overwrite=True, loader=lambda **kwargs: kwargs["title_translations"])
+        translations = json_persister.load(translations_file, "translated_descriptions")
+        title_translations = json_persister.load(title_translations_file, "translated_titles", loader=lambda **kw: kw["title_translations"])
         # TODO[e] depending on pp_compoments, title_languages etc may still allowed to be empty
     else:
         translations, title_translations = None, None
     descriptions, metainf = preprocess_descriptions_base(raw_descriptions, dataset_class, ctx.get_config("pp_components"), ctx.get_config("translate_policy"), languages, translations, title_languages, title_translations)
-    json_persister.save("pp_descriptions.json", descriptions=descriptions, relevant_metainf=metainf)
+    json_persister.save("pp_descriptions.json", descriptions=descriptions)# , relevant_metainf=metainf) #TODO overhaul 16.01.2022: can I do wihtout relevant_metainf?!
 
 
 ########################################################################################################################
@@ -276,26 +288,30 @@ def create_spaces(ctx, json_persister):
 @create_spaces.command()
 @click_pass_add_context
 def create_dissim_mat(ctx, json_persister):
-    pp_descriptions = json_persister.load(None, "pp_descriptions", ignore_params=["quantification_measure"], loader=DescriptionList.from_json)
-    quant_dtm, dissim_mat, metainf = create_dissim_mat_base(pp_descriptions, ctx.obj["quantification_measure"], ctx.obj["verbose"])
-    ctx.obj["json_persister"].save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat, relevant_metainf=metainf)
+    pp_descriptions = json_persister.load(None, "pp_descriptions", loader=DescriptionList.from_json)
+    quant_dtm, dissim_mat, metainf = create_dissim_mat_base(pp_descriptions, ctx.get_config("quantification_measure"), ctx.get_config("verbose"))
+    ctx.obj["json_persister"].save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat)
 
 
 @create_spaces.command()
 @click.option("--embed-dimensions", type=int, default=None)
 @click.option("--embed-algo", type=click.Choice(ALL_EMBED_ALGO, case_sensitive=False), default=None)
 @click_pass_add_context
-def create_embedding(ctx):
-    dissim_mat = ctx.obj["json_persister"].load(None, "dissim_mat", ignore_params=["embed_dimensions"], loader=dtm_dissimmat_loader)
-    pp_descriptions = ctx.obj["json_persister"].load(None, "pp_descriptions", ignore_params=["quantification_measure"], loader=DescriptionList.from_json, silent=True) \
-                      if ctx.obj["verbose"] else None
-    embedding = create_embedding_base(dissim_mat, ctx.obj["embed_dimensions"], ctx.obj["embed_algo"], ctx.obj["verbose"], pp_descriptions=pp_descriptions)
-    ctx.obj["json_persister"].save("embedding.json", embedding=embedding)
+def create_embedding(ctx, json_persister):
+    dissim_mat = json_persister.load(None, "dissim_mat", loader=dtm_dissimmat_loader)
+    pp_descriptions = json_persister.load(None, "pp_descriptions", loader=DescriptionList.from_json, silent=True) if ctx.get_config("verbose") else None
+    embedding = create_embedding_base(dissim_mat, ctx.get_config("embed_dimensions"), ctx.get_config("embed_algo"), ctx.get_config("verbose"), pp_descriptions=pp_descriptions)
+    json_persister.save("embedding.json", embedding=embedding)
 
 ########################################################################################################################
 ########################################################################################################################
 ########################################################################################################################
 #prepare-candidateterms group
+
+
+
+#TODO from here to below, make sure to remove all the "relevant_metainf" etc from saving!!
+
 
 @cli.group()
 @click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", fordefault=True))

@@ -7,6 +7,7 @@ from langdetect import detect
 from langdetect.lang_detect_exception import LangDetectException
 from tqdm import tqdm
 
+from derive_conceptualspace.settings import get_setting
 from misc_util.pretty_print import pretty_print as print
 from derive_conceptualspace.util.google_translate import translate_text
 from derive_conceptualspace.create_spaces.preprocess_descriptions import PPComponents
@@ -71,31 +72,23 @@ def translate_elems(whatever_list, languages=None, keys=None, already_translated
 
 
 
-def full_translate_titles(raw_descriptions, pp_components, translate_policy, title_languages_file, title_translations_file, json_persister):
+def full_translate_titles(raw_descriptions, pp_components, translate_policy, title_languages_file, title_translations_file, json_persister, dataset_class):
     pp_components = PPComponents.from_str(pp_components)
     if (pp_components.add_coursetitle or pp_components.add_subtitle) and translate_policy == "translate": #TODO parts of this also needs to be done for onlyeng
+        title_languages = create_languages_file(title_languages_file, "title_languages", "Name", json_persister, raw_descriptions, dataset_class)
         try:
-            title_languages = json_persister.load(title_languages_file, "title_languages", ignore_params=["pp_components", "translate_policy"], loader=lambda title_langs: title_langs)
-        except FileNotFoundError:
-            descriptions = preprocess_raw_course_file(raw_descriptions)
-            full_titles = [(tit+". \n"+sub) if str(sub) != "nan" else tit for tit,sub in zip(descriptions["Name"], descriptions["Untertitel"])]
-            title_langs = dict(zip(list(descriptions["Name"]), get_langs(full_titles).values()))
-            json_persister.save(title_languages_file, title_langs=title_langs, relevant_params=[])
-            title_languages = json_persister.load(title_languages_file, "title_languages", ignore_params=["pp_components", "translate_policy"], loader=lambda title_langs: title_langs)
-
-        try:
-            title_translations = json_persister.load(title_translations_file, "translated_titles", ignore_params=["pp_components", "translate_policy"], force_overwrite=True)
+            title_translations = json_persister.load(title_translations_file, "translated_titles", silent=True)
         except FileNotFoundError:
             title_translations = dict(title_translations={}, is_complete=False)
-        if not title_translations["is_complete"]:
-            descriptions = preprocess_raw_course_file(raw_descriptions)
+        if not title_translations.get("is_complete", False):
+            descriptions = dataset_class.preprocess_raw_file(raw_descriptions)
             subtitles = [i if str(i) != "nan" else None for i in descriptions["Untertitel"]]
             to_translate = list(zip(*[(k, v) for k, v in title_languages.items() if v != "en"]))
             sec_translate = list(zip(*[i for i in zip(subtitles, title_languages.values()) if i[0] and i[1] != "en"]))
-            translateds, did_update, is_complete= translate_elems(to_translate[0]+sec_translate[0], to_translate[1]+sec_translate[1], already_translated=title_translations["title_translations"])
+            translateds, did_update, is_complete= translate_elems(to_translate[0]+sec_translate[0], to_translate[1]+sec_translate[1], already_translated=title_translations["title_translations"] if "title_translations" in title_translations else title_translations)
             if did_update:
-                json_persister.save(title_translations_file, title_translations=translateds, is_complete=is_complete, relevant_params=[], force_overwrite=True)
-            title_translations = json_persister.load(title_translations_file, "translated_titles", ignore_params=["pp_components", "translate_policy"], force_overwrite=True)
+                json_persister.save(title_translations_file, title_translations=translateds, is_complete=is_complete, force_overwrite=True)
+            title_translations = json_persister.load(title_translations_file, "translated_titles", silent=True)
             if not is_complete:
                 print("The translated Titles are not complete yet!")
                 exit(1)
@@ -106,36 +99,38 @@ def full_translate_titles(raw_descriptions, pp_components, translate_policy, tit
     return None, None
 
 
-def create_languages_file(languages_file, json_persister, raw_descriptions, dataset_class):
+def create_languages_file(languages_file, file_basename, column, json_persister, raw_descriptions, dataset_class):
     try:
-        languages = json_persister.load(languages_file, "languages", ignore_params=["translate_policy"], loader=lambda langs: langs)
+        languages = json_persister.load(languages_file, file_basename, loader=lambda langs: langs)
     except FileNotFoundError:
         descriptions = dataset_class.preprocess_raw_file(raw_descriptions)
-        langs = get_langs(descriptions["Beschreibung"], assert_len=False)
-        langs = {i["Name"]: langs[i["Beschreibung"]] for _,i in descriptions.iterrows()}
-        json_persister.save(languages_file, langs=langs, relevant_params=[])
-        languages = json_persister.load(languages_file, "languages", ignore_params=["translate_policy"], loader=lambda langs: langs)
+        langs = get_langs(descriptions[column], assert_len=False)
+        langs = {i["Name"]: langs[i[column]] for _,i in descriptions.iterrows()}
+        json_persister.save(languages_file, langs=langs)
+        languages = json_persister.load(languages_file, file_basename, loader=lambda langs: langs)
     return languages
+
+
 
 
 def full_translate_descriptions(raw_descriptions, translate_policy, languages_file, translations_file, json_persister):
     if translate_policy == "translate": #TODO parts of this also needs to be done for onlyeng
-        languages = create_languages_file(languages_file, json_persister, raw_descriptions, dataset_class)
+        languages = create_languages_file(languages_file, "languages", "Beschreibung", json_persister, raw_descriptions, dataset_class)
         try:
-            translations = json_persister.load(translations_file, "translated_descriptions", ignore_params=["translate_policy"], force_overwrite=True)
+            translations = json_persister.load(translations_file, "translated_descriptions")
         except FileNotFoundError:
             translations = dict(translations={}, is_complete=False)
         if "is_complete" not in translations: #for backwards compatibility
-            json_persister.save(translations_file, translations=translations, is_complete=False, relevant_params=[], force_overwrite=True)
-            translations = json_persister.load(translations_file, "translated_descriptions", ignore_params=["translate_policy"], force_overwrite=True)
+            json_persister.save(translations_file, translations=translations, is_complete=False)
+            translations = json_persister.load(translations_file, "translated_descriptions")
         if True: #TODO #PRECOMMIT not translations["is_complete"]:
             descriptions = preprocess_raw_course_file(raw_descriptions)
             assert len(descriptions) == len(languages)
             to_translate = [i for i in zip(descriptions["Beschreibung"], languages.values(), languages.keys()) if i[1] != "en"]
             translateds, did_update, is_complete= translate_elems(*list(zip(*to_translate)), already_translated=translations["translations"])
             if did_update:
-                json_persister.save(translations_file, translations=translateds, is_complete=is_complete, relevant_params=[], force_overwrite=True)
-            translations = json_persister.load(translations_file, "translated_descriptions", ignore_params=["translate_policy"], force_overwrite=True)
+                json_persister.save(translations_file, translations=translateds, is_complete=is_complete, force_overwrite=True)
+            translations = json_persister.load(translations_file, "translated_descriptions")
             if not is_complete:
                 print("The translated Descriptions are not complete yet!")
                 exit(1)

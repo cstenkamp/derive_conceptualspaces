@@ -1,3 +1,4 @@
+import contextlib
 from os.path import isfile, abspath, dirname, join
 import os
 
@@ -47,7 +48,7 @@ DEFAULT_PRIM_LAMBDA = 0.45
 DEFAULT_SEC_LAMBDA = 0.1
 DEFAULT_STANFORDNLP_VERSION = "4.2.2" #whatever's newest at https://stanfordnlp.github.io/CoreNLP/history.html
 DEFAULT_COURSE_TYPES = ["colloquium", "seminar", "internship", "practice", "lecture"]
-DEFAULT_CUSTOM_STOPWORDS = ["one", "also", "take"]
+DEFAULT_CUSTOM_STOPWORDS = ("one", "also", "take")
 DEFAULT_MAX_NGRAM = 5
 DEFAULT_NGRAMS_IN_EMBEDDING = False #If I should set the ngram-range already in the preprocess_descriptions step (makes the dissimiliarity-matrix a shitton more sparse)
 DEFAULT_DISSIM_MAT_ONLY_PARTNERED = True
@@ -65,18 +66,28 @@ DEFAULT_QUANTEXTRACT_FORCETAKE_PERC = 0.99
 DEFAULT_CLASSIFIER_COMPARETO_RANKING = "count"  #so far: one of ["count", "ppmi"]
 DEFAULT_CLASSIFIER_SUCCMETRIC = "cohen_kappa"
 
-#Settings regarding the architecture/platform
-CONF_PRIORITY = ["cmd_args", "env_vars", "conf_file", "dataset_class", "defaults"] #no distinction between env_file and env_var bc load_dotenv is executed eagerly and just overwrites envvars from envfile
-DEFAULT_BASE_DIR = abspath(join(dirname(__file__), "..", "..", ENV_PREFIX+"_data"))
-DEFAULT_NOTIFY_TELEGRAM = False
+@contextlib.contextmanager
+def set_noninfluentials():
+    pre_globals = dict(globals())
+    yield
+    added_vars = set(i for i in globals().keys() - pre_globals.keys() - {"pre_globals"} if not i.startswith("__py_debug"))
+    globals()["NON_INFLUENTIAL_CONFIGS"] += [i[len("DEFAULT_"):] if i.startswith("DEFAULT_") else i for i in added_vars]
 
-DEFAULT_RAW_DESCRIPTIONS_FILE = "kurse-beschreibungen.csv"
-DEFAULT_LANGUAGES_FILE = "languages.json"
-DEFAULT_TRANSLATIONS_FILE = "translated_descriptions.json"
-DEFAULT_TITLE_LANGUAGES_FILE = "title_languages.json"
-DEFAULT_TITLE_TRANSLATIONS_FILE = "translated_titles.json"
-DEFAULT_LOG = "Info"
-DEFAULT_LOGFILE = ""
+#Settings regarding the architecture/platform
+NON_INFLUENTIAL_CONFIGS = ["CONF_FILE"]
+with set_noninfluentials(): #this context-manager adds all settings from here to the NON_INFLUENTIAL_CONFIGS variable
+    CONF_PRIORITY = ["dependency", "cmd_args", "env_vars", "conf_file", "dataset_class", "defaults"] #no distinction between env_file and env_var bc load_dotenv is executed eagerly and just overwrites envvars from envfile
+    DEFAULT_BASE_DIR = abspath(join(dirname(__file__), "..", "..", ENV_PREFIX+"_data"))
+    DEFAULT_NOTIFY_TELEGRAM = False
+
+    DEFAULT_RAW_DESCRIPTIONS_FILE = "kurse-beschreibungen.csv"
+    DEFAULT_LANGUAGES_FILE = "languages.json"
+    DEFAULT_TRANSLATIONS_FILE = "translated_descriptions.json"
+    DEFAULT_TITLE_LANGUAGES_FILE = "title_languages.json"
+    DEFAULT_TITLE_TRANSLATIONS_FILE = "translated_titles.json"
+    DEFAULT_LOG = "Info"
+    DEFAULT_LOGFILE = ""
+    DEFAULT_CONF_FILE = None
 
 ########################################################################################################################
 ######################################## set and get settings/env-vars #################################################
@@ -116,39 +127,44 @@ def get_envvar(envvarname):
 from functools import wraps
 import sys
 
-def notify_jsonpersister(fn):
-    @wraps(fn)
-    def wrapped(*args, **kwargs):
-        res = fn(*args, **kwargs)
-        if not kwargs.get("fordefault"):
-            if hasattr(sys.stdout, "ctx") and "json_persister" in sys.stdout.ctx.obj:  # TODO getting the json_serializer this way is dirty as fuck!
-                sys.stdout.ctx.obj["json_persister"].add_config(args[0].lower(), res)
-        return res
-    return wrapped
+# def notify_jsonpersister(fn):
+#     @wraps(fn)
+#     def wrapped(*args, **kwargs):
+#         res = fn(*args, **kwargs)
+#         if not kwargs.get("fordefault"):
+#             if hasattr(sys.stdout, "ctx") and "json_persister" in sys.stdout.ctx.obj:  # TODO getting the json_serializer this way is dirty as fuck!
+#                 sys.stdout.ctx.obj["json_persister"].add_config(args[0].lower(), res)
+#         return res
+#     return wrapped
 
 
-@notify_jsonpersister
+# @notify_jsonpersister
 def get_setting(name, default_none=False, silent=False, set_env_from_default=False, stay_silent=False, fordefault=True):
-    if fordefault: #fordefault is used for click's default-values. In those situations, it it should NOT notify the json-persister!
-        silent = True
-        stay_silent = False
-        set_env_from_default = False
-        default_none = True
-        # return "default" #("default", globals().get("DEFAULT_"+name, "NO_DEFAULT"))
-    suppress_further = True if not silent else True if stay_silent else False
-    if get_envvar(get_envvarname(name, assert_hasdefault=False)) is not None:
-        return get_envvar(get_envvarname(name, assert_hasdefault=False)) if get_envvar(get_envvarname(name, assert_hasdefault=False)) != "none" else None
-    if "DEFAULT_"+get_envvarname(name, assert_hasdefault=False, without_prefix=True) in globals():
-        if not silent and not get_envvar(get_envvarname(name, assert_hasdefault=False)+"_shutup"):
-            print(f"returning setting for {name} from default value: {globals()['DEFAULT_'+name]}")
-        if suppress_further and not get_envvar(get_envvarname(name, assert_hasdefault=False) + "_shutup"):
-            set_envvar(get_envvarname(name, assert_hasdefault=False)+"_shutup", True)
-        if set_env_from_default:
-            set_envvar(get_envvarname(name, assert_hasdefault=False)+name, globals()['DEFAULT_'+name])
-        return globals()["DEFAULT_"+name]
-    if default_none:
-        return None
-    raise ValueError(f"There is no default-value for setting {name}, you have to explicitly pass it!")
+    #!!! diese funktion darf NICHTS machen außer sys.stdout.ctx.get_config(name) returnen!!! alles an processing gehört in die get_config!!!
+    if hasattr(sys.stdout, "ctx"):
+        return sys.stdout.ctx.get_config(name)
+    #TODO overhaul 16.01.2022: einige Dinge von der old version waren schon sinnvoll, zum beispiel das bescheid sagen wenn von default, gucken
+    # was ich davon wieder haben möchte
+    # if fordefault: #fordefault is used for click's default-values. In those situations, it it should NOT notify the json-persister!
+    #     silent = True
+    #     stay_silent = False
+    #     set_env_from_default = False
+    #     default_none = True
+    #     # return "default" #("default", globals().get("DEFAULT_"+name, "NO_DEFAULT"))
+    # suppress_further = True if not silent else True if stay_silent else False
+    # if get_envvar(get_envvarname(name, assert_hasdefault=False)) is not None:
+    #     return get_envvar(get_envvarname(name, assert_hasdefault=False)) if get_envvar(get_envvarname(name, assert_hasdefault=False)) != "none" else None
+    # if "DEFAULT_"+get_envvarname(name, assert_hasdefault=False, without_prefix=True) in globals():
+    #     if not silent and not get_envvar(get_envvarname(name, assert_hasdefault=False)+"_shutup"):
+    #         print(f"returning setting for {name} from default value: {globals()['DEFAULT_'+name]}")
+    #     if suppress_further and not get_envvar(get_envvarname(name, assert_hasdefault=False) + "_shutup"):
+    #         set_envvar(get_envvarname(name, assert_hasdefault=False)+"_shutup", True)
+    #     if set_env_from_default:
+    #         set_envvar(get_envvarname(name, assert_hasdefault=False)+name, globals()['DEFAULT_'+name])
+    #     return globals()["DEFAULT_"+name]
+    # if default_none:
+    #     return None
+    # raise ValueError(f"There is no default-value for setting {name}, you have to explicitly pass it!")
 
 
 def get_envvarname(config, assert_hasdefault=True, without_prefix=False):
@@ -171,7 +187,9 @@ def cast_config(k, v):
         v = True
     if v == "False":
         v = False
-    if v != None and "DEFAULT_" + k in globals() and type(globals()["DEFAULT_" + k]) != type(v):
+    if isinstance(v, list):
+        v = tuple(v)
+    if "DEFAULT_" + k in globals() and type(globals()["DEFAULT_" + k]) != type(v) and (v != None and globals()["DEFAULT_" + k] != None):
         assert False, "TODO overhaul 16.01.2022"
     return v
 
@@ -188,6 +206,13 @@ def standardize_config(configname, configval):
     configname = standardize_config_name(configname)
     return configname, standardize_config_val(configname, configval)
 
+def get_defaultsetting(key):
+    if "DEFAULT_" + key not in globals():
+        raise ValueError(f"You didn't provide a value for {key} and there is no default-value!")
+    default = globals()["DEFAULT_"+key]
+    if key not in NON_INFLUENTIAL_CONFIGS:
+        print(f"returning setting for {key} from default value: {default}")
+    return default
 
 ########################################################################################################################
 ########################################### KEEP THIS AT THE BOTTOM! ###################################################

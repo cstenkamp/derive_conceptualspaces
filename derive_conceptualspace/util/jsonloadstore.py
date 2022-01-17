@@ -1,4 +1,5 @@
 """https://stackoverflow.com/a/47626762/5122790"""
+import re
 import inspect
 import json
 import os
@@ -13,6 +14,7 @@ import pandas as pd
 from sklearn.manifold import MDS, TSNE, Isomap
 
 from derive_conceptualspace import settings
+from derive_conceptualspace.settings import standardize_config_name, standardize_config_val
 from misc_util.logutils import CustomIO
 
 flatten = lambda l: [item for sublist in l for item in sublist]
@@ -174,9 +176,27 @@ def json_load(*args, assert_meta=(), return_meta=False, **kwargs):
 ########################################################################################################################
 # json-persister
 
+def makelist(orig, basename):
+    res = []
+    for i in orig:
+        if i == "this":
+            i = basename
+        if i not in res:
+            res.append(i)
+    return res
+
 class format_dict(dict):
+    def __init__(self, *args, **kwargs):
+        super(format_dict, self).__init__(*args, **kwargs)
+        self.used_keys = {}
     def __missing__(self, key):
         return "UNDEFINED"
+    def __getitem__(self, item):
+        item = standardize_config_name(item)
+        res = super().__getitem__(item)
+        if res != "UNDEFINED":
+            self.used_keys[item] = res
+        return res
 
 
 class JsonPersister():
@@ -190,9 +210,10 @@ class JsonPersister():
     #     candidate_terms["candidate_terms"] = postprocess_candidates(candidate_terms, descriptions)
     #     return model, candidate_terms
 
-    def __init__(self, in_dir, out_dir, ctx, forward_params, forward_meta_inf, dir_struct=None, add_relevantparams_to_filename=True, strict_metainf_checking=True):
-        self.forward_params = forward_params
-        self.forward_meta_inf = forward_meta_inf
+    def __init__(self, in_dir, out_dir, ctx, forward_params, forward_meta_inf, incompletedirnames_to_filenames=True, dir_struct=None, strict_metainf_checking=True):
+        self.incompletedirnames_to_filenames = incompletedirnames_to_filenames #means that if there is info that should be added to dirname, but not all for one level, then add to filename
+        # self.forward_params = forward_params
+        # self.forward_meta_inf = forward_meta_inf
         #TODO the FORWARD_META_INF here is not used - I can use it to automatically add this in the save-method if the respective keys are in the ctx.obj, such that I don't need to
         # explitly specify them when saving!
         self.dir_struct = dir_struct or []
@@ -200,124 +221,177 @@ class JsonPersister():
         self.out_dir = out_dir
         self.ctx = ctx
         self.loaded_objects = {} #dict: {save_basename of loaded file: [object (None if loaded), filepath, [save_basename_of_file_that_needed_it_1, save_basename_of_file_that_needed_it_2,..]
-        self.loaded_relevant_params = {}
-        self.loaded_relevant_metainf = {}
-        self.add_relevantparams_to_filename = add_relevantparams_to_filename
-        self.default_metainf_getters = {}
-        self.strict_metainf_checking = strict_metainf_checking
-        self.created_data = {}
-        self.used_config = {}
+        # self.loaded_relevant_params = {}
+        # self.loaded_relevant_metainf = {}
+        # self.default_metainf_getters = {}
+        # self.strict_metainf_checking = strict_metainf_checking
+        self.created_plots = {}
+        # self.used_config = {}
 
-    def get_subdir(self, relevant_metainf, ignore_params=None):
+    def get_subdir(self, influential_confs):
         if not (self.dir_struct and all(i for i in self.dir_struct)):
             return "", []
-        di = format_dict({**{k:v for k,v in self.ctx.obj.items() if k not in (ignore_params or [])}, **relevant_metainf})
-        dirstruct = [d.format_map(di) for d in self.dir_struct]
+        di = format_dict(influential_confs)
+        dirstruct = [d.format_map(di) for d in self.dir_struct] #that will have "UNDEFINED" from some point on
         fulfilled_dirs = len(dirstruct) if not (tmp := [i for i, el in enumerate(dirstruct) if "UNDEFINED" in el]) else tmp[0]
-        used_params = [k for k in di.keys() if "{"+k+"}" in "".join(self.dir_struct[:fulfilled_dirs])] #"verbrauchte", damit die nicht mehr zum filename hinzugefügt werden müssen
-        return os.sep.join(dirstruct[:fulfilled_dirs]), used_params
+        used_keys = {standardize_config_name(i): di.used_keys[standardize_config_name(i)] for i in re.findall(r'{(.*?)}', "".join(self.dir_struct[:fulfilled_dirs]))}
+        return (os.sep.join(dirstruct[:fulfilled_dirs]),
+                used_keys, #what you used
+                {k: v for k, v in di.used_keys.items() if k not in used_keys.keys()}, #what you should have used for filename but didn't
+                {k:v for k, v in influential_confs.items() if k not in used_keys.keys()} #what you didn't use
+                )
+
+    # def get_subdir(self, relevant_metainf, ignore_params=None):
+    #     if not (self.dir_struct and all(i for i in self.dir_struct)):
+    #         return "", []
+    #     di = format_dict({**{k:v for k,v in self.ctx.obj.items() if k not in (ignore_params or [])}, **relevant_metainf})
+    #     dirstruct = [d.format_map(di) for d in self.dir_struct]
+    #     fulfilled_dirs = len(dirstruct) if not (tmp := [i for i, el in enumerate(dirstruct) if "UNDEFINED" in el]) else tmp[0]
+    #     used_params = [k for k in di.keys() if "{"+k+"}" in "".join(self.dir_struct[:fulfilled_dirs])] #"verbrauchte", damit die nicht mehr zum filename hinzugefügt werden müssen
+    #     return os.sep.join(dirstruct[:fulfilled_dirs]), used_params
 
 
-    def get_file_by_config(self, subdir, relevant_metainf, save_basename):
-        subdirlen = len(join(self.in_dir, subdir))+1 if str(subdir).endswith(os.sep) else len(join(self.in_dir, subdir))
-        candidates = [join(path, name)[subdirlen:] for path, subdirs, files in
-                      os.walk(join(self.in_dir, subdir)) for name in files if name.startswith(save_basename)]
-        candidates = [i if not i.startswith(os.sep) else i[1:] for i in candidates]
-        assert candidates, f"No Candidate for {save_basename}! Subdir: {subdir}"
-        if len(candidates) == 1:
-            return candidates
-        elif len(candidates) > 1:
-            if all([splitext(i)[1] == ".json" for i in candidates]):
-                correct_cands = []
-                for cand in candidates:
-                    tmp = json_load(join(self.in_dir, subdir, cand))
-                    if (all(tmp.get("relevant_metainf", {}).get(k, v) == v or v == "ANY" for k, v in {**self.loaded_relevant_metainf, **relevant_metainf}.items()) and
-                            # all(tmp.get("relevant_params", {}).get(k) for k, v in self.loaded_relevant_params.items()) and #TODO was this necessary
-                            all(self.ctx.obj.get(k) == tmp["relevant_params"][k] for k in set(self.forward_params) & set(tmp.get("relevant_params", {}).keys()))):
-                        correct_cands.append(cand)
-                return correct_cands
+    # def get_file_by_config(self, subdir, relevant_metainf, save_basename):
+    #     subdirlen = len(join(self.in_dir, subdir))+1 if str(subdir).endswith(os.sep) else len(join(self.in_dir, subdir))
+    #     candidates = [join(path, name)[subdirlen:] for path, subdirs, files in
+    #                   os.walk(join(self.in_dir, subdir)) for name in files if name.startswith(save_basename)]
+    #     candidates = [i if not i.startswith(os.sep) else i[1:] for i in candidates]
+    #     assert candidates, f"No Candidate for {save_basename}! Subdir: {subdir}"
+    #     if len(candidates) == 1:
+    #         return candidates
+    #     elif len(candidates) > 1:
+    #         if all([splitext(i)[1] == ".json" for i in candidates]):
+    #             correct_cands = []
+    #             for cand in candidates:
+    #                 tmp = json_load(join(self.in_dir, subdir, cand))
+    #                 if (all(tmp.get("relevant_metainf", {}).get(k, v) == v or v == "ANY" for k, v in {**self.loaded_relevant_metainf, **relevant_metainf}.items()) and
+    #                         # all(tmp.get("relevant_params", {}).get(k) for k, v in self.loaded_relevant_params.items()) and #TODO was this necessary
+    #                         all(self.ctx.obj.get(k) == tmp["relevant_params"][k] for k in set(self.forward_params) & set(tmp.get("relevant_params", {}).keys()))):
+    #                     correct_cands.append(cand)
+    #             return correct_cands
+
+    def get_file_by_config(self, subdir, save_basename):
+        """If no filename specified, recursively search for files whose name startswith save_basename, and then from
+           the paths of the results, reverse-engineer the demanded configs of these files and then match them up"""
+        correct_cands = []
+        candidates = [join(path, name)[len(self.in_dir)+1:] for path, subdirs, files in os.walk(join(self.in_dir, subdir)) for name in files if name.startswith(save_basename)]
+        for cand in candidates: #ich muss nicht reverse-matchen, ich kann die required confs nehmen, anwenden und schauen ob's gleich ist!
+            demanded_confs = re.findall(r'{(.*?)}', "".join(self.dir_struct[:cand.count(os.sep)]))
+            dirstruct, _, _, nonapplied_args = self.get_subdir({standardize_config_name(i): self.ctx.get_config(i) for i in demanded_confs})
+            if dirname(cand) == dirstruct:
+                correct_cands.append(cand)
+        if not correct_cands:
+            raise FileNotFoundError(f"There is no candidate for {save_basename} with the current config!")
+        assert len(correct_cands) == 1
+        return correct_cands[0]
 
 
-    def load(self, filename, save_basename, relevant_metainf=None, ignore_params=None, loader=None, force_overwrite=False, silent=False):
-        complete_metainf = {**{k: v() for k, v in self.default_metainf_getters.items()}, **(relevant_metainf or {})}
-        ignore_params = ignore_params or []
-        subdir = ""
-        if filename is None:
-            subdir, _ = self.get_subdir(complete_metainf, ignore_params)
-            assert isdir(join(self.in_dir, subdir)), f"Directory `{join(self.in_dir, subdir)}` doesn't exist - Cannot get {save_basename}"
-            candidates = self.get_file_by_config(subdir, complete_metainf, save_basename)
-            if len(candidates) != 1:
-                raise Exception(f"There are != 1 candidates for {save_basename} in {subdir} with demanded params {self.loaded_relevant_params}: {candidates}")
-                #TODO: still wrong?!
-            filename = candidates[0]
+    def add_file_metas(self, file): #TODO overhaul 16.01.2022
+        print()
+        for k, v in file.get("loaded_files", {}).items(): #for all files that THAT file loaded
+            if k in self.loaded_objects: #if that file is already loaded
+                self.loaded_objects[k]["used_in"].extend(v["used_in"])  # jot down that that file was also used for THAT file
+            else:
+                self.loaded_objects[k] = v  #add those ones as dependency here
+            # elif file["basename"] in v["used_in"]: #and if they are already a dependency (either here or in THAT file)
+            #     self.loaded_objects[k]["used_in"].extend(v["used_in"])  #jot down that #TODO do I need this?!
+        for k, v in file.get("used_influentials", {}).items():
+            #TODO if a dependency used a value, you should add it to the context with MAXIMUM priority (and fail if already set from non-default)
+            self.ctx.set_config(k, v, "dependency")
+
+        # for k, v in file.get("loaded_files", {}).items():
+        #     if k not in self.loaded_objects: self.loaded_objects[k] = v
+        #     elif file["basename"] in v[2]:
+        #         assert {k:v for k,v in self.loaded_objects[k][3].items()} == v[3]
+        #         self.loaded_objects[k][2].extend(v[2])
+        #     elif k in self.loaded_objects:
+        #         self.loaded_objects[k][2].extend(v[2])
+        # for k, v in file.get("relevant_params", {}).items():
+        #     if k in self.loaded_relevant_params: assert self.loaded_relevant_params[k] == v
+        #     else: self.loaded_relevant_params[k] = v
+        # for k, v in file.get("relevant_metainf", {}).items():
+        #     if k in self.loaded_relevant_metainf: assert self.loaded_relevant_metainf[k] == v
+        #     else: self.loaded_relevant_metainf[k] = v
+        #     if self.ctx.obj["strict_metainf_checking"]:
+        #         assert k in complete_metainf, f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}`, but you don't have a value for this!"
+        #         assert complete_metainf[k] in [v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
+        #     else:
+        #         assert complete_metainf.get(k) in [None, v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
+        # obj = tmp["object"] if "object" in tmp else tmp
+        # obj_info = {**tmp.get("obj_info", {}), "relevant_params": tmp.get("relevant_params", {}), "relevant_metainf": tmp.get("relevant_metainf", {})}
+        # assert all(self.used_config[k] == tmp["introduced_config"][k] for k in self.used_config.keys() & tmp.get("introduced_config", {}).keys())
+
+
+    def check_file_metas(self, file):
+        for k, v in file.get("loaded_files", {}).items():
+            if file["basename"] in v["used_in"] and k in self.loaded_objects:  #ensure that the info of all currently loaded files corresponds to all of those the file used
+                assert self.loaded_objects[k]["metadata"] == v["metadata"]
+        for k, v in file.get("used_influentials", {}).items():
+            assert self.ctx.get_config(k, silent=True) == standardize_config_val(k, v)  #check that all current influential settings are consistent with what the file had
+        # for k, v in file.get("relevant_metainf", {}).items():
+        #     if k in self.loaded_relevant_metainf: assert self.loaded_relevant_metainf[k] == v
+        #     else: self.loaded_relevant_metainf[k] = v
+        #     if self.ctx.obj["strict_metainf_checking"]:
+        #         assert k in complete_metainf, f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}`, but you don't have a value for this!"
+        #         assert complete_metainf[k] in [v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
+        #     else:
+        #         assert complete_metainf.get(k) in [None, v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
+        # obj = tmp["object"] if "object" in tmp else tmp
+        # obj_info = {**tmp.get("obj_info", {}), "relevant_params": tmp.get("relevant_params", {}), "relevant_metainf": tmp.get("relevant_metainf", {})}
+        # assert all(self.used_config[k] == tmp["introduced_config"][k] for k in self.used_config.keys() & tmp.get("introduced_config", {}).keys())
+        #TODO overhaul 16.01.2022: do I need this????
+
+    def load(self, filename, save_basename, /, loader=None, silent=False):
+        filename = filename or self.get_file_by_config("", save_basename)
         if splitext(filename)[1] == ".csv":
-            obj = pd.read_csv(join(self.in_dir, subdir, filename))
-            obj_info = {}
+            obj = pd.read_csv(join(self.in_dir, filename))
+            full_metadata = {}
         elif splitext(filename)[1] == ".json":
-            tmp = json_load(join(self.in_dir, subdir, filename))
-            # " ".join([tmp["basename"], "loaded", "(", *list(tmp["loaded_files"].keys()), ")"])
-            # 'filtered_dcm loaded ( raw_descriptions translations languages pp_descriptions candidate_terms postprocessed_candidates doc_cand_matrix )'
-            # 'embedding loaded ( raw_descriptions translations languages pp_descriptions dissim_mat )'
+            obj = json_load(join(self.in_dir, filename))
+            full_metadata = {k: v for k,v in obj.items() if k not in ["object", "loaded_files"]} if "object" in obj else {}
             if not silent:
-                for k, v in tmp.get("loaded_files", {}).items():
-                    if k not in self.loaded_objects: self.loaded_objects[k] = v
-                    elif tmp["basename"] in v[2]:
-                        assert {k:v for k,v in self.loaded_objects[k][3].items()} == v[3]
-                        self.loaded_objects[k][2].extend(v[2])
-                    elif k in self.loaded_objects:
-                        self.loaded_objects[k][2].extend(v[2])
-                for k, v in tmp.get("relevant_params", {}).items():
-                    if k in self.loaded_relevant_params: assert self.loaded_relevant_params[k] == v
-                    else: self.loaded_relevant_params[k] = v
-                for k, v in tmp.get("relevant_metainf", {}).items():
-                    if k in self.loaded_relevant_metainf: assert self.loaded_relevant_metainf[k] == v
-                    else: self.loaded_relevant_metainf[k] = v
-                    if self.ctx.obj["strict_metainf_checking"]:
-                        assert k in complete_metainf, f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}`, but you don't have a value for this!"
-                        assert complete_metainf[k] in [v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
-                    else:
-                        assert complete_metainf.get(k) in [None, v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
-            obj = tmp["object"] if "object" in tmp else tmp
-            obj_info = {**tmp.get("obj_info", {}), "relevant_params": tmp.get("relevant_params", {}), "relevant_metainf": tmp.get("relevant_metainf", {})}
-            assert all(self.used_config[k] == tmp["introduced_config"][k] for k in self.used_config.keys() & tmp.get("introduced_config", {}).keys())
-        if loader is not None:
-            obj = loader(**obj)
+                self.add_file_metas(obj)
+            self.check_file_metas(obj)
+            if "object" in obj:
+                obj = obj["object"]
+            if loader is not None:
+                obj = loader(**obj)
         if not silent:
-            for k, v in self.loaded_relevant_params.items():
-                if k in self.ctx.obj: assert self.ctx.obj[k] == v, f"{k} is demanded to be {self.ctx.obj[k]}, but is {v} in {tmp['basename']} at {join(subdir, filename)}"
-                #TODO better error message that tells which file is probably missing
-                else: self.ctx.obj[k] = v
-            if not force_overwrite:
-                assert save_basename not in self.loaded_objects
-            self.loaded_objects[save_basename] = (obj, join(self.in_dir, subdir, filename), ["this"], obj_info)
-        #TODO do something with the introduced_config
+            # for k, v in self.loaded_relevant_params.items():
+            #     if k in self.ctx.obj: assert self.ctx.obj[k] == v, f"{k} is demanded to be {self.ctx.obj[k]}, but is {v} in {tmp['basename']} at {join(subdir, filename)}"
+            #     #TODO better error message that tells which file is probably missing
+            #     else: self.ctx.obj[k] = v
+            assert save_basename not in self.loaded_objects
+            self.loaded_objects[save_basename] = {"content": obj, "path": join(self.in_dir, filename), "used_in": ["this"], "metadata": full_metadata}
         return obj
 
-
-    def save(self, basename, /, relevant_params=None, relevant_metainf=None, force_overwrite=False, **kwargs):
+    def save(self, basename, /, force_overwrite=False, **kwargs):
         basename, ext = splitext(basename)
         filename = basename
-        if relevant_params is not None:
-            relevant_params += self.loaded_relevant_params
-            assert len(set(relevant_params)) == len(relevant_params)
-        else:
-            relevant_params = [i for i in self.forward_params if i in self.ctx.obj]
-        relevant_metainf = {**self.loaded_relevant_metainf, **(relevant_metainf or {})}
-        subdir, used_args = self.get_subdir(relevant_metainf)
-        if self.add_relevantparams_to_filename and [i for i in relevant_params if i not in used_args]:
-            filename += "_" + "_".join([str(self.ctx.obj[i]) for i in [i for i in relevant_params if i not in used_args]])
-        loaded_files = {k:[None, v[1], [i if i != "this" else basename for i in v[2]], v[3]] for k,v in self.loaded_objects.items()}
-        assert all(self.ctx.obj[v] == k for v, k in self.loaded_relevant_params.items())
+        # if relevant_params is not None:
+        #     relevant_params += self.loaded_relevant_params
+        #     assert len(set(relevant_params)) == len(relevant_params)
+        # else:
+        #     relevant_params = [i for i in self.forward_params if i in self.ctx.obj]
+        # relevant_metainf = {**self.loaded_relevant_metainf, **(relevant_metainf or {})}
+        #TODO overhaul 16.01.2022: dass der sich hier loaded_relevant_metainf anschaut macht ja schon sinn!!
+
+        subdir, _, shoulduse_infls, _ = self.get_subdir(self.ctx.used_influential_confs())
+        if self.incompletedirnames_to_filenames and shoulduse_infls:
+            filename += "_"+("_".join(str(i) for i in shoulduse_infls.values()))
+        loaded_files = {k: dict(path=v["path"], used_in=makelist(v["used_in"], basename), metadata=v["metadata"]) for k, v in self.loaded_objects.items()}
+        # assert all(self.ctx.obj[v] == k for v, k in self.loaded_relevant_params.items()) #TODO overhaul 16.01.2022: add back?!
         os.makedirs(join(self.out_dir, subdir), exist_ok=True)
-        obj = {"loaded_files": loaded_files, "relevant_params": {i: self.ctx.obj[i] for i in relevant_params},
-               "relevant_metainf": relevant_metainf, "basename": basename, "obj_info": get_all_info(), "object": kwargs,
-               "created_data": self.created_data, "introduced_config": self.used_config}
+        obj = {"loaded_files": loaded_files, "used_influentials": self.ctx.used_influential_confs(),  #TODO overhaul 16.01.2022: used_conf is superfluos!!
+               "basename": basename, "obj_info": get_all_info(), "created_plots": self.created_plots,
+               "used_config": (self.ctx.used_configs, self.ctx.toset_configs),
+               "object": kwargs} #object should be last!!
         name = json_dump(obj, join(self.out_dir, subdir, filename+ext), write_meta=False, forbid_overwrite=not force_overwrite)
-        print(f"Saved under {name}. Relevant Params: {relevant_params}. Relevant Meta-Inf: {relevant_metainf}")
+        print(f"Saved under {name}. Influential Config: {self.ctx.used_influential_confs()}.")# Relevant Meta-Inf: {relevant_metainf}")
         return name
 
-    def add_data(self, title, data):
-        self.created_data[title] = json.dumps(data, cls=NumpyEncoder)
+    def add_plot(self, title, data):
+        self.created_plots[title] = json.dumps(data, cls=NumpyEncoder)
 
     def add_config(self, key, val):
         assert self.used_config.get(key, val) == val, f"{key} was {self.used_config[key]} and is now {val}"

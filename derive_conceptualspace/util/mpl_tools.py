@@ -70,7 +70,7 @@ def prepare_fig(full_data, title):
 
 def serialize_plot(title, full_data):
     if hasattr(sys.stdout, "ctx"): #TODO getting the json_serializer this way is dirty as fuck!
-        sys.stdout.ctx.obj["json_persister"].add_data(title, full_data)
+        sys.stdout.ctx.obj["json_persister"].add_plot(title, full_data)
 
 
 if __name__ == "__main__":

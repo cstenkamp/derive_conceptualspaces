@@ -40,7 +40,6 @@ def setup_json_persister(ctx):
     return JsonPersister(join(ctx.get_config("base_dir"), ctx.get_config("dataset")),
                          join(ctx.get_config("base_dir"), ctx.get_config("dataset")), ctx,
                          forward_params = all_params, forward_meta_inf = forward_meta_inf, dir_struct = dir_struct,
-                         add_relevantparams_to_filename=ctx.obj.get("add_relevantparams_to_filename", True),
                          )
 
 def set_debug(ctx, use_auto_envvar_prefix=False):
