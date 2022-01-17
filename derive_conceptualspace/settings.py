@@ -7,9 +7,10 @@ ENV_PREFIX = "MA"
 ############################################## the important parameters ################################################
 ########################################################################################################################
 
+
 #!! use singular for these (bzw the form you'd use if there wasn't the "ALL_" before)
 ALL_PP_COMPONENTS = ["faucsd2"]#, "autcsldp"] #,"tcsdp"                 # If in preprocessing it should add coursetitle, lemmatize, etc #TODO "autcsldp", "tcsldp" (gehen gerade nicht weil die nicht mit ngrams klarkommen)
-ALL_TRANSLATE_POLICY = ["translate"]#, "origlang", "onlyeng"]          # If non-english descriptions should be translated
+ALL_TRANSLATE_POLICY = ["translate", "onlyeng"]#, "origlang", "onlyeng"]          # If non-english descriptions should be translated
 ALL_EMBED_ALGO = ["mds"]#, "tsne", "isomap"]                           # Actual Embedding of the Descriptions
 ALL_EMBED_DIMENSIONS = [100]#, 3] #, 50, 200                           # Actual Embedding of the Descriptions
 ALL_QUANTIFICATION_MEASURE = ["ppmi"]#, "tfidf", "count", "binary"]    # For the dissimiliarity Matrix of the Descripts
