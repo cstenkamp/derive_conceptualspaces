@@ -1,6 +1,6 @@
 """
     Run default:   `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p default)`
-or             `MA_DEBUG=1 PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR tcsldp_translate/ppmi_3d/pp_keybert_count/clusters.json`
+    or             ` PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR siddata/debug_True/fautcsdp_translate_minwords100/embedding_ppmi/dissim_mat.json`
 ALL Combis:    `ma_cont snakemake --cores 1 -p  --directory /opt/data all --keep-going`
 ALL for 1 rule `(export $(cat $MA_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR all_for --config for_rule=create_embedding)`
 Plot DAG:      `PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -np --directory $MA_DATA_DIR --dag | grep -A99999 "digraph" | dot -Tsvg > dag.svg`
@@ -86,8 +86,8 @@ def initialize_snakemake():
         for k, v in dict(globals()).items():
             if k.endswith("_base") and callable(v):
                 globals()[k] =  telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(globals()[k])
+    print("CWD IS ON STARTUP", os.getcwd())
     ctx = CustomContext(SnakeContext(cwd=os.getcwd()))
-    ctx.init_context(load_envfile=True)  #after this point, no new env-vars should be set anymore (are not considered)
     #we don't load the conffile because in snakemake that has a different meaning #TODO overhaul really?!
     #TODO overhaul 16.01.2022: is the context consistent with all ways of doing things here (by filename, by config)???
     os.environ[f"{ENV_PREFIX}_SMK_INITIALIZED"] = "1"
@@ -98,6 +98,7 @@ ctx = initialize_snakemake()
 def add_to_ctx(wildcards, ctx):
     for k, v in wildcards.items():
         k, v = standardize_config(k, v)
+        print("SETTING WITH SMK", k, v)
         ctx.set_config(k, v, "smk_wildcard")
         # set_envvar(ENV_PREFIX+"_"+k.upper().replace("-","_"), v) #TODO use the one function for this
         # TODO overhaul 16.01.2022: I need to set envvars in snakemake
@@ -115,6 +116,7 @@ def autoload_context_inputs(ctx, inputs, wildcards, params=None, input_kwargs=No
     input_kwargs = input_kwargs or {}
     add_to_ctx(wildcards, ctx)
     if params: add_to_ctx(params, ctx)
+    ctx.init_context(load_envfile=True)  #after this point, no new env-vars should be set anymore (are not considered)
     for key, val in inputs.items():
         ctx.obj[key] = ctx.p.load(val, key, loader=loader(key), **input_kwargs.get(key, {}))
     #TODO overhaul 16.01.2022: hier könnte man jetzt tatsächlich confirm_config aufrufen und das setzt dann die ganzen envvars
@@ -131,23 +133,23 @@ rule trigger_default:
 
 
 generated_paths = dict(
-    pp_descriptions = "debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/pp_descriptions.json",
-    dissim_mat = "debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/dissim_mat.json",
-    embedding = "debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/embedding.json",
-    candidate_terms = "debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/candidate_terms_{extraction_method}.json",
-    postprocessed_candidates = "debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/postprocessed_candidates_{extraction_method}.json",
-    filtered_dcm = "debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json",
-    clusters = "debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}/clusters.json"
+    pp_descriptions = "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/pp_descriptions.json",
+    dissim_mat = "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/dissim_mat.json",
+    embedding = "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/embedding.json",
+    candidate_terms = "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/candidate_terms_{extraction_method}.json",
+    postprocessed_candidates = "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/postprocessed_candidates_{extraction_method}.json",
+    filtered_dcm = "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json",
+    clusters = "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}/clusters.json"
 )
 
 
 rule preprocess_descriptions:
     input:
-        raw_descriptions = "kurse-beschreibungen.csv",
-        translations = "translated_descriptions.json",
-        languages = "languages.json",
-        title_languages = "title_languages.json",
-        title_translations = "translated_titles.json",
+        raw_descriptions = "{dataset}/kurse-beschreibungen.csv",
+        translations = "{dataset}/translated_descriptions.json",
+        languages = "{dataset}/languages.json",
+        title_languages = "{dataset}/title_languages.json",
+        title_translations = "{dataset}/translated_titles.json",
     output:
         generated_paths["pp_descriptions"]
     threads: 1
@@ -272,6 +274,7 @@ def rule_by_name(name): # must be after all other rules!
 
 
 def expand_output(output, expand_all=False, overwriter_di=None):
+    ctx.init_context(load_envfile=True)  #after this point, no new env-vars should be set anymore (are not considered)
     set_val = bkp = (lambda name: settings.__dict__.get("ALL_"+standardize_config_name(name), ctx.get_config(standardize_config_name(name), silent=True))) \
                     if expand_all else (lambda name: ctx.get_config(standardize_config_name(name), silent=True))
     if overwriter_di:

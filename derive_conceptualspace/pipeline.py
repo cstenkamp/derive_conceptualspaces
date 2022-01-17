@@ -31,43 +31,49 @@ class CustomContext(ObjectWrapper):
         super(CustomContext, self).__init__(orig_ctx)
         self.toset_configs = []
         self.used_configs = {}
+        self._initialized = False
 
     @property
     def p(self):
         return self.obj["json_persister"]
 
     def reattach(self, ctx): #If I have this ontop of click's context, then for every subcommand call I have to reattach the click-context
-        toset, used = self.toset_configs, self.used_configs
+        toset, used, init = self.toset_configs, self.used_configs, self._initialized
         self.wrapper_setattr("_wrapped", ctx)
-        self.toset_configs, self.used_configs = toset, used
+        self.toset_configs, self.used_configs, self._initialized = toset, used, init
         return self
 
     def init_context(self, load_envfile=False, load_conffile=True): #works for both a click-Context and my custom one
-        if load_envfile and os.environ.get(ENV_PREFIX+"_"+"ENV_FILE"):
-            load_dotenv(os.environ.get(ENV_PREFIX+"_"+"ENV_FILE"))
-        #first of all, load settings from env-vars and, if you have it by then, from config-file
-        relevant_envvars = {k[len(ENV_PREFIX)+1:]: v for k, v in os.environ.items() if k.startswith(ENV_PREFIX+"_")}
-        for param, val in relevant_envvars.items():
-            self.set_config(param, val, "env_vars")
-        if load_conffile and self.get_config("conf_file"):
-            self.read_configfile()
-        # setup_logging(self.get_config("log"), self.get_config("logfile")) #TODO overhaul 16.01.2022: this looks shitty AF in snakemake (but add back for click!!)
-        self.obj["dataset_class"] = dataset_specifics.load_dataset_class(self.get_config("dataset"))
-        if hasattr(self.obj["dataset_class"], "configs"):
-            for param, val in self.obj["dataset_class"].configs.items():
-                self.set_config(param, val, "dataset_class")
-        CustomIO.init(self)
-        self.obj["json_persister"] = setup_json_persister(self)
-        set_debug(self) #TODO overhaul 16.01.2022: make this a method as well
-        if self.has_config("base_dir", include_default=False) and self.has_config("dataset", include_default=False):
-            os.chdir(join(self.get_config("base_dir"), self.get_config("dataset")))
+        if not self._initialized:
+            if load_envfile and os.environ.get(ENV_PREFIX+"_"+"ENV_FILE"):
+                load_dotenv(os.environ.get(ENV_PREFIX+"_"+"ENV_FILE"))
+            #first of all, load settings from env-vars and, if you have it by then, from config-file
+            relevant_envvars = {k[len(ENV_PREFIX)+1:]: v for k, v in os.environ.items() if k.startswith(ENV_PREFIX+"_")}
+            for param, val in relevant_envvars.items():
+                self.set_config(param, val, "env_vars")
+            if load_conffile and self.get_config("conf_file"):
+                self.read_configfile()
+            if "cwd" in self.obj: #TODO overhaul 16.01. das geht doch locker eleganter!!
+                self.set_config("base_dir", self.obj["cwd"], "smk_args")
+            # setup_logging(self.get_config("log"), self.get_config("logfile")) #TODO overhaul 16.01.2022: this looks shitty AF in snakemake (but add back for click!!)
+            print("Is it here?!")
+            self.obj["dataset_class"] = dataset_specifics.load_dataset_class(self.get_config("dataset"))
+            if hasattr(self.obj["dataset_class"], "configs"):
+                for param, val in self.obj["dataset_class"].configs.items():
+                    self.set_config(param, val, "dataset_class")
+            CustomIO.init(self)
+            self.obj["json_persister"] = setup_json_persister(self)
+            set_debug(self) #TODO overhaul 16.01.2022: make this a method as well
+            if self.has_config("base_dir", include_default=False):
+                os.chdir(self.get_config("base_dir"))
+            self._initialized = True
 
     def set_config(self, key, val, source): #this is only a suggestion, it will only be finally set once it's accessed!
         key, val = standardize_config(key, val)
         if key in self.used_configs and val != self.used_configs[key]:
             raise ValueError(f"You're trying to overwrite config {key} with *r*{val}*r*, but it was already used with value *b*{self.used_configs[key]}*b*!")
         self.toset_configs.append([key, val, source])
-        existing_configs = list(zip(*[i for i in self.toset_configs if i[0] == key and i[2] != "defaults"]))
+        existing_configs = list(zip(*[i for i in self.toset_configs if i[0] == key and i[2] not in ["defaults", "smk_args"]]))
         if existing_configs and len(set(existing_configs[1])) > 1:
             ordered_args = sorted(list(zip(*existing_configs[::-1][:2])), key=lambda x:CONF_PRIORITY.index(x[0]))
             ordered_args = {v:k for k,v in list({v: k for k, v in ordered_args[::-1]}.items())[::-1]}
@@ -138,7 +144,8 @@ def get_jsonpersister_args():
 
 def setup_json_persister(ctx):
     all_params, forward_meta_inf, dir_struct = get_jsonpersister_args()
-    return JsonPersister(join(ctx.get_config("base_dir"), ctx.get_config("dataset")),
+    print("Is it here?asdf")
+    return JsonPersister(join(ctx.get_config("base_dir")),
                          join(ctx.get_config("base_dir"), ctx.get_config("dataset")), ctx,
                          forward_params = all_params, forward_meta_inf = forward_meta_inf, dir_struct = dir_struct,
                          )

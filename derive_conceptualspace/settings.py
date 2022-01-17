@@ -76,7 +76,7 @@ def set_noninfluentials():
 #Settings regarding the architecture/platform
 NON_INFLUENTIAL_CONFIGS = ["CONF_FILE", "GOOGLE_CREDENTIALS_FILE", "VERBOSE"]
 with set_noninfluentials(): #this context-manager adds all settings from here to the NON_INFLUENTIAL_CONFIGS variable
-    CONF_PRIORITY = ["smk_wildcard", "force", "dependency", "cmd_args", "env_vars", "conf_file", "dataset_class", "defaults"] #no distinction between env_file and env_var bc load_dotenv is executed eagerly and just overwrites envvars from envfile
+    CONF_PRIORITY = ["force", "smk_wildcard", "dependency", "cmd_args", "env_vars", "smk_args", "conf_file", "dataset_class", "defaults"] #no distinction between env_file and env_var bc load_dotenv is executed eagerly and just overwrites envvars from envfile
     DEFAULT_BASE_DIR = abspath(join(dirname(__file__), "..", "..", ENV_PREFIX+"_data"))
     DEFAULT_NOTIFY_TELEGRAM = False
 
