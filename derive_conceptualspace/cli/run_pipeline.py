@@ -51,10 +51,11 @@ from derive_conceptualspace.semantic_directions.create_candidate_svm import (
     create_candidate_svms as create_candidate_svms_base
 )
 from derive_conceptualspace.unfinished_commands import (
-    rank_courses_saldirs as rank_courses_saldirs_base
+    rank_courses_saldirs as rank_courses_saldirs_base,
+    show_data_info as show_data_info_base,
 )
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
-from derive_conceptualspace.pipeline import print_settings, cluster_loader
+from derive_conceptualspace.pipeline import cluster_loader
 from misc_util.object_wrapper import ObjectWrapper
 
 logger = logging.getLogger(basename(__file__))
@@ -64,7 +65,7 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 ########################################################################################################################
 ########################################################################################################################
 #cli helpers & main
-#TODO putt the stuff from here in ../pipeline.py
+#TODO put the stuff from here in ../pipeline.py
 
 
 # def incorporate_settings(source_dict, ctx, source):
@@ -93,31 +94,50 @@ class CustomContext(ObjectWrapper):
         self.toset_configs = []
         self.used_configs = {}
 
+    def reattach(self, ctx): #If I have this ontop of click's context, then for every subcommand call I have to reattach the click-context
+        toset, used = self.toset_configs, self.used_configs
+        self.wrapper_setattr("_wrapped", ctx)
+        self.toset_configs, self.used_configs = toset, used
+        return self
+
     def set_config(self, key, val, source): #this is only a suggestion, it will only be finally set once it's accessed!
         key, val = standardize_config(key, val)
+        if key in self.used_configs and val != self.used_configs[key]:
+            raise ValueError(f"You're trying to overwrite config {key} with *r*{val}*r*, but it was already used with value *b*{self.used_configs[key]}*b*!")
         self.toset_configs.append([key, val, source])
-        existing_configs = list(zip(*[i[1:] for i in self.toset_configs if i[0] == key and i[2] != "defaults"]))
-        if existing_configs and "dependency" in existing_configs[1]:
-            assert len(set(existing_configs[0])) <= 1, "A config of a dependency is inconsistent with a config set here!"
-
+        existing_configs = list(zip(*[i for i in self.toset_configs if i[0] == key and i[2] != "defaults"]))
+        if existing_configs and len(set(existing_configs[1])) > 1:
+            ordered_args = sorted(list(zip(*existing_configs[::-1][:2])), key=lambda x:settings.CONF_PRIORITY.index(x[0]))
+            ordered_args = {v:k for k,v in list({v: k for k, v in ordered_args[::-1]}.items())[::-1]}
+            if "dependency" in ordered_args and ordered_args["dependency"] != ordered_args.get("force", ordered_args["dependency"]):
+                raise ValueError(f"A Dependency requires {existing_configs[0][0]} to be {dict(ordered_args)['dependency']} but your other config demands {ordered_args[1][1]}")
+            ordered_args = list(ordered_args.items())
+            print(f"{ordered_args[1][0]} demanded config {existing_configs[0][0]} to be *r*{ordered_args[1][1]}*r*, but {ordered_args[0][0]} overwrites it to *b*{ordered_args[0][1]}*b*")
 
     def pre_actualcommand_ops(self):
-        #TODO: finalize configs!!
-        warnings.warn("pre_actualcommand_ops TODO overhaul 16.1.2022")
-        # import derive_conceptualspace.settings
-        # # ensure that those configs that can be set/overwritten in click are all added as config (it's important to know in which file they were first introduced)
-        # for key, val in {k: v for k, v in ctx.obj.items() if "DEFAULT_" + k.upper() in derive_conceptualspace.settings.__dict__}.items():
-        #     ctx.obj["json_persister"].add_config(key, val)
-        # print_settings()
+        #TODO overhaul 16.01.2022: finalize configs?!
+        self.print_important_settings()
 
-    def get_config(self, key, silent=False):
-        #TODO overhaul 16.01.2022: warn if multiple non-defaults are conflicting!
+    @property
+    def important_settings(self): #TODO be able to explicitly add important settings
+        #important are: * those that have "ALL_" in settings * those that are part of the dirpath
+        return [k[4:] for k in settings.__dict__ if k.startswith("ALL_")] + self.obj["json_persister"].dirname_vars()
+
+    def print_important_settings(self):
+        params = {standardize_config_name(i): self.get_config(i, silent=True) for i in self.important_settings if self.has_config(i)}
+        default_params = {k[len("DEFAULT_"):]:v for k,v in settings.__dict__.items() if k in ["DEFAULT_"+i for i in params.keys()]}
+        print("Running with the following settings:", ", ".join([f"{k}: *{'b' if v==default_params[k] else 'r'}*{v}*{'b' if v==default_params[k] else 'r'}*" for k, v in params.items()]))
+
+    def has_config(self, key, include_default=True): #if there is a click-arg with "default=None", it will be EXPLICITLY set by default, ONLY that is included if include_default
+        return key in self.used_configs or bool([i for i in self.toset_configs if i[0]==standardize_config_name(key) and (include_default or i[2] != "defaults")])
+
+    def get_config(self, key, silent=False, silence_defaultwarning=False):
         key = standardize_config_name(key)
         if key not in self.used_configs:
             conf_suggestions = [i[1:] for i in self.toset_configs if i[0] == key]
             final_conf = min([i for i in conf_suggestions], key=lambda x: settings.CONF_PRIORITY.index(x[1])) if len(conf_suggestions) > 0 else [None, "defaults"]
             if final_conf[1] == "defaults":
-                final_conf[0] = get_defaultsetting(key)
+                final_conf[0] = get_defaultsetting(key, silent=silence_defaultwarning)
             if silent:
                 return final_conf[0]
             self.used_configs[key] = final_conf[0]
@@ -145,7 +165,7 @@ def click_pass_add_context(fn):
     def wrapped(ctx, *args, **kwargs):  #kwargs are cli-args, default-vals None
         if not isinstance(ctx, CustomContext): #ensure I always have my CustomContext
             if "actual_context" in ctx.obj:
-                ctx = ctx.obj["actual_context"]
+                ctx = ctx.obj["actual_context"].reattach(ctx)
             else:
                 ctx = CustomContext(ctx)
                 ctx._wrapped.obj["actual_context"] = ctx
@@ -212,8 +232,8 @@ def process_result(*args, **kwargs):
 @click_pass_add_context
 def check_languages(ctx, raw_descriptions_file, languages_file, title_languages_file):
     raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions")
-    create_languages_file_base(languages_file, "languages", "Beschreibung", ctx.obj["json_persister"], raw_descriptions, ctx.obj["dataset_class"])
-    create_languages_file_base(title_languages_file, "title_languages", "Name", ctx.obj["json_persister"], raw_descriptions, ctx.obj["dataset_class"])
+    create_languages_file_base(languages_file, "languages", "Beschreibung", ctx.obj["json_persister"], raw_descriptions, ctx.obj["dataset_class"], declare_silent=True)
+    create_languages_file_base(title_languages_file, "title_languages", "Name", ctx.obj["json_persister"], raw_descriptions, ctx.obj["dataset_class"], declare_silent=True)
     #no need to save, that's done inside the function.
 
 
@@ -309,18 +329,14 @@ def create_embedding(ctx, json_persister):
 #prepare-candidateterms group
 
 
-
-#TODO from here to below, make sure to remove all the "relevant_metainf" etc from saving!!
-
-
 @cli.group()
-@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", fordefault=True))
-@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", fordefault=True))
-@click.option("--extraction-method", type=click.Choice(ALL_EXTRACTION_METHOD, case_sensitive=False), default=lambda: get_setting("EXTRACTION_METHOD", fordefault=True))
+@click.option("--pp-components", type=str, default=None)
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=None)
+@click.option("--extraction-method", type=click.Choice(ALL_EXTRACTION_METHOD, case_sensitive=False), default=None)
 @click_pass_add_context
-def prepare_candidateterms(ctx):
+def prepare_candidateterms(ctx, json_persister):
     """[group] CLI base to extract candidate-terms from texts"""
-    ctx.obj["pp_descriptions"] = ctx.obj["json_persister"].load(None, "pp_descriptions", loader=DescriptionList.from_json)
+    ctx.obj["pp_descriptions"] = json_persister.load(None, "pp_descriptions", loader=DescriptionList.from_json)
 
 
 @prepare_candidateterms.command()
@@ -333,37 +349,37 @@ def extract_candidateterms_stanfordlp(ctx):
 
 
 @prepare_candidateterms.command()
-@click.option("--faster-keybert/--no-faster-keybert", default=lambda: get_setting("FASTER_KEYBERT", fordefault=True))
-@click.option("--max-ngram", default=lambda: get_setting("MAX_NGRAM", fordefault=True))
+@click.option("--faster-keybert/--no-faster-keybert", default=None)
+@click.option("--max-ngram", default=None)
 @click_pass_add_context
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
 def extract_candidateterms(ctx, max_ngram):
     #TODO if not NGRAMS_IN_EMBEDDING and extraction_method in tfidf/ppmi, you have to re-extract, otherwise you won't get n-grams
-    candidateterms, relevant_metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.obj["extraction_method"], max_ngram, ctx.obj["faster_keybert"], verbose=ctx.obj["verbose"])
-    ctx.obj["json_persister"].save("candidate_terms.json", candidateterms=candidateterms, relevant_metainf=relevant_metainf)
+    candidateterms, relevant_metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.get_config("extraction_method"), max_ngram, ctx.get_config("faster_keybert"), verbose=ctx.get_config("verbose"))
+    ctx.obj["json_persister"].save("candidate_terms.json", candidateterms=candidateterms)
 
 
 @prepare_candidateterms.command()
 @click_pass_add_context
-def postprocess_candidateterms(ctx):
-    ctx.obj["candidate_terms"] = ctx.obj["json_persister"].load(None, "candidate_terms")
-    postprocessed_candidates = postprocess_candidateterms_base(ctx.obj["candidate_terms"], ctx.obj["pp_descriptions"], ctx.obj["extraction_method"])
-    ctx.obj["json_persister"].save("postprocessed_candidates.json", postprocessed_candidates=postprocessed_candidates)
+def postprocess_candidateterms(ctx, json_persister):
+    ctx.obj["candidate_terms"] = json_persister.load(None, "candidate_terms")
+    postprocessed_candidates = postprocess_candidateterms_base(ctx.obj["candidate_terms"], ctx.obj["pp_descriptions"], ctx.get_config("extraction_method"))
+    json_persister.save("postprocessed_candidates.json", postprocessed_candidates=postprocessed_candidates)
 
 
 @prepare_candidateterms.command()
-@click.option("--candidate-min-term-count", type=int, default=lambda: get_setting("CANDIDATE_MIN_TERM_COUNT", fordefault=True))
-@click.option("--dcm-quant-measure", type=click.Choice(ALL_DCM_QUANT_MEASURE, case_sensitive=False), default=lambda: get_setting("DCM_QUANT_MEASURE", fordefault=True))
-@click.option("--use-ndocs-count/--no-use-ndocs-count", default=lambda: get_setting("CANDS_USE_NDOCS_COUNT", fordefault=True))
+@click.option("--candidate-min-term-count", type=int, default=None)
+@click.option("--dcm-quant-measure", type=click.Choice(ALL_DCM_QUANT_MEASURE, case_sensitive=False), default=None)
+@click.option("--cands-use-ndocs-count/--no-cands-use-ndocs-count", default=None)
 @click_pass_add_context
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
-def create_filtered_doc_cand_matrix(ctx, candidate_min_term_count, use_ndocs_count):
+def create_filtered_doc_cand_matrix(ctx, candidate_min_term_count, cands_use_ndocs_count):
     # TODO missing options here: `tag-share` (chap. 4.2.1 of [VISR12])
     # TODO Do I need pp_descriptions except for verbosity? -> if not, make loading silent
     ctx.obj["postprocessed_candidates"] = ctx.obj["json_persister"].load(None, "postprocessed_candidates", loader = lambda **args: args["postprocessed_candidates"])
     filtered_dcm = create_filtered_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], min_term_count=candidate_min_term_count,
-                                                    dcm_quant_measure=ctx.obj["dcm_quant_measure"], use_n_docs_count=use_ndocs_count, verbose=ctx.obj["verbose"])
-    ctx.obj["json_persister"].save("filtered_dcm.json", relevant_metainf={"candidate_min_term_count": candidate_min_term_count}, doc_term_matrix=filtered_dcm)
+                                                    dcm_quant_measure=ctx.get_config("dcm_quant_measure"), use_n_docs_count=cands_use_ndocs_count, verbose=ctx.get_config("verbose"))
+    ctx.obj["json_persister"].save("filtered_dcm.json", doc_term_matrix=filtered_dcm) #, relevant_metainf={"candidate_min_term_count": candidate_min_term_count}
 
 
 ########################################################################################################################
@@ -373,19 +389,19 @@ def create_filtered_doc_cand_matrix(ctx, candidate_min_term_count, use_ndocs_cou
 
 
 @cli.group()
-@click.option("--pp-components", type=str, default=lambda: get_setting("PP_COMPONENTS", fordefault=True))
-@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=lambda: get_setting("TRANSLATE_POLICY", fordefault=True))
-@click.option("--quantification-measure", type=click.Choice(ALL_QUANTIFICATION_MEASURE, case_sensitive=False), default=lambda: get_setting("QUANTIFICATION_MEASURE", fordefault=True))
-@click.option("--embed-dimensions", type=int, default=lambda: get_setting("EMBED_DIMENSIONS", fordefault=True))
-@click.option("--embed-algo", type=click.Choice(ALL_EMBED_ALGO, case_sensitive=False), default=lambda: get_setting("EMBED_ALGO", fordefault=True))
-@click.option("--extraction-method", type=click.Choice(ALL_EXTRACTION_METHOD, case_sensitive=False), default=lambda: get_setting("EXTRACTION_METHOD", fordefault=True))
-@click.option("--dcm-quant-measure", type=click.Choice(ALL_DCM_QUANT_MEASURE, case_sensitive=False), default=lambda: get_setting("DCM_QUANT_MEASURE", fordefault=True))
+@click.option("--pp-components", type=str, default=None)
+@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=None)
+@click.option("--quantification-measure", type=click.Choice(ALL_QUANTIFICATION_MEASURE, case_sensitive=False), default=None)
+@click.option("--embed-dimensions", type=int, default=None)
+@click.option("--embed-algo", type=click.Choice(ALL_EMBED_ALGO, case_sensitive=False), default=None)
+@click.option("--extraction-method", type=click.Choice(ALL_EXTRACTION_METHOD, case_sensitive=False), default=None)
+@click.option("--dcm-quant-measure", type=click.Choice(ALL_DCM_QUANT_MEASURE, case_sensitive=False), default=None)
 @click_pass_add_context
-def generate_conceptualspace(ctx):
+def generate_conceptualspace(ctx, json_persister):
     """[group] CLI base to create the actual conceptual spaces"""
-    ctx.obj["pp_descriptions"] = ctx.obj["json_persister"].load(None, "pp_descriptions", loader=DescriptionList.from_json, ignore_params=["quantification_measure", "embed_dimensions"])
-    ctx.obj["filtered_dcm"] = ctx.obj["json_persister"].load(None, "filtered_dcm", loader=dtm_loader, ignore_params=["quantification_measure", "embed_dimensions"])
-    ctx.obj["embedding"] = ctx.obj["json_persister"].load(None, "embedding", ignore_params=["extraction_method", "dcm_quant_measure"], loader=lambda **args: args["embedding"])
+    ctx.obj["pp_descriptions"] = json_persister.load(None, "pp_descriptions", loader=DescriptionList.from_json)
+    ctx.obj["filtered_dcm"] = json_persister.load(None, "filtered_dcm", loader=dtm_loader)
+    ctx.obj["embedding"] = json_persister.load(None, "embedding", loader=lambda **args: args["embedding"])
     assert ctx.obj["embedding"].embedding_.shape[0] == len(ctx.obj["filtered_dcm"].dtm), f'The Doc-Candidate-Matrix contains {len(ctx.obj["filtered_dcm"].dtm)} items But your embedding has {ctx.obj["embedding"].embedding_.shape[0] } descriptions!'
 
 
@@ -393,11 +409,9 @@ def generate_conceptualspace(ctx):
 @click_pass_add_context
 def create_candidate_svm(ctx):
     #TODO here, the descriptions are also only needed for visualization
-    decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.obj["verbose"])
+    decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"))
     ctx.obj["json_persister"].save("clusters.json", decision_planes=decision_planes, metrics=metrics)
     #TODO hier war dcm = DocTermMatrix(json_load(join(ctx.obj["base_dir"], dcm_filename), assert_meta=("CANDIDATE_MIN_TERM_COUNT", "STANFORDNLP_VERSION"))), krieg ich das wieder hin?
-
-#TODO I can do something like autodetect_relevant_params und metainf im json_persister
 
 
 @generate_conceptualspace.command()
@@ -420,14 +434,14 @@ def rank_courses_saldirs(ctx):
 @generate_conceptualspace.command()
 @click_pass_add_context
 def run_lsi_gensim(ctx):
-    run_lsi_gensim_base(ctx.obj["pp_descriptions"], ctx.obj["filtered_dcm"], verbose=ctx.obj["verbose"])
+    run_lsi_gensim_base(ctx.obj["pp_descriptions"], ctx.obj["filtered_dcm"], verbose=ctx.get_config("verbose"))
 
 
 @generate_conceptualspace.command()
 @click_pass_add_context
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
 def run_lsi(ctx):
-    run_lsi_base(ctx.obj["pp_descriptions"], ctx.obj["filtered_dcm"], ctx.obj["verbose"])
+    run_lsi_base(ctx.obj["pp_descriptions"], ctx.obj["filtered_dcm"], ctx.get_config("verbose"))
 
 
 #

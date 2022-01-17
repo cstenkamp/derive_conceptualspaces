@@ -15,6 +15,7 @@ from scipy.spatial.distance import cosine, cdist
 
 from derive_conceptualspace.settings import get_setting
 from misc_util.logutils import CustomIO
+from misc_util.pretty_print import pretty_print as print
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 logger = logging.getLogger(basename(__file__))
@@ -26,64 +27,54 @@ logger = logging.getLogger(basename(__file__))
 
 
 def show_data_info(ctx):
-    if get_setting("DEBUG"):
-        print(f"Looking at data generated in Debug-Mode for {get_setting('DEBUG_N_ITEMS')} items!")
+    if ctx.get_config("DEBUG"):
+        print(f"Looking at data generated in Debug-Mode for {ctx.get_config('DEBUG_N_ITEMS')} items!")
 
     print(f"Data lies at *b*{ctx.obj['json_persister'].in_dir}*b*")
-    print("Settings:",
-          ", ".join([f"{k}: *b*{v}*b*" for k, v in ctx.obj["json_persister"].loaded_relevant_params.items()]))
-    print("Relevant Metainfo:",
-          ", ".join([f"{k}: *b*{v}*b*" for k, v in ctx.obj["json_persister"].loaded_relevant_metainf.items()]))
-    data_dirs = {k: v[1].replace(ctx.obj["json_persister"].in_dir, "data_dir/") for k, v in
-                 ctx.obj["json_persister"].loaded_objects.items()}
-    print("Directories:\n ",
-          "\n  ".join(f"{k.rjust(max(len(i) for i in data_dirs))}: {v}" for k, v in data_dirs.items()))
-    dependencies = {k: set([i for i in v[2] if i != "this"]) for k, v in
-                    ctx.obj["json_persister"].loaded_objects.items()}
+    print("Settings:", ", ".join([f"{k}: *b*{v}*b*" for k, v in ctx.obj["json_persister"].loaded_influentials.items()]))
+    # print("Relevant Metainfo:", ", ".join([f"{k}: *b*{v}*b*" for k, v in ctx.obj["json_persister"].loaded_relevant_metainf.items()]))
+    data_dirs = {k: v["path"].replace(ctx.obj["json_persister"].in_dir, "data_dir") for k, v in ctx.obj["json_persister"].loaded_objects.items()}
+    print("Directories:\n ", "\n  ".join(f"{k.rjust(max(len(i) for i in data_dirs))}: {v}" for k, v in data_dirs.items()))
+    dependencies = {k: set([i for i in v["used_in"] if i != "this"]) for k, v in ctx.obj["json_persister"].loaded_objects.items()}
     # figuring out when a new param was first necessary
-    param_intro = {k: v[3].get("relevant_params") if v[3] else None for k, v in
-                   ctx.obj["json_persister"].loaded_objects.items()}
+    param_intro = {k: i.get("metadata", {}).get("used_influentials", {}) for k,i in ctx.obj["json_persister"].loaded_objects.items()}
     newparam = {}
     for key, val in {k: list(v.keys()) for k, v in param_intro.items() if v}.items():
         for elem in val:
-            if elem not in flatten(newparam.values()):
+            if elem in ctx.important_settings and elem not in flatten(newparam.values()):
                 newparam.setdefault(key, []).append(elem)
     # /figuring out when a new param was first necessary
     dot = Digraph()
     for key in dependencies:
-        add_txt = "\n  ".join(
-            [f"{el}: {ctx.obj['json_persister'].loaded_relevant_params[el]}" for el in newparam.get(key, [])])
+        add_txt = "\n  ".join([f"{el}: {ctx.get_config(el)}" for el in newparam.get(key, [])])
         dot.node(key, key + ("\n\n  " + add_txt if add_txt else ""))
     dot.edges([[k, e] for k, v in dependencies.items() for e in v])
     # print(dot.source) #TODO save to file
-    if ctx.obj["verbose"]:
+    if ctx.get_config("verbose"):
         dot.render(view=True)
-    commits = {k2: v2 for k2, v2 in
-               {k: v[3]["git_hash"]["inner_commit"] if isinstance(v[3], dict) and "git_hash" in v[3] else None for k, v
-                in ctx.obj["json_persister"].loaded_objects.items()}.items() if v2 is not None}
-    if len(set(commits.values())) == 1:
-        print(f"All Parts from commit {list(commits.values())[0]}")
+    commits = {k: v.get("metadata", {}).get("obj_info", {}).get("git_hash", {}).get("inner_commit") for k, v in ctx.obj["json_persister"].loaded_objects.items()}
+    commit_dict = {}
+    for elem in list(commits.items()):
+        commit_dict.setdefault(elem[1], []).append(elem[0])
+    print("Commits:\n"+("\n".join([f"{str(k)[:8].rjust(8)}: {', '.join(v)}" for k,v in commit_dict.items()])))
     # ob alle vom gleichem commit, wenn ja welcher, und die letzten 2-3 commit-messages davor
-    git_hist = list(git.Repo(".", search_parent_directories=True).iter_commits("main", max_count=20))
-    commit_num = [ind for ind, i in enumerate(git_hist) if i.hexsha == list(commits.values())[0]][0]
-    messages = [i.message.strip() for i in git_hist[commit_num:commit_num + 5]]
-    tmp = []
-    for msg in messages:
-        if msg not in tmp: tmp.append(msg)
-    print("Latest commit messages:\n  ", "\n   ".join(tmp))
-    dates = {k2: v2 for k2, v2 in {k: v[3]["date"] if isinstance(v[3], dict) and "date" in v[3] else None for k, v in
-                                   ctx.obj["json_persister"].loaded_objects.items()}.items() if v2 is not None}
+    if len([i for i in commit_dict.keys() if i is not None]) == 1:
+        git_hist = list(git.Repo(".", search_parent_directories=True).iter_commits("main", max_count=20))
+        commit_num = [ind for ind, i in enumerate(git_hist) if i.hexsha == list(commits.values())[0]][0]
+        messages = [i.message.strip() for i in git_hist[commit_num:commit_num + 5]]
+        tmp = []
+        for msg in messages:
+            if msg not in tmp: tmp.append(msg)
+        print("Latest commit messages:\n  ", "\n   ".join(tmp))
+    dates = {k: v["metadata"]["obj_info"]["date"] for k, v in ctx.obj["json_persister"].loaded_objects.items() if v.get("metadata", {}).get("obj_info", {}).get("date")}
     print("Dates:\n ", "\n  ".join(f"{k.rjust(max(len(i) for i in dates))}: {v}" for k, v in dates.items()))
-    output = {k: merge_streams(v[3].get("stdout", ""), v[3].get("stderr", ""), k) for k, v in
-              ctx.obj["json_persister"].loaded_objects.items()}
+    output = {k: merge_streams(v["metadata"]["obj_info"]["stdout"], v["metadata"]["obj_info"]["stderr"], k) for k, v in ctx.obj["json_persister"].loaded_objects.items() if v.get("metadata", {}).get("obj_info", {}).get("stdout")}
     print()
     N_SPACES = 30
-    while (show := input(
-            f"Which step's output should be shown ({', '.join([k for k, v in output.items() if v])}): ").strip()) in output.keys():
+    while (show := input(f"Which step's output should be shown ({', '.join([k for k, v in output.items() if v])}): ").strip()) in output.keys():
         print(f"\n{'=' * N_SPACES} Showing output of **{show}** {'=' * N_SPACES}")
         print(output[show])
         print("=" * len(f"{'=' * N_SPACES} Showing output of **{show}** {'=' * N_SPACES}") + "\n")
-    print()
 
 
 def merge_streams(s1, s2, for_):

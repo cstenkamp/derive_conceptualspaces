@@ -99,15 +99,15 @@ def full_translate_titles(raw_descriptions, pp_components, translate_policy, tit
     return None, None
 
 
-def create_languages_file(languages_file, file_basename, column, json_persister, raw_descriptions, dataset_class):
+def create_languages_file(languages_file, file_basename, column, json_persister, raw_descriptions, dataset_class, declare_silent=False):
     try:
-        languages = json_persister.load(languages_file, file_basename, loader=lambda langs: langs)
+        languages = json_persister.load(languages_file, file_basename, loader=lambda langs: langs, silent=declare_silent)
     except FileNotFoundError:
         descriptions = dataset_class.preprocess_raw_file(raw_descriptions)
         langs = get_langs(descriptions[column], assert_len=False)
         langs = {i["Name"]: langs[i[column]] for _,i in descriptions.iterrows()}
-        json_persister.save(languages_file, langs=langs)
-        languages = json_persister.load(languages_file, file_basename, loader=lambda langs: langs)
+        json_persister.save(languages_file, langs=langs, ignore_confs=["DEBUG"])
+        languages = json_persister.load(languages_file, file_basename, loader=lambda langs: langs, silent=declare_silent)
     return languages
 
 

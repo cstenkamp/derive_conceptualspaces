@@ -74,9 +74,9 @@ def set_noninfluentials():
     globals()["NON_INFLUENTIAL_CONFIGS"] += [i[len("DEFAULT_"):] if i.startswith("DEFAULT_") else i for i in added_vars]
 
 #Settings regarding the architecture/platform
-NON_INFLUENTIAL_CONFIGS = ["CONF_FILE"]
+NON_INFLUENTIAL_CONFIGS = ["CONF_FILE", "GOOGLE_CREDENTIALS_FILE", "VERBOSE"]
 with set_noninfluentials(): #this context-manager adds all settings from here to the NON_INFLUENTIAL_CONFIGS variable
-    CONF_PRIORITY = ["dependency", "cmd_args", "env_vars", "conf_file", "dataset_class", "defaults"] #no distinction between env_file and env_var bc load_dotenv is executed eagerly and just overwrites envvars from envfile
+    CONF_PRIORITY = ["force", "dependency", "cmd_args", "env_vars", "conf_file", "dataset_class", "defaults"] #no distinction between env_file and env_var bc load_dotenv is executed eagerly and just overwrites envvars from envfile
     DEFAULT_BASE_DIR = abspath(join(dirname(__file__), "..", "..", ENV_PREFIX+"_data"))
     DEFAULT_NOTIFY_TELEGRAM = False
 
@@ -206,11 +206,11 @@ def standardize_config(configname, configval):
     configname = standardize_config_name(configname)
     return configname, standardize_config_val(configname, configval)
 
-def get_defaultsetting(key):
+def get_defaultsetting(key, silent=False):
     if "DEFAULT_" + key not in globals():
         raise ValueError(f"You didn't provide a value for {key} and there is no default-value!")
     default = globals()["DEFAULT_"+key]
-    if key not in NON_INFLUENTIAL_CONFIGS:
+    if key not in NON_INFLUENTIAL_CONFIGS and not silent:
         print(f"returning setting for {key} from default value: {default}")
     return default
 

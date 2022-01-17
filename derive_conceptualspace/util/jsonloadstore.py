@@ -228,13 +228,22 @@ class JsonPersister():
         self.created_plots = {}
         # self.used_config = {}
 
+    @property
+    def loaded_influentials(self):
+        loadeds = [i.get("metadata", {}).get("used_influentials", {}) for i in self.loaded_objects.values()]
+        return {k:v for list_item in loadeds for (k,v) in list_item.items()}
+
+
+    def dirname_vars(self, uptolevel=None):
+        return re.findall(r'{(.*?)}', "".join(self.dir_struct[:uptolevel]))
+
     def get_subdir(self, influential_confs):
         if not (self.dir_struct and all(i for i in self.dir_struct)):
             return "", []
         di = format_dict(influential_confs)
         dirstruct = [d.format_map(di) for d in self.dir_struct] #that will have "UNDEFINED" from some point on
         fulfilled_dirs = len(dirstruct) if not (tmp := [i for i, el in enumerate(dirstruct) if "UNDEFINED" in el]) else tmp[0]
-        used_keys = {standardize_config_name(i): di.used_keys[standardize_config_name(i)] for i in re.findall(r'{(.*?)}', "".join(self.dir_struct[:fulfilled_dirs]))}
+        used_keys = {standardize_config_name(i): di.used_keys[standardize_config_name(i)] for i in self.dirname_vars(fulfilled_dirs)}
         return (os.sep.join(dirstruct[:fulfilled_dirs]),
                 used_keys, #what you used
                 {k: v for k, v in di.used_keys.items() if k not in used_keys.keys()}, #what you should have used for filename but didn't
@@ -276,7 +285,7 @@ class JsonPersister():
         correct_cands = []
         candidates = [join(path, name)[len(self.in_dir)+1:] for path, subdirs, files in os.walk(join(self.in_dir, subdir)) for name in files if name.startswith(save_basename)]
         for cand in candidates: #ich muss nicht reverse-matchen, ich kann die required confs nehmen, anwenden und schauen ob's gleich ist!
-            demanded_confs = re.findall(r'{(.*?)}', "".join(self.dir_struct[:cand.count(os.sep)]))
+            demanded_confs = self.dirname_vars(cand.count(os.sep))
             dirstruct, _, _, nonapplied_args = self.get_subdir({standardize_config_name(i): self.ctx.get_config(i) for i in demanded_confs})
             if dirname(cand) == dirstruct:
                 correct_cands.append(cand)
@@ -365,7 +374,7 @@ class JsonPersister():
             self.loaded_objects[save_basename] = {"content": obj, "path": join(self.in_dir, filename), "used_in": ["this"], "metadata": full_metadata}
         return obj
 
-    def save(self, basename, /, force_overwrite=False, **kwargs):
+    def save(self, basename, /, force_overwrite=False, ignore_confs=None, **kwargs):
         basename, ext = splitext(basename)
         filename = basename
         # if relevant_params is not None:
@@ -375,8 +384,9 @@ class JsonPersister():
         #     relevant_params = [i for i in self.forward_params if i in self.ctx.obj]
         # relevant_metainf = {**self.loaded_relevant_metainf, **(relevant_metainf or {})}
         #TODO overhaul 16.01.2022: dass der sich hier loaded_relevant_metainf anschaut macht ja schon sinn!!
-
-        subdir, _, shoulduse_infls, _ = self.get_subdir(self.ctx.used_influential_confs())
+        relevant_confs = {**self.loaded_influentials, **self.ctx.used_influential_confs()}
+        if ignore_confs: relevant_confs = {k: v for k, v in relevant_confs if k not in ignore_confs}
+        subdir, _, shoulduse_infls, _ = self.get_subdir(relevant_confs)
         if self.incompletedirnames_to_filenames and shoulduse_infls:
             filename += "_"+("_".join(str(i) for i in shoulduse_infls.values()))
         loaded_files = {k: dict(path=v["path"], used_in=makelist(v["used_in"], basename), metadata=v["metadata"]) for k, v in self.loaded_objects.items()}
@@ -387,12 +397,10 @@ class JsonPersister():
                "used_config": (self.ctx.used_configs, self.ctx.toset_configs),
                "object": kwargs} #object should be last!!
         name = json_dump(obj, join(self.out_dir, subdir, filename+ext), write_meta=False, forbid_overwrite=not force_overwrite)
-        print(f"Saved under {name}. Influential Config: {self.ctx.used_influential_confs()}.")# Relevant Meta-Inf: {relevant_metainf}")
+        new_influentials = {k: v for k, v in self.ctx.used_influential_confs().items() if k not in self.loaded_influentials}
+        print(f"Saved under {name}. New Influential Config: {new_influentials}.")# Relevant Meta-Inf: {relevant_metainf}")
         return name
 
     def add_plot(self, title, data):
         self.created_plots[title] = json.dumps(data, cls=NumpyEncoder)
 
-    def add_config(self, key, val):
-        assert self.used_config.get(key, val) == val, f"{key} was {self.used_config[key]} and is now {val}"
-        self.used_config[key] = val

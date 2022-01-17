@@ -1,5 +1,7 @@
 import os
 from os.path import join
+import random
+
 import yaml
 
 import numpy as np
@@ -19,10 +21,6 @@ from misc_util.pretty_print import pretty_print as print
 from .util.jsonloadstore import JsonPersister
 
 
-def print_settings():
-    all_params = {i: get_setting(i.upper(), fordefault=True) for i in get_jsonpersister_args()[0]}
-    default_params = {k[len("DEFAULT_"):].lower():v for k,v in derive_conceptualspace.settings.__dict__.items() if k in ["DEFAULT_"+i.upper() for i in all_params.keys()]}
-    print("Running with the following settings:", ", ".join([f"{k}: *{'b' if v==default_params[k] else 'r'}*{v}*{'b' if v==default_params[k] else 'r'}*" for k, v in all_params.items()]))
 
 
 def get_jsonpersister_args():
@@ -31,7 +29,8 @@ def get_jsonpersister_args():
     forward_meta_inf = ["n_samples", "faster_keybert", "candidate_min_term_count"]
     dir_struct = ["debug_{debug}",
                   "{pp_components}_{translate_policy}_minwords{min_words_per_desc}",
-                  "{quantification_measure}_{embed_algo}_{embed_dimensions}d",
+                  "embedding_{quantification_measure}",
+                  "{embed_algo}_{embed_dimensions}d",
                   "{extraction_method}_{dcm_quant_measure}"]
     return all_params, forward_meta_inf, dir_struct
 
@@ -42,20 +41,13 @@ def setup_json_persister(ctx):
                          forward_params = all_params, forward_meta_inf = forward_meta_inf, dir_struct = dir_struct,
                          )
 
-def set_debug(ctx, use_auto_envvar_prefix=False):
-    env_prefix = ctx.auto_envvar_prefix if use_auto_envvar_prefix else ENV_PREFIX
-    return
-    #TODO overhaul 16.01.2022
-    # if get_setting("DEBUG"):
-    #     if not os.getenv(env_prefix+"_DEBUG_SET"):
-    #         assert env_prefix+"_CANDIDATE_MIN_TERM_COUNT" not in os.environ
-    #         os.environ[env_prefix + "_CANDIDATE_MIN_TERM_COUNT"] = "1"
-    #         print(f"Debug is active! #Items for Debug: {get_setting('DEBUG_N_ITEMS')}")
-    #         if get_setting("RANDOM_SEED", default_none=True): print("Using a random seed!")
-    #     if get_setting("RANDOM_SEED", default_none=True):
-    #         random.seed(get_setting("RANDOM_SEED"))
-    #     assert os.environ[env_prefix + "_CANDIDATE_MIN_TERM_COUNT"] == "1"
-    #     os.environ[env_prefix+"_DEBUG_SET"] = "1"
+def set_debug(ctx):
+    if ctx.get_config("DEBUG"):
+        ctx.set_config("CANDIDATE_MIN_TERM_COUNT", 1, "force")
+        print(f"Debug is active! #Items for Debug: {ctx.get_config('DEBUG_N_ITEMS')}")
+        if ctx.get_config("RANDOM_SEED", silence_defaultwarning=True):
+            print(f"Using a random seed: {ctx.get_config('RANDOM_SEED')}")
+            random.seed(ctx.get_config("RANDOM_SEED"))
 
 ########################################################################################################################
 ########################################################################################################################
