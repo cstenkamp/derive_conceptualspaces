@@ -103,7 +103,7 @@ def create_bare_desclist(languages, translations, names, descriptions, subtitles
                                       ))
     elif translate_policy == "onlyeng":
         indices = [ind for ind, elem in enumerate(orig_lans) if elem == "en"]
-        print(f"Dropped {len(names)-len(indices)} out of {len(names)} descriptions because I will take only the english ones")
+        print(f"Dropped {len(names)-len(indices)} out of {len(names)} descriptions because I will take only the english ones ({len(indices)} left)")
         for i in indices:
             desc_list.add(Description(lang="en", text=descriptions[i], title=names[i], subtitle=subtitles[i], orig_textlang="en",
                                       orig_titlelang=title_languages[names[i]], additionals=additionals[i] if additionals is not None else None

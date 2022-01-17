@@ -1,12 +1,10 @@
-import os
-import warnings
 import inspect
 import logging
+import os
 import sys
 from datetime import datetime
 from functools import wraps
 from os.path import join, dirname, basename, abspath
-import yaml
 
 if abspath(join(dirname(__file__), "../..")) not in sys.path:
     sys.path.append(abspath(join(dirname(__file__), "../..")))
@@ -15,15 +13,12 @@ from dotenv import load_dotenv
 import click
 
 from misc_util.telegram_notifier import telegram_notify
-from misc_util.logutils import setup_logging
 from misc_util.pretty_print import pretty_print as print
 
-from derive_conceptualspace import settings
 from derive_conceptualspace.util.desc_object import DescriptionList
 from derive_conceptualspace.settings import (
     ALL_TRANSLATE_POLICY, ALL_QUANTIFICATION_MEASURE, ALL_EXTRACTION_METHOD, ALL_EMBED_ALGO, ALL_DCM_QUANT_MEASURE,
-    ENV_PREFIX, NORMALIFY_PARAMS,
-    get_setting, set_envvar, get_envvar, get_envvarname, standardize_config, standardize_config_name, get_defaultsetting
+    ENV_PREFIX,
 )
 from derive_conceptualspace.create_spaces.translate_descriptions import (
     full_translate_titles as translate_titles_base,
@@ -56,38 +51,16 @@ from derive_conceptualspace.unfinished_commands import (
 )
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
 from derive_conceptualspace.pipeline import cluster_loader
-from misc_util.object_wrapper import ObjectWrapper
 from derive_conceptualspace.pipeline import CustomContext
 
 logger = logging.getLogger(basename(__file__))
-flatten = lambda l: [item for sublist in l for item in sublist]
 
 ########################################################################################################################
 ########################################################################################################################
 ########################################################################################################################
 #cli helpers & main
-#TODO put the stuff from here in ../pipeline.py
 
-
-# def incorporate_settings(source_dict, ctx, source):
-#     """yes there is click's auto_envvar_prefix, but that messes with what I want to do (and doesn't work for arguments).
-#        So this function overwrites ctx.params & ctx.obj from env-vars (if they have the correct prefix), and also SETS
-#        these env-vars from the cmd-args such that they can be accessed using get_setting(). ALSO, we don't use the
-#        ctx.auto_envvar_prefix which builds up the prefix hierachically for subcommands."""
-#     for param, val in source_dict.items():
-#         param, val = standardize_config(param, val)
-#         ctx.set_config(param, val, source) #does basically ctx.obj[param] = val
-#         # envvarname = env_prefix+"_"+param.upper().replace("-","_")
-#         # # https://github.com/pallets/click/issues/714#issuecomment-651389598
-#         # eagers = set(i.human_readable_name for i in ctx.command.params if i.is_eager)
-#         # if (envvar := get_envvar(envvarname)) is not None and envvar != ctx.params[param] and param not in eagers:
-#         #     print(f"The param {param} used to be *r*{ctx.params[param]}*r*, but is overwritten by an env-var to *b*{envvar}*b*")
-#         #     ctx.params[param] = envvar
-#         #     ctx.obj[param] = envvar
-#         # else:
-#         #     set_envvar(envvarname, ctx.obj[param])
-
-
+#TODO overhaul 16.01.2022: I used to set the env-vars from the configs, did that make sense or is it fine to be rid of it?
 
 def click_pass_add_context(fn):
     @click.pass_context
@@ -114,9 +87,7 @@ def click_pass_add_context(fn):
     return wrapped
 
 
-
 @click.group()
-#TODO even prior to evaluating this, save the old env-vars somewhere.
 @click.option("--env-file", callback=lambda ctx, param, value: load_dotenv(value) if (param.name == "env_file" and value) else None,
               default=os.environ.get(ENV_PREFIX+"_"+"ENV_FILE"), type=click.Path(exists=True), is_eager=True,
               help="If you want to provide environment-variables using .env-files you can provide the path to a .env-file here.")
@@ -136,6 +107,7 @@ def cli(ctx):
     values for settings are given, precedence-order is command-line-args > env-vars (--env-file > pre-existing) > conf-file > dataset_class > defaults
     """
     print("Starting up at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
+    setup_logging(ctx.get_config("log"), ctx.get_config("logfile"))
     ctx.init_context() #after this point, no new env-vars should be set anymore (are not considered)
 
 
@@ -328,7 +300,6 @@ def create_filtered_doc_cand_matrix(ctx, candidate_min_term_count, cands_use_ndo
 @click_pass_add_context
 def generate_conceptualspace(ctx, json_persister):
     """[group] CLI base to create the actual conceptual spaces"""
-    ctx.obj["pp_descriptions"] = json_persister.load(None, "pp_descriptions", loader=DescriptionList.from_json)
     ctx.obj["filtered_dcm"] = json_persister.load(None, "filtered_dcm", loader=dtm_loader)
     ctx.obj["embedding"] = json_persister.load(None, "embedding", loader=lambda **args: args["embedding"])
     assert ctx.obj["embedding"].embedding_.shape[0] == len(ctx.obj["filtered_dcm"].dtm), f'The Doc-Candidate-Matrix contains {len(ctx.obj["filtered_dcm"].dtm)} items But your embedding has {ctx.obj["embedding"].embedding_.shape[0] } descriptions!'
@@ -337,9 +308,9 @@ def generate_conceptualspace(ctx, json_persister):
 @generate_conceptualspace.command()
 @click_pass_add_context
 def create_candidate_svm(ctx):
-    #TODO here, the descriptions are also only needed for visualization
+    ctx.obj["pp_descriptions"] = ctx.p.load(None, "pp_descriptions", loader=DescriptionList.from_json, silent=True)
     decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"))
-    ctx.obj["json_persister"].save("clusters.json", decision_planes=decision_planes, metrics=metrics)
+    ctx.p.save("clusters.json", decision_planes=decision_planes, metrics=metrics)
     #TODO hier war dcm = DocTermMatrix(json_load(join(ctx.obj["base_dir"], dcm_filename), assert_meta=("CANDIDATE_MIN_TERM_COUNT", "STANFORDNLP_VERSION"))), krieg ich das wieder hin?
 
 
@@ -371,15 +342,6 @@ def run_lsi_gensim(ctx):
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
 def run_lsi(ctx):
     run_lsi_base(ctx.obj["pp_descriptions"], ctx.obj["filtered_dcm"], ctx.get_config("verbose"))
-
-
-#
-#
-#
-#
-# def rank_courses_saldirs_base(descriptions, clusters):
-#     assert hasattr(descriptions[0], "embedding")
-#     print()
 
 
 

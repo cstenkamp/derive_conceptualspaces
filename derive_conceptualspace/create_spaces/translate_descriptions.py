@@ -106,7 +106,7 @@ def create_languages_file(languages_file, file_basename, column, json_persister,
         descriptions = dataset_class.preprocess_raw_file(raw_descriptions)
         langs = get_langs(descriptions[column], assert_len=False)
         langs = {i["Name"]: langs[i[column]] for _,i in descriptions.iterrows()}
-        json_persister.save(languages_file, langs=langs, ignore_confs=["DEBUG"])
+        json_persister.save(basename(languages_file), langs=langs, ignore_confs=["DEBUG"])
         languages = json_persister.load(languages_file, file_basename, loader=lambda langs: langs, silent=declare_silent)
     return languages
 

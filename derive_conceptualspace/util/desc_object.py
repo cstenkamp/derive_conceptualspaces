@@ -278,6 +278,6 @@ class DescriptionList():
 
     def filter_words(self, min_words):
         tmp = [i for i in self._descriptions if i.n_words() >= min_words]
-        print(f"Removed {len(self)-len(tmp)} of {len(self)} Descriptions because they are less than {min_words} words")
+        print(f"Removed {len(self)-len(tmp)} of {len(self)} Descriptions because they are less than {min_words} words ({len(tmp)} left)")
         self._descriptions = tmp
         return self

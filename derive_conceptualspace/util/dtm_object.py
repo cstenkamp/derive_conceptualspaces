@@ -39,7 +39,7 @@ class DocTermMatrix():
             return DocTermMatrix.filter(dtm, min_df, use_n_docs_count=True, verbose=verbose, descriptions=descriptions, all_terms=all_terms) #TODO make use_n_docs_count an arg
         return DocTermMatrix(dtm, all_terms, quant_name="count")
 
-    def __init__(self, dtm, all_terms, quant_name, verbose=False, **kwargs):
+    def __init__(self, dtm, all_terms, quant_name, verbose=False, **kwargs): #TODO overhaul 16.01.2022: much to delete here?!
         self.includes_pseudodocs = False
         self.dtm = dtm
         self.all_terms = {n: elem for n, elem in enumerate(all_terms)} if isinstance(all_terms, list) else all_terms
@@ -141,7 +141,7 @@ class DocTermMatrix():
 
 
     @staticmethod
-    def filter(dtm, min_count, use_n_docs_count=True, verbose=False, descriptions=None, all_terms=None):
+    def filter(dtm, min_count, use_n_docs_count=True, verbose=False, descriptions=None, all_terms=None, cap_max=True):
         """can get either a DocTermMatrix as dtm, or a DocTermMatrix.dtm as dtm and an all_terms value"""
         if not all_terms:
             assert isinstance(dtm, DocTermMatrix)
@@ -156,6 +156,8 @@ class DocTermMatrix():
             flat_terms = [flatten([[i[0]] * i[1] for i in doc]) for doc in dtm]
             term_counts = Counter(flatten(flat_terms))
         used_terms = {k: v for k, v in term_counts.items() if v >= min_count}
+        if cap_max:
+            used_terms = {k: v for k, v in term_counts.items() if v <= len(dtm)-min_count}
         if verbose:
             print(f"Filtering such that terms occur " + (f"in at least {min_count} documents" if use_n_docs_count else
                                                          f"at least {min_count} times") + f", which are {len(used_terms)} of {len(term_counts)} terms.")

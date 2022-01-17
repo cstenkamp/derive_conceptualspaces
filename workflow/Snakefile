@@ -73,7 +73,7 @@ def initialize_snakemake():
                 globals()[k] =  telegram_notify(only_terminal=False, only_on_fail=False, log_start=True)(globals()[k])
     if any(i in sys.argv for i in NONDEFAULT_RULES):
         os.environ[f"{ENV_PREFIX}_SMK_NONDEFAULTRULE"] = [i for i in sys.argv if i in NONDEFAULT_RULES][0]
-    ctx = CustomContext(SnakeContext(cwd=os.getcwd())) #TODO overhaul 16.01.2022: brauch ich das cwd=os.getcwd here?!
+    ctx = CustomContext(SnakeContext())
     os.environ[f"{ENV_PREFIX}_SMK_INITIALIZED"] = "1"
     return ctx
 
@@ -93,6 +93,7 @@ def autoload_context_inputs(ctx, inputs, wildcards, params=None, input_kwargs=No
     ctx.init_context(load_envfile=True, load_conffile=False)  #after this point, new-env-vars are no considered anymore!
     for key, val in inputs.items():
         ctx.obj[key] = ctx.p.load(val, key, loader=loader(key), **input_kwargs.get(key, {}))
+    ctx.print_important_settings()
     # TODO overhaul: don't I need to set envvars in snakemake? -> maybe call confirm_config() here which sets all the envvars?
 
 ctx = initialize_snakemake()
@@ -106,7 +107,7 @@ generated_paths = dict(
     filtered_dcm = "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json",
     clusters = "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}/clusters.json"
 )
-#TODO overhaul 16.01.2022: auto-generate these from jsonpersister?!
+#TODO can I auto-generate these from jsonpersister?!
 
 ########################################################################################################################
 ########################################################################################################################
@@ -151,7 +152,7 @@ rule preprocess_descriptions_notranslate:
         generated_paths["pp_descriptions"]
     threads: 1
     run:
-        assert ctx.get_config("translate_policy") != "translate"
+        assert ctx.get_config("translate_policy") != "translate", "This rule shouldn't be triggered if translate-policy == translate!!"
         autoload_context_inputs(ctx, input, wildcards)
         descriptions, metainf = preprocess_descriptions_base(ctx.obj["raw_descriptions"], ctx.obj["dataset_class"], ctx.get_config("pp_components"),
                                                              ctx.get_config("translate_policy"), ctx.obj["languages"])

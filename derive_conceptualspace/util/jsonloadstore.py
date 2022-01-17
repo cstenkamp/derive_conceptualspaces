@@ -1,13 +1,13 @@
 """https://stackoverflow.com/a/47626762/5122790"""
-import re
 import inspect
 import json
 import os
-import sys
+import re
 import subprocess
+import sys
 import warnings
 from datetime import datetime
-from os.path import isfile, splitext, dirname, join, isdir
+from os.path import isfile, splitext, dirname, join
 
 import numpy as np
 import pandas as pd
@@ -87,7 +87,7 @@ def npify_rek(di):
 
 def get_all_info():
     info = {"git_hash": get_commithash(),
-            "settings": get_settings(),
+            "default_settings": get_defaults(),
             "date": str(datetime.now()),
             "env_vars": get_envvars(),
             "startup_env_vars": settings.STARTUP_ENVVARS,
@@ -115,7 +115,7 @@ def get_commithash():
     return res
 
 
-def get_settings():
+def get_defaults():
     from types import ModuleType  # noqa: E402
     return {
         k: v
@@ -128,48 +128,30 @@ def get_settings():
 ########################################################################################################################
 # json-dump
 
-def prepare_dump(*args, write_meta=True, **kwargs):
-    assert "cls" not in kwargs
-    if write_meta:
-        content = {"git_hash": get_commithash(), "settings": get_settings(), "date": str(datetime.now()),
-                   "env_vars": {k:v for k,v in os.environ.items() if k.startswith(settings.ENV_PREFIX+"_")}, "cmdargs": sys.argv, "content": args[0]}
-        #TODO: also stored plots, ...
-    else:
-        content = args[0]
-    return content
-
-
-def json_dump(*args, forbid_overwrite=True, **kwargs):
-    content = prepare_dump(*args, **kwargs)
-    kwargs = {k:v for k,v in kwargs.items() if k not in inspect.getfullargspec(prepare_dump).kwonlyargs}
-    fpath = str(args[1])
+def json_dump(content, orig_fpath, *args, forbid_overwrite=True, **kwargs):
+    fpath = str(orig_fpath)
     if forbid_overwrite and isfile(fpath):
         for i in range(2, 999):
-            fpath = splitext(str(args[1]))[0]+f"_{i}"+splitext(fpath)[1]
+            fpath = splitext(str(orig_fpath))[0]+f"_{i}"+splitext(fpath)[1]
             if not isfile(fpath): break
     with open(fpath, "w") as wfile:
-        json.dump(content, wfile, *args[2:], cls=NumpyEncoder, **kwargs)
+        json.dump(content, wfile, *args, cls=NumpyEncoder, **kwargs)
     return fpath
 
 
-def json_dumps(*args, **kwargs):
-    content = prepare_dump(*args, **kwargs)
-    return json.dumps(content, *args[2:], cls=NumpyEncoder, **kwargs)
-
-
-def json_load(*args, assert_meta=(), return_meta=False, **kwargs):
-    if isinstance(args[0], str):
-        with open(args[0], "r") as rfile:
+def json_load(fname, **kwargs): #assert_meta=(), return_meta=False,
+    if isinstance(fname, str):
+        with open(fname, "r") as rfile:
             tmp = json.load(rfile, **kwargs)
     else: #then it may be a sacred opened resource (https://sacred.readthedocs.io/en/stable/apidoc.html#sacred.Experiment.open_resource)
-        tmp = json.load(args[0], **kwargs)
-    if isinstance(tmp, dict) and all(i in tmp for i in ["git_hash", "settings", "content"]):
-        for i in assert_meta:
-            assert getattr(settings, i) == tmp["settings"][i], f"The setting {i} does not correspond to what was saved!"
-        if return_meta:
-            meta = {k:v for k,v in tmp.items() if k != "content"}
-            return npify_rek(tmp["content"]), meta
-        return npify_rek(tmp["content"])
+        tmp = json.load(fname, **kwargs)
+    # if isinstance(tmp, dict) and all(i in tmp for i in ["git_hash", "settings", "content"]):
+    #     for i in assert_meta:
+    #         assert getattr(settings, i) == tmp["settings"][i], f"The setting {i} does not correspond to what was saved!"
+    #     if return_meta:
+    #         meta = {k:v for k,v in tmp.items() if k != "content"}
+    #         return npify_rek(tmp["content"]), meta
+    #     return npify_rek(tmp["content"])
     return npify_rek(tmp)
 
 
@@ -201,9 +183,7 @@ class format_dict(dict):
 
 
 class JsonPersister():
-    #TODO a very important thing this should do is not done yet: Er soll von der kompletten historie an required files auch die kompletten meta-infos speichern,
-    # also das was json_store mitspeichert! Das muss alles an loaded_objects hängen! Ich möchte wissen was der git-commit der jeweiligen benötigten files war!
-    # - dementsprechend muss es auch klappen, dass wenn ich in extract_candidates als relevant_metainfo das model anhänge, ich auch in den postprocessed_descriptions
+    # TODO es muss auch klappen, dass wenn ich in extract_candidates als relevant_metainfo das model anhänge, ich auch in den postprocessed_descriptions
     #   noch sehe was das originale model war! original code:
     #     candidate_terms, meta_inf = json_load(join(base_dir, "candidate_terms.json"), return_meta=True)
     #     model = candidate_terms["model"]
@@ -211,29 +191,24 @@ class JsonPersister():
     #     candidate_terms["candidate_terms"] = postprocess_candidates(candidate_terms, descriptions)
     #     return model, candidate_terms
 
-    def __init__(self, in_dir, out_dir, ctx, forward_params, forward_meta_inf, incompletedirnames_to_filenames=True, dir_struct=None, strict_metainf_checking=True):
-        self.incompletedirnames_to_filenames = incompletedirnames_to_filenames #means that if there is info that should be added to dirname, but not all for one level, then add to filename
-        # self.forward_params = forward_params
-        # self.forward_meta_inf = forward_meta_inf
-        #TODO the FORWARD_META_INF here is not used - I can use it to automatically add this in the save-method if the respective keys are in the ctx.obj, such that I don't need to
-        # explitly specify them when saving!
-        self.dir_struct = dir_struct or []
-        self.in_dir = in_dir if in_dir.endswith(os.sep) else in_dir+os.sep
-        self.out_dir = out_dir if out_dir.endswith(os.sep) else out_dir+os.sep
+    # TODO the FORWARD_META_INF here is not used - I can use it to automatically add this in the save-method if the respective keys are in the ctx.obj, such that I don't need to explitly specify them when saving!
+    def __init__(self, ctx, dir_struct, /, in_dir=None, out_dir=None, forward_meta_inf=None, incompletedirnames_to_filenames=True): #TODO overhaul 16.01.2022: add back meta-inf-stuff
         self.ctx = ctx
-        self.loaded_objects = {} #dict: {save_basename of loaded file: [object (None if loaded), filepath, [save_basename_of_file_that_needed_it_1, save_basename_of_file_that_needed_it_2,..]
-        # self.loaded_relevant_params = {}
-        # self.loaded_relevant_metainf = {}
-        # self.default_metainf_getters = {}
-        # self.strict_metainf_checking = strict_metainf_checking
+        self.in_dir = in_dir or ctx.get_config("base_dir")
+        if not self.in_dir.endswith(os.sep): self.in_dir+=os.sep
+        self.out_dir = out_dir or ctx.get_config("base_dir")
+        if not self.out_dir.endswith(os.sep): self.out_dir+=os.sep
+        self.dir_struct = dir_struct or []
+        self.incompletedirnames_to_filenames = incompletedirnames_to_filenames #means that if there is info that should be added to dirname, but not all for one level, then add to filename
+        self.loaded_objects = {} # dict: {save_basename of loaded file: [object (None if loaded), filepath, [save_basename_of_file_that_needed_it_1, save_basename_of_file_that_needed_it_2,..]
         self.created_plots = {}
-        # self.used_config = {}
+        # self.forward_meta_inf = forward_meta_inf
+        # self.loaded_relevant_metainf = {}
 
     @property
     def loaded_influentials(self):
         loadeds = [i.get("metadata", {}).get("used_influentials", {}) for i in self.loaded_objects.values()]
         return {k:v for list_item in loadeds for (k,v) in list_item.items()}
-
 
     def dirname_vars(self, uptolevel=None):
         return re.findall(r'{(.*?)}', "".join(self.dir_struct[:uptolevel]))
@@ -247,38 +222,10 @@ class JsonPersister():
         used_keys = {standardize_config_name(i): di.used_keys[standardize_config_name(i)] for i in self.dirname_vars(fulfilled_dirs)}
         return (os.sep.join(dirstruct[:fulfilled_dirs]),
                 used_keys, #what you used
-                {k: v for k, v in di.used_keys.items() if k not in used_keys.keys()}, #what you should have used for filename but didn't
+                {k: v for k, v in di.used_keys.items() if k not in used_keys.keys()},    #what you should have used for filename but didn't
                 {k:v for k, v in influential_confs.items() if k not in used_keys.keys()} #what you didn't use
                 )
 
-    # def get_subdir(self, relevant_metainf, ignore_params=None):
-    #     if not (self.dir_struct and all(i for i in self.dir_struct)):
-    #         return "", []
-    #     di = format_dict({**{k:v for k,v in self.ctx.obj.items() if k not in (ignore_params or [])}, **relevant_metainf})
-    #     dirstruct = [d.format_map(di) for d in self.dir_struct]
-    #     fulfilled_dirs = len(dirstruct) if not (tmp := [i for i, el in enumerate(dirstruct) if "UNDEFINED" in el]) else tmp[0]
-    #     used_params = [k for k in di.keys() if "{"+k+"}" in "".join(self.dir_struct[:fulfilled_dirs])] #"verbrauchte", damit die nicht mehr zum filename hinzugefügt werden müssen
-    #     return os.sep.join(dirstruct[:fulfilled_dirs]), used_params
-
-
-    # def get_file_by_config(self, subdir, relevant_metainf, save_basename):
-    #     subdirlen = len(join(self.in_dir, subdir))+1 if str(subdir).endswith(os.sep) else len(join(self.in_dir, subdir))
-    #     candidates = [join(path, name)[subdirlen:] for path, subdirs, files in
-    #                   os.walk(join(self.in_dir, subdir)) for name in files if name.startswith(save_basename)]
-    #     candidates = [i if not i.startswith(os.sep) else i[1:] for i in candidates]
-    #     assert candidates, f"No Candidate for {save_basename}! Subdir: {subdir}"
-    #     if len(candidates) == 1:
-    #         return candidates
-    #     elif len(candidates) > 1:
-    #         if all([splitext(i)[1] == ".json" for i in candidates]):
-    #             correct_cands = []
-    #             for cand in candidates:
-    #                 tmp = json_load(join(self.in_dir, subdir, cand))
-    #                 if (all(tmp.get("relevant_metainf", {}).get(k, v) == v or v == "ANY" for k, v in {**self.loaded_relevant_metainf, **relevant_metainf}.items()) and
-    #                         # all(tmp.get("relevant_params", {}).get(k) for k, v in self.loaded_relevant_params.items()) and #TODO was this necessary
-    #                         all(self.ctx.obj.get(k) == tmp["relevant_params"][k] for k in set(self.forward_params) & set(tmp.get("relevant_params", {}).keys()))):
-    #                     correct_cands.append(cand)
-    #             return correct_cands
 
     def get_file_by_config(self, subdir, save_basename):
         """If no filename specified, recursively search for files whose name startswith save_basename, and then from
@@ -355,6 +302,8 @@ class JsonPersister():
 
     def load(self, filename, save_basename, /, loader=None, silent=False):
         filename = filename or self.get_file_by_config("", save_basename)
+        if not isfile(join(self.in_dir, filename)) and isfile(join(self.in_dir, self.ctx.get_config("dataset"), filename)):
+            filename = join(self.ctx.get_config("dataset"), filename)
         if splitext(filename)[1] == ".csv":
             obj = pd.read_csv(join(self.in_dir, filename))
             full_metadata = {}
@@ -396,11 +345,11 @@ class JsonPersister():
         loaded_files = {k: dict(path=v["path"], used_in=makelist(v["used_in"], basename), metadata=v["metadata"]) for k, v in self.loaded_objects.items()}
         # assert all(self.ctx.obj[v] == k for v, k in self.loaded_relevant_params.items()) #TODO overhaul 16.01.2022: add back?!
         os.makedirs(join(self.out_dir, subdir), exist_ok=True)
-        obj = {"loaded_files": loaded_files, "used_influentials": used_influentials,  #TODO overhaul 16.01.2022: used_conf is superfluos!!
+        obj = {"loaded_files": loaded_files, "used_influentials": used_influentials,
                "basename": basename, "obj_info": get_all_info(), "created_plots": self.created_plots,
                "used_config": (self.ctx.used_configs, self.ctx.toset_configs),
                "object": kwargs} #object should be last!!
-        name = json_dump(obj, join(self.out_dir, subdir, filename+ext), write_meta=False, forbid_overwrite=not force_overwrite)
+        name = json_dump(obj, join(self.out_dir, subdir, filename+ext), forbid_overwrite=not force_overwrite)
         new_influentials = {k: v for k, v in used_influentials.items() if k not in self.loaded_influentials}
         print(f"Saved under {name}. New Influential Config: {new_influentials}.")# Relevant Meta-Inf: {relevant_metainf}")
         return name

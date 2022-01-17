@@ -5,7 +5,7 @@ from fb_classifier.preprocess_data import make_classifier_dict
 
 class Dataset(BaseDataset):
     configs = dict(
-        raw_descriptions_file = "kurse-beschreibungen.csv"
+        raw_descriptions_file = "raw_descriptions.csv"
     )
 
     @staticmethod
