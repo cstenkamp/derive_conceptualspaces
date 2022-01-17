@@ -6,8 +6,6 @@ ENV_PREFIX = "MA"
 ########################################################################################################################
 ############################################## the important parameters ################################################
 ########################################################################################################################
-# ALL_MIN_WORDS_PER_DESC = [10, 50, 100]
-
 
 #!! use singular for these (bzw the form you'd use if there wasn't the "ALL_" before)
 ALL_PP_COMPONENTS = ["faucsd2"]#, "autcsldp"] #,"tcsdp"                 # If in preprocessing it should add coursetitle, lemmatize, etc #TODO "autcsldp", "tcsldp" (gehen gerade nicht weil die nicht mit ngrams klarkommen)
@@ -181,6 +179,8 @@ def get_envvarname(config, assert_hasdefault=True, without_prefix=False):
 def cast_config(k, v):
     if isinstance(v, str) and v.isnumeric():
         v = int(v)
+    if isinstance(v, str) and all([i.isdecimal() or i in ".," for i in v]):
+        v = float(v)
     if "DEFAULT_" + k in globals() and isinstance(globals()["DEFAULT_" + k], bool) and v in [0, 1]:
         v = bool(v)
     if v == "True":
@@ -190,6 +190,7 @@ def cast_config(k, v):
     if isinstance(v, list):
         v = tuple(v)
     if "DEFAULT_" + k in globals() and type(globals()["DEFAULT_" + k]) != type(v) and (v != None and globals()["DEFAULT_" + k] != None):
+        print(f"Default {k}: {globals()['DEFAULT_' + k] }, should-be: {v}")
         assert False, "TODO overhaul 16.01.2022"
     return v
 

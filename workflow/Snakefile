@@ -1,12 +1,12 @@
 """
-    Run default:   `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p default)`
-    or             ` PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR siddata/debug_True/fautcsdp_translate_minwords100/embedding_ppmi/dissim_mat.json`
-ALL Combis:    `ma_cont snakemake --cores 1 -p  --directory /opt/data all --keep-going`
-ALL for 1 rule `(export $(cat $MA_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR all_for --config for_rule=create_embedding)`
-Plot DAG:      `PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -np --directory $MA_DATA_DIR --dag | grep -A99999 "digraph" | dot -Tsvg > dag.svg`
+Run default:   `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p default)`
+specific file: `PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR siddata/debug_True/fautcsdp_translate_minwords100/embedding_ppmi/dissim_mat.json`
+ALL Combis:    `ma_cont snakemake --cores 1 -p all --keep-going`
+ALL for 1 rule `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p all_for --config for_rule=create_embedding)`
+from config:   ` (export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p  by_config --configfile ./config/derrac2015.yml)`
+
+Plot DAG:      `MA_DATASET=siddata PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -np --directory $MA_DATA_DIR --dag | grep -A99999 "digraph" | dot -Tsvg > dag.svg`
 Get results:   `rsync -az --progress $MA_DATA_DIR etlpipelines:~/data --exclude .snakemake`
-UPDATE: `(export $(cat $MA_SELECT_ENV_FILE | xargs) && export $(cat $MA_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR/$MA_DATASET_NAME)`
-from config:   `(export $(cat $MA_SELECT_ENV_FILE | xargs) && export $(cat $MA_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR/$MA_DATASET_NAME by_config --configfile ./config/derrac2015.yml)`
 """
 
 #TODO before writing about it: have a way of not having to set the PYTHONPATH as cmd-arg
@@ -116,7 +116,8 @@ def autoload_context_inputs(ctx, inputs, wildcards, params=None, input_kwargs=No
     input_kwargs = input_kwargs or {}
     add_to_ctx(wildcards, ctx)
     if params: add_to_ctx(params, ctx)
-    ctx.init_context(load_envfile=True)  #after this point, no new env-vars should be set anymore (are not considered)
+    print("cand1")
+    ctx.init_context(load_envfile=True, load_conffile=False)  #after this point, no new env-vars should be set anymore (are not considered)
     for key, val in inputs.items():
         ctx.obj[key] = ctx.p.load(val, key, loader=loader(key), **input_kwargs.get(key, {}))
     #TODO overhaul 16.01.2022: hier könnte man jetzt tatsächlich confirm_config aufrufen und das setzt dann die ganzen envvars
@@ -207,9 +208,9 @@ rule extract_candidate_terms:
     output:
         generated_paths["candidate_terms"]
     threads: 1
-    params:
-        faster_keybert=get_setting("FASTER_KEYBERT"), #TODO overhaul 16.01.2022: this is not how it's supposed to be anymore, is it?!
-        max_ngram=get_setting("MAX_NGRAM")
+    # params:
+    #     faster_keybert=get_setting("FASTER_KEYBERT"), #TODO overhaul 16.01.2022: this is not how it's supposed to be anymore, is it?!
+    #     max_ngram=get_setting("MAX_NGRAM")            #TODO overhaul 16.01.2022: get_setting would overwrite with None !!!
     run:
         autoload_context_inputs(ctx, input, wildcards, params)
         candidateterms, relevant_metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.get_config("extraction_method"), ctx.get_config("max_ngram"),
@@ -237,13 +238,13 @@ rule create_doc_cand_matrix:
     output:
         generated_paths["filtered_dcm"]
     threads: 1
-    params:
-        candidate_min_term_count = get_setting("CANDIDATE_MIN_TERM_COUNT"),
-        use_ndocs_count = get_setting("CANDS_USE_NDOCS_COUNT")
+    # params:
+    #     candidate_min_term_count = get_setting("CANDIDATE_MIN_TERM_COUNT"),
+    #     use_ndocs_count = get_setting("CANDS_USE_NDOCS_COUNT")
     run:
         autoload_context_inputs(ctx, input, wildcards, params)
         filtered_dcm = create_filtered_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], min_term_count=ctx.get_config("candidate_min_term_count"),
-                                                    dcm_quant_measure=ctx.get_config("dcm_quant_measure"), use_n_docs_count=ctx.get_config("use_ndocs_count"), verbose=ctx.get_config("verbose"))
+                                                    dcm_quant_measure=ctx.get_config("dcm_quant_measure"), use_n_docs_count=ctx.get_config("cands_use_ndocs_count"), verbose=ctx.get_config("verbose"))
         ctx.p.save("filtered_dcm.json", doc_term_matrix=filtered_dcm) #relevant_metainf={"candidate_min_term_count": ctx.obj["candidate_min_term_count"]}
 
 
@@ -274,7 +275,8 @@ def rule_by_name(name): # must be after all other rules!
 
 
 def expand_output(output, expand_all=False, overwriter_di=None):
-    ctx.init_context(load_envfile=True)  #after this point, no new env-vars should be set anymore (are not considered)
+    print("cand2")
+    ctx.init_context(load_envfile=True, load_conffile=False)  #after this point, no new env-vars should be set anymore (are not considered)
     set_val = bkp = (lambda name: settings.__dict__.get("ALL_"+standardize_config_name(name), ctx.get_config(standardize_config_name(name), silent=True))) \
                     if expand_all else (lambda name: ctx.get_config(standardize_config_name(name), silent=True))
     if overwriter_di:
@@ -282,43 +284,46 @@ def expand_output(output, expand_all=False, overwriter_di=None):
     return [expand(out, **{i[1]: set_val(i[1]) for i in Formatter().parse(out) if i[1]}) for out in output]
 
 
-# def input_all_for(wildcards, rule_name=None):
-#     darule = rule_by_name(rule_name or config.get("for_rule", "preprocess_descriptions"))
-#     if darule:
-#         inputs = [i for i in flatten(expand_output(darule.output, expand_all=True)) if not any(j in i for j in FORBIDDEN_COMBIS)]
-#         if inputs:
-#             print("Running all rules for these inputs:")
-#             print_multicol(inputs)
-#         return inputs
-
-# def set_envvars_generate_input_from_config(cnf):
-#     """the by_config rule which allows to provide a yaml with a configuration. This reads out this configuration and
-#     sets the correct environment-variables for the demanded settings and lists the required output-files. It is possible
-#     to generate multiple outputs, so those settings that are reflected in the filenames can have lists as value, such that
-#     all combination of these will be tried, however those settings that must be set as env-vars cannot be lists and must
-#     be equal for all combinations."""
-#     lkeys, lvals = zip(*[(k,v) for k,v in cnf.items() if isinstance(v, list)])
-#     othervals = {k: v for k,v in cnf.items() if k not in lkeys}
-#     configs_in_filename = flatten([[i[1] for i in Formatter().parse(out) if i[1]] for out in rule_by_name(LAST_RULE).output])
-#     assert all(i in configs_in_filename for i in lkeys), "You can only have multiple values for configs that are reflected in the filename"
-#     for k, v in othervals.items():
-#         if k not in configs_in_filename:
-#             os.environ.setdefault(get_envvarname(k), str(v))
-#             os.environ[get_envvarname(k)] = str(v)
-#     outputs = []
-#     for multival_comb in itertools.product(*lvals):
-#         all_vals = {**dict(zip(lkeys,multival_comb)), **othervals}
-#         outputs.append(expand_output(rule_by_name(LAST_RULE).output, overwriter_di=all_vals))
-#     return outputs
+def input_all_for(wildcards, rule_name=None):
+    darule = rule_by_name(rule_name or config.get("for_rule", "preprocess_descriptions"))
+    if darule:
+        inputs = [i for i in flatten(expand_output(darule.output, expand_all=True)) if not any(j in i for j in FORBIDDEN_COMBIS)]
+        if inputs:
+            print("Running all rules for these inputs:")
+            print_multicol(inputs)
+        return inputs
 
 
-# rule all:
-#     input:
-#         partial(input_all_for, rule_name=LAST_RULE)
-#
-# rule all_for:
-#     input:
-#         input_all_for
+def set_envvars_generate_input_from_config(cnf):
+    """the by_config rule which allows to provide a yaml with a configuration. This reads out this configuration and
+    sets the correct environment-variables for the demanded settings and lists the required output-files. It is possible
+    to generate multiple outputs, so those settings that are reflected in the filenames can have lists as value, such that
+    all combination of these will be tried, however those settings that must be set as env-vars cannot be lists and must
+    be equal for all combinations."""
+    print("got to the correct one")
+    lkeys, lvals = zip(*[(k,v) for k,v in cnf.items() if isinstance(v, list)])
+    othervals = {k: v for k,v in cnf.items() if k not in lkeys}
+    configs_in_filename = flatten([[i[1] for i in Formatter().parse(out) if i[1]] for out in rule_by_name(LAST_RULE).output])
+    assert all(i in configs_in_filename for i in lkeys), "You can only have multiple values for configs that are reflected in the filename"
+    for k, v in othervals.items():
+        if k not in configs_in_filename:
+            # os.environ.setdefault(get_envvarname(k), str(v))
+            print(f"SETTING {k} to {v}")
+            os.environ[ENV_PREFIX+"_CONF_FORCE_"+standardize_config_name(k)] = str(v)
+    outputs = []
+    for multival_comb in itertools.product(*lvals):
+        all_vals = {**dict(zip(lkeys,multival_comb)), **othervals}
+        outputs.append(expand_output(rule_by_name(LAST_RULE).output, overwriter_di=all_vals))
+    return outputs
+
+
+rule all:
+    input:
+        partial(input_all_for, rule_name=LAST_RULE)
+
+rule all_for:
+    input:
+        input_all_for
 
 rule default:
     input:
@@ -326,6 +331,6 @@ rule default:
     output:
         touch(".alldone")
 
-# rule by_config:
-#     input:
-#         set_envvars_generate_input_from_config(config)
+rule by_config:
+    input:
+        set_envvars_generate_input_from_config(config)

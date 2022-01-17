@@ -50,9 +50,15 @@ class CustomContext(ObjectWrapper):
             #first of all, load settings from env-vars and, if you have it by then, from config-file
             relevant_envvars = {k[len(ENV_PREFIX)+1:]: v for k, v in os.environ.items() if k.startswith(ENV_PREFIX+"_")}
             for param, val in relevant_envvars.items():
-                self.set_config(param, val, "env_vars")
-            if load_conffile and self.get_config("conf_file"):
-                self.read_configfile()
+                if param.startswith("CONF_FORCE_"): #that's how snakemake enforces the config-file, in that situation conf-file has higher prio than env-var
+                    self.set_config(param[len("CONF_FORCE_"):], val, "smk_wildcard")
+                else:
+                    self.set_config(param, val, "env_vars")
+            if self.get_config("conf_file"):
+                if load_conffile:
+                    self.read_configfile()
+                else:
+                    print("A config-file could be loaded, but intentionally isn't.")
             if "cwd" in self.obj: #TODO overhaul 16.01. das geht doch locker eleganter!!
                 self.set_config("base_dir", self.obj["cwd"], "smk_args")
             # setup_logging(self.get_config("log"), self.get_config("logfile")) #TODO overhaul 16.01.2022: this looks shitty AF in snakemake (but add back for click!!)
@@ -204,12 +210,3 @@ class SnakeContext():
 
 
 
-
-########################################################################################################################
-########################################################################################################################
-########################################################################################################################
-
-if __name__ == "__main__":
-    ctx = CustomContext(SnakeContext(cwd=os.getcwd()))
-    ctx.init_context(load_envfile=True, load_conffile=False)
-    print()
