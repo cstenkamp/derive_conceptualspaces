@@ -3,6 +3,7 @@ from datetime import datetime
 from itertools import combinations
 import logging
 from os.path import basename
+import json
 
 from gensim import corpora
 from gensim.models import LsiModel
@@ -16,6 +17,7 @@ from scipy.spatial.distance import cosine, cdist
 from derive_conceptualspace.settings import get_setting
 from misc_util.logutils import CustomIO
 from misc_util.pretty_print import pretty_print as print
+from derive_conceptualspace.util.mpl_tools import actually_plot
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 logger = logging.getLogger(basename(__file__))
@@ -75,6 +77,13 @@ def show_data_info(ctx):
         print(f"\n{'=' * N_SPACES} Showing output of **{show}** {'=' * N_SPACES}")
         print(output[show])
         print("=" * len(f"{'=' * N_SPACES} Showing output of **{show}** {'=' * N_SPACES}") + "\n")
+    print()
+    plots = {k: v["metadata"]["created_plots"] for k, v in ctx.obj["json_persister"].loaded_objects.items() if v.get("metadata", {}).get("created_plots")}
+    while (show := input(f"Which step's plots should be shown ({', '.join([k for k, v in plots.items() if v])}): ").strip()) in plots.keys():
+        print(f"Showing plots of **{show}**")
+        for key, val in plots[show].items():
+            print(f"  Showing plot **{key}**")
+            actually_plot(json.loads(val))
 
 
 def merge_streams(s1, s2, for_):

@@ -52,6 +52,10 @@ def prepare_fig(full_data, title):
         #mpl needs main-thread, snakemake often is not mainthread!
         warnings.warn("Cannot plot the figure as we are not in the main-thread!")
         return
+    actually_plot(full_data)
+
+
+def actually_plot(full_data):
     fig, ax = plt.subplots()
     if full_data["type"] == "hist":
         ax.hist(full_data["x"], **full_data["kwargs"])
@@ -65,7 +69,7 @@ def prepare_fig(full_data, title):
         raise NotImplementedError(f"Cannot do plot of type {full_data['type']}!")
     if full_data["title"]: plt.title(full_data["title"])
     plt.tight_layout()
-    show_fig(fig, title)
+    show_fig(fig, full_data["title"])
 
 
 def serialize_plot(title, full_data):

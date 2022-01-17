@@ -1,3 +1,4 @@
+import os
 import warnings
 import inspect
 import logging
@@ -187,9 +188,8 @@ def click_pass_add_context(fn):
 
 @click.group()
 #TODO even prior to evaluating this, save the old env-vars somewhere.
-#TODO overhaul 16.01.2022: should env-file have a default-value from get_setting?!
 @click.option("--env-file", callback=lambda ctx, param, value: load_dotenv(value) if (param.name == "env_file" and value) else None,
-              default=lambda: get_setting("ENV_FILE", default_none=True, fordefault=True), type=click.Path(exists=True), is_eager=True,
+              default=os.environ.get(ENV_PREFIX+"_"+"ENV_FILE"), type=click.Path(exists=True), is_eager=True,
               help="If you want to provide environment-variables using .env-files you can provide the path to a .env-file here.")
 @click.option("--conf-file", default=None, type=click.Path(exists=True), help="You can also pass a yaml-file containing values for some of the settings")
 @click.option("--base-dir", type=click.Path(exists=True), default=None)
@@ -460,7 +460,4 @@ def run_lsi(ctx):
 
 
 if __name__ == '__main__':
-    cli(auto_envvar_prefix=ENV_PREFIX, obj={})
-
-
-
+    cli(obj={})

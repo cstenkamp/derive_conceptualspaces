@@ -384,20 +384,21 @@ class JsonPersister():
         #     relevant_params = [i for i in self.forward_params if i in self.ctx.obj]
         # relevant_metainf = {**self.loaded_relevant_metainf, **(relevant_metainf or {})}
         #TODO overhaul 16.01.2022: dass der sich hier loaded_relevant_metainf anschaut macht ja schon sinn!!
-        relevant_confs = {**self.loaded_influentials, **self.ctx.used_influential_confs()}
-        if ignore_confs: relevant_confs = {k: v for k, v in relevant_confs if k not in ignore_confs}
+        used_influentials = {k: v for k, v in self.ctx.used_influential_confs().items() if k not in ignore_confs} if ignore_confs else self.ctx.used_influential_confs()
+        relevant_confs = {**self.loaded_influentials, **used_influentials}
+        if ignore_confs: relevant_confs = {k: v for k, v in relevant_confs.items() if k not in ignore_confs}
         subdir, _, shoulduse_infls, _ = self.get_subdir(relevant_confs)
         if self.incompletedirnames_to_filenames and shoulduse_infls:
             filename += "_"+("_".join(str(i) for i in shoulduse_infls.values()))
         loaded_files = {k: dict(path=v["path"], used_in=makelist(v["used_in"], basename), metadata=v["metadata"]) for k, v in self.loaded_objects.items()}
         # assert all(self.ctx.obj[v] == k for v, k in self.loaded_relevant_params.items()) #TODO overhaul 16.01.2022: add back?!
         os.makedirs(join(self.out_dir, subdir), exist_ok=True)
-        obj = {"loaded_files": loaded_files, "used_influentials": self.ctx.used_influential_confs(),  #TODO overhaul 16.01.2022: used_conf is superfluos!!
+        obj = {"loaded_files": loaded_files, "used_influentials": used_influentials,  #TODO overhaul 16.01.2022: used_conf is superfluos!!
                "basename": basename, "obj_info": get_all_info(), "created_plots": self.created_plots,
                "used_config": (self.ctx.used_configs, self.ctx.toset_configs),
                "object": kwargs} #object should be last!!
         name = json_dump(obj, join(self.out_dir, subdir, filename+ext), write_meta=False, forbid_overwrite=not force_overwrite)
-        new_influentials = {k: v for k, v in self.ctx.used_influential_confs().items() if k not in self.loaded_influentials}
+        new_influentials = {k: v for k, v in used_influentials.items() if k not in self.loaded_influentials}
         print(f"Saved under {name}. New Influential Config: {new_influentials}.")# Relevant Meta-Inf: {relevant_metainf}")
         return name
 
