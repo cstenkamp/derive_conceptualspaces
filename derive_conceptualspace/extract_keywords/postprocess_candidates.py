@@ -21,6 +21,7 @@ def fix_cand(cand, text):
 
 
 def postprocess_candidateterms(candidate_terms, descriptions, extraction_method):
+    #TODO add a print wie viele candiates es wirklich zunächst sind (schritt davor sagt "found 15692 terms", und hier heißt es dann "had to drop 0 out of 1211 candidates", das sieht weird aus)
     candidate_terms, = candidate_terms.values()
     assert len(candidate_terms) == len(descriptions), f"Candidate Terms: {len(candidate_terms)}, Descriptions: {len(descriptions)}"
 

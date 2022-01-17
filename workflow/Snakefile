@@ -5,7 +5,7 @@ ALL Combis:    `ma_cont snakemake --cores 1 -p all --keep-going`
 ALL for 1 rule `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p all_for --config for_rule=create_embedding)`
 from config:   `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p  by_config --configfile ./config/derrac2015.yml)`
 
-Plot DAG:      `MA_DATASET=siddata PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -np --directory $MA_DATA_DIR --dag | grep -A99999 "digraph" | dot -Tsvg > dag.svg`
+Plot DAG:      `MA_DATASET=siddata PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -np --directory $MA_DATA_DIR --dag default | grep -A99999 "digraph" | dot -Tsvg > dag.svg`
 Get results:   `rsync -az --progress $MA_DATA_DIR etlpipelines:~/data --exclude .snakemake`
 """
 
@@ -77,8 +77,8 @@ def initialize_snakemake():
     os.environ[f"{ENV_PREFIX}_SMK_INITIALIZED"] = "1"
     return ctx
 
-def autoload_context_inputs(ctx, inputs, wildcards, params=None, input_kwargs=None):
-    #input_kwargs could eg. be: `input_kwargs={"pp_descriptions": {"relevant_metainf": {"n_samples": "ANY"}}}` to ignore the n_samples check for ONE call.
+def autoload_context_inputs(ctx, inputs, wildcards, params=None, input_kwargs=None, silents=None):
+    #input_kwargs could eg. be: `input_kwargs={"pp_descriptions": {"metainf": {"n_samples": "ANY"}}}` to ignore the n_samples check for ONE call.
     def loader(key):
         if key in ctx.autoloader_di:
             return ctx.autoloader_di[key]
@@ -92,7 +92,7 @@ def autoload_context_inputs(ctx, inputs, wildcards, params=None, input_kwargs=No
     if params: add_to_ctx(params, ctx)
     ctx.init_context(load_envfile=True, load_conffile=False)  #after this point, new-env-vars are no considered anymore!
     for key, val in inputs.items():
-        ctx.obj[key] = ctx.p.load(val, key, loader=loader(key), **input_kwargs.get(key, {}))
+        ctx.obj[key] = ctx.p.load(val, key, loader=loader(key), **input_kwargs.get(key, {}), silent=key in (silents or []))
     ctx.print_important_settings()
     # TODO overhaul: don't I need to set envvars in snakemake? -> maybe call confirm_config() here which sets all the envvars?
 
@@ -141,7 +141,7 @@ rule preprocess_descriptions:
         autoload_context_inputs(ctx, input, wildcards)
         descriptions, metainf = preprocess_descriptions_base(ctx.obj["raw_descriptions"], ctx.obj["dataset_class"], ctx.get_config("pp_components"), ctx.get_config("translate_policy"),
                                                              ctx.obj["languages"], ctx.obj["translations"], ctx.obj["title_languages"], ctx.obj["title_translations"])
-        ctx.p.save("pp_descriptions.json", descriptions=descriptions)#, relevant_metainf=metainf) #TODO overhaul 16.01.2022: what about it?!
+        ctx.p.save("pp_descriptions.json", descriptions=descriptions, metainf=metainf) #TODO overhaul 16.01.2022: what about it?!
 
 
 rule preprocess_descriptions_notranslate:
@@ -156,7 +156,7 @@ rule preprocess_descriptions_notranslate:
         autoload_context_inputs(ctx, input, wildcards)
         descriptions, metainf = preprocess_descriptions_base(ctx.obj["raw_descriptions"], ctx.obj["dataset_class"], ctx.get_config("pp_components"),
                                                              ctx.get_config("translate_policy"), ctx.obj["languages"])
-        ctx.p.save("pp_descriptions.json", descriptions=descriptions)#, relevant_metainf=metainf)
+        ctx.p.save("pp_descriptions.json", descriptions=descriptions, metainf=metainf)
 
 ruleorder: preprocess_descriptions > preprocess_descriptions_notranslate
 
@@ -170,7 +170,7 @@ rule create_dissim_mat:
     run:
         autoload_context_inputs(ctx, input, wildcards)
         quant_dtm, dissim_mat, metainf = create_dissim_mat_base(ctx.obj["pp_descriptions"], ctx.get_config("quantification_measure"), ctx.get_config("verbose"))
-        ctx.p.save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat)#, relevant_metainf=metainf)
+        ctx.p.save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat, metainf=metainf)
 
 
 rule create_embedding:
@@ -194,9 +194,9 @@ rule extract_candidate_terms:
     threads: 1
     run:
         autoload_context_inputs(ctx, input, wildcards)
-        candidateterms, relevant_metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.get_config("extraction_method"), ctx.get_config("max_ngram"),
-                                                                       ctx.get_config("faster_keybert"), verbose=ctx.get_config("verbose"))
-        ctx.p.save("candidate_terms.json", candidateterms=candidateterms)#, relevant_metainf=relevant_metainf)
+        candidateterms, metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.get_config("extraction_method"), ctx.get_config("max_ngram"),
+                                                              ctx.get_config("faster_keybert"), verbose=ctx.get_config("verbose"))
+        ctx.p.save("candidate_terms.json", candidateterms=candidateterms, metainf=metainf)
 
 
 rule postprocess_candidateterms:
@@ -223,7 +223,7 @@ rule create_doc_cand_matrix:
         autoload_context_inputs(ctx, input, wildcards)
         filtered_dcm = create_filtered_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], min_term_count=ctx.get_config("candidate_min_term_count"),
                                                     dcm_quant_measure=ctx.get_config("dcm_quant_measure"), use_n_docs_count=ctx.get_config("cands_use_ndocs_count"), verbose=ctx.get_config("verbose"))
-        ctx.p.save("filtered_dcm.json", doc_term_matrix=filtered_dcm) #relevant_metainf={"candidate_min_term_count": ctx.obj["candidate_min_term_count"]}
+        ctx.p.save("filtered_dcm.json", doc_term_matrix=filtered_dcm, metainf={"candidate_min_term_count": ctx.obj["candidate_min_term_count"]})
 
 
 rule create_candidate_svm:
@@ -235,10 +235,9 @@ rule create_candidate_svm:
         generated_paths["clusters"]
     threads: 3
     run:
-        autoload_context_inputs(ctx, input, wildcards)
+        autoload_context_inputs(ctx, input, wildcards, silents=["pp_descriptions"])
         decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"))
-        ctx.p.save("clusters.json", decision_planes=decision_planes, metrics=metrics)
-                            # relevant_metainf={"prim_lambda": params.prim_lambda, "sec_lambda": params.sec_lambda})
+        ctx.p.save("clusters.json", decision_planes=decision_planes, metrics=metrics) # metainf={"prim_lambda": params.prim_lambda, "sec_lambda": params.sec_lambda})
 
 ########################################################################################################################
 ########################################################################################################################

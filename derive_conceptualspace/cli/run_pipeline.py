@@ -14,6 +14,7 @@ import click
 
 from misc_util.telegram_notifier import telegram_notify
 from misc_util.pretty_print import pretty_print as print
+from misc_util.logutils import setup_logging
 
 from derive_conceptualspace.util.desc_object import DescriptionList
 from derive_conceptualspace.settings import (
@@ -188,7 +189,7 @@ def preprocess_descriptions(ctx, json_persister, dataset_class, raw_descriptions
     else:
         translations, title_translations = None, None
     descriptions, metainf = preprocess_descriptions_base(raw_descriptions, dataset_class, ctx.get_config("pp_components"), ctx.get_config("translate_policy"), languages, translations, title_languages, title_translations)
-    json_persister.save("pp_descriptions.json", descriptions=descriptions)# , relevant_metainf=metainf) #TODO overhaul 16.01.2022: can I do wihtout relevant_metainf?!
+    json_persister.save("pp_descriptions.json", descriptions=descriptions, metainf=metainf)
 
 
 ########################################################################################################################
@@ -211,7 +212,7 @@ def create_spaces(ctx, json_persister):
 def create_dissim_mat(ctx, json_persister):
     pp_descriptions = json_persister.load(None, "pp_descriptions", loader=DescriptionList.from_json)
     quant_dtm, dissim_mat, metainf = create_dissim_mat_base(pp_descriptions, ctx.get_config("quantification_measure"), ctx.get_config("verbose"))
-    ctx.obj["json_persister"].save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat)
+    ctx.obj["json_persister"].save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat, metainf=metainf)
 
 
 @create_spaces.command()
@@ -256,8 +257,8 @@ def extract_candidateterms_stanfordlp(ctx):
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
 def extract_candidateterms(ctx, max_ngram):
     #TODO if not NGRAMS_IN_EMBEDDING and extraction_method in tfidf/ppmi, you have to re-extract, otherwise you won't get n-grams
-    candidateterms, relevant_metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.get_config("extraction_method"), max_ngram, ctx.get_config("faster_keybert"), verbose=ctx.get_config("verbose"))
-    ctx.obj["json_persister"].save("candidate_terms.json", candidateterms=candidateterms)
+    candidateterms, metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.get_config("extraction_method"), max_ngram, ctx.get_config("faster_keybert"), verbose=ctx.get_config("verbose"))
+    ctx.obj["json_persister"].save("candidate_terms.json", candidateterms=candidateterms, metainf=metainf)
 
 
 @prepare_candidateterms.command()
@@ -280,7 +281,7 @@ def create_filtered_doc_cand_matrix(ctx, candidate_min_term_count, cands_use_ndo
     ctx.obj["postprocessed_candidates"] = ctx.obj["json_persister"].load(None, "postprocessed_candidates", loader = lambda **args: args["postprocessed_candidates"])
     filtered_dcm = create_filtered_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], min_term_count=candidate_min_term_count,
                                                     dcm_quant_measure=ctx.get_config("dcm_quant_measure"), use_n_docs_count=cands_use_ndocs_count, verbose=ctx.get_config("verbose"))
-    ctx.obj["json_persister"].save("filtered_dcm.json", doc_term_matrix=filtered_dcm) #, relevant_metainf={"candidate_min_term_count": candidate_min_term_count}
+    ctx.obj["json_persister"].save("filtered_dcm.json", doc_term_matrix=filtered_dcm, metainf={"candidate_min_term_count": candidate_min_term_count})
 
 
 ########################################################################################################################
@@ -319,6 +320,7 @@ def create_candidate_svm(ctx):
 def show_data_info(ctx):
     ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, "clusters")
     show_data_info_base(ctx)
+    print()
 
 
 @generate_conceptualspace.command()
@@ -328,7 +330,7 @@ def show_data_info(ctx):
 def rank_courses_saldirs(ctx):
     ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, "clusters", loader=cluster_loader)
     rank_courses_saldirs_base(ctx.obj["pp_descriptions"], ctx.obj["embedding"], ctx.obj["clusters"], ctx.obj["filtered_dcm"])
-    #relevant_metainf={"prim_lambda": ctx.obj["prim_lambda"], "sec_lambda": ctx.obj["sec_lambda"]}
+    #metainf={"prim_lambda": ctx.obj["prim_lambda"], "sec_lambda": ctx.obj["sec_lambda"]}
 
 
 @generate_conceptualspace.command()

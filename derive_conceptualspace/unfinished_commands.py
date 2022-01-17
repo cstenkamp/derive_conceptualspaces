@@ -61,13 +61,17 @@ def show_data_info(ctx):
     print("Commits:\n"+("\n".join([f"{str(k)[:8].rjust(8)}: {', '.join(v)}" for k,v in commit_dict.items()])))
     # ob alle vom gleichem commit, wenn ja welcher, und die letzten 2-3 commit-messages davor
     if len([i for i in commit_dict.keys() if i is not None]) == 1:
-        git_hist = list(git.Repo(".", search_parent_directories=True).iter_commits("main", max_count=20))
-        commit_num = [ind for ind, i in enumerate(git_hist) if i.hexsha == list(commits.values())[0]][0]
-        messages = [i.message.strip() for i in git_hist[commit_num:commit_num + 5]]
-        tmp = []
-        for msg in messages:
-            if msg not in tmp: tmp.append(msg)
-        print("Latest commit messages:\n  ", "\n   ".join(tmp))
+        try:
+            git_hist = list(git.Repo(".", search_parent_directories=True).iter_commits("main", max_count=20))
+        except:
+            pass
+        else:
+            commit_num = [ind for ind, i in enumerate(git_hist) if i.hexsha == list(commits.values())[0]][0]
+            messages = [i.message.strip() for i in git_hist[commit_num:commit_num + 5]]
+            tmp = []
+            for msg in messages:
+                if msg not in tmp: tmp.append(msg)
+            print("Latest commit messages:\n  ", "\n   ".join(tmp))
     dates = {k: v["metadata"]["obj_info"]["date"] for k, v in ctx.obj["json_persister"].loaded_objects.items() if v.get("metadata", {}).get("obj_info", {}).get("date")}
     print("Dates:\n ", "\n  ".join(f"{k.rjust(max(len(i) for i in dates))}: {v}" for k, v in dates.items()))
     output = {k: merge_streams(v["metadata"]["obj_info"]["stdout"], v["metadata"]["obj_info"]["stderr"], k) for k, v in ctx.obj["json_persister"].loaded_objects.items() if v.get("metadata", {}).get("obj_info", {}).get("stdout")}

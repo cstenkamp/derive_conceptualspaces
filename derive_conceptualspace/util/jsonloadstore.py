@@ -145,15 +145,7 @@ def json_load(fname, **kwargs): #assert_meta=(), return_meta=False,
             tmp = json.load(rfile, **kwargs)
     else: #then it may be a sacred opened resource (https://sacred.readthedocs.io/en/stable/apidoc.html#sacred.Experiment.open_resource)
         tmp = json.load(fname, **kwargs)
-    # if isinstance(tmp, dict) and all(i in tmp for i in ["git_hash", "settings", "content"]):
-    #     for i in assert_meta:
-    #         assert getattr(settings, i) == tmp["settings"][i], f"The setting {i} does not correspond to what was saved!"
-    #     if return_meta:
-    #         meta = {k:v for k,v in tmp.items() if k != "content"}
-    #         return npify_rek(tmp["content"]), meta
-    #     return npify_rek(tmp["content"])
     return npify_rek(tmp)
-
 
 ########################################################################################################################
 ########################################################################################################################
@@ -246,7 +238,6 @@ class JsonPersister():
 
 
     def add_file_metas(self, file): #TODO overhaul 16.01.2022
-        print()
         for k, v in file.get("loaded_files", {}).items(): #for all files that THAT file loaded
             if k in self.loaded_objects: #if that file is already loaded
                 self.loaded_objects[k]["used_in"].extend(v["used_in"])  # jot down that that file was also used for THAT file
@@ -255,8 +246,7 @@ class JsonPersister():
             # elif file["basename"] in v["used_in"]: #and if they are already a dependency (either here or in THAT file)
             #     self.loaded_objects[k]["used_in"].extend(v["used_in"])  #jot down that #TODO do I need this?!
         for k, v in file.get("used_influentials", {}).items():
-            #TODO if a dependency used a value, you should add it to the context with MAXIMUM priority (and fail if already set from non-default)
-            self.ctx.set_config(k, v, "dependency")
+            self.ctx.set_config(k, v, "dependency") #if a dependency used a value, that's maximum priority (and fail if already used)
 
         # for k, v in file.get("loaded_files", {}).items():
         #     if k not in self.loaded_objects: self.loaded_objects[k] = v
@@ -281,7 +271,9 @@ class JsonPersister():
         # assert all(self.used_config[k] == tmp["introduced_config"][k] for k in self.used_config.keys() & tmp.get("introduced_config", {}).keys())
 
 
-    def check_file_metas(self, file):
+    def check_file_metas(self, file, required_metainf=None):
+        if required_metainf is not None:
+            raise NotImplementedError("TODO: custom checking of metainf!")
         for k, v in file.get("loaded_files", {}).items():
             if file["basename"] in v["used_in"] and k in self.loaded_objects:  #ensure that the info of all currently loaded files corresponds to all of those the file used
                 assert self.loaded_objects[k]["metadata"] == v["metadata"]
@@ -300,7 +292,7 @@ class JsonPersister():
         # assert all(self.used_config[k] == tmp["introduced_config"][k] for k in self.used_config.keys() & tmp.get("introduced_config", {}).keys())
         #TODO overhaul 16.01.2022: do I need this????
 
-    def load(self, filename, save_basename, /, loader=None, silent=False):
+    def load(self, filename, save_basename, /, loader=None, silent=False, required_metainf=None):
         filename = filename or self.get_file_by_config("", save_basename)
         if not isfile(join(self.in_dir, filename)) and isfile(join(self.in_dir, self.ctx.get_config("dataset"), filename)):
             filename = join(self.ctx.get_config("dataset"), filename)
@@ -312,7 +304,7 @@ class JsonPersister():
             full_metadata = {k: v for k,v in obj.items() if k not in ["object", "loaded_files"]} if "object" in obj else {}
             if not silent:
                 self.add_file_metas(obj)
-            self.check_file_metas(obj)
+            self.check_file_metas(obj, required_metainf)
             if "object" in obj:
                 obj = obj["object"]
             if loader is not None:
@@ -326,7 +318,7 @@ class JsonPersister():
             self.loaded_objects[save_basename] = {"content": obj, "path": join(self.in_dir, filename), "used_in": ["this"], "metadata": full_metadata}
         return obj
 
-    def save(self, basename, /, force_overwrite=False, ignore_confs=None, **kwargs):
+    def save(self, basename, /, force_overwrite=False, ignore_confs=None, metainf=None, **kwargs):
         basename, ext = splitext(basename)
         filename = basename
         # if relevant_params is not None:
@@ -347,7 +339,7 @@ class JsonPersister():
         os.makedirs(join(self.out_dir, subdir), exist_ok=True)
         obj = {"loaded_files": loaded_files, "used_influentials": used_influentials,
                "basename": basename, "obj_info": get_all_info(), "created_plots": self.created_plots,
-               "used_config": (self.ctx.used_configs, self.ctx.toset_configs),
+               "used_config": (self.ctx.used_configs, self.ctx.toset_configs), "metainf": metainf,
                "object": kwargs} #object should be last!!
         name = json_dump(obj, join(self.out_dir, subdir, filename+ext), forbid_overwrite=not force_overwrite)
         new_influentials = {k: v for k, v in used_influentials.items() if k not in self.loaded_influentials}

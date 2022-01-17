@@ -118,3 +118,20 @@ def get_envvarname(config, assert_hasdefault=True, without_prefix=False):
     #                         all(self.ctx.obj.get(k) == tmp["relevant_params"][k] for k in set(self.forward_params) & set(tmp.get("relevant_params", {}).keys()))):
     #                     correct_cands.append(cand)
     #             return correct_cands
+
+
+
+def json_load(fname, **kwargs): #assert_meta=(), return_meta=False,
+    if isinstance(fname, str):
+        with open(fname, "r") as rfile:
+            tmp = json.load(rfile, **kwargs)
+    else: #then it may be a sacred opened resource (https://sacred.readthedocs.io/en/stable/apidoc.html#sacred.Experiment.open_resource)
+        tmp = json.load(fname, **kwargs)
+    # if isinstance(tmp, dict) and all(i in tmp for i in ["git_hash", "settings", "content"]):
+    #     for i in assert_meta:
+    #         assert getattr(settings, i) == tmp["settings"][i], f"The setting {i} does not correspond to what was saved!"
+    #     if return_meta:
+    #         meta = {k:v for k,v in tmp.items() if k != "content"}
+    #         return npify_rek(tmp["content"]), meta
+    #     return npify_rek(tmp["content"])
+    return npify_rek(tmp)
