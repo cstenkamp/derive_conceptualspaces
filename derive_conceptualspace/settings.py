@@ -34,6 +34,7 @@ DEFAULT_DEBUG = False
 DEFAULT_DEBUG_N_ITEMS = 100
 DEFAULT_RANDOM_SEED = 1
 DEFAULT_VERBOSE = True
+IS_INTERACTIVE = "PYCHARM_HOSTED" in os.environ
 
 #Settings that influence the algorithm
 DEFAULT_DISSIM_MEASURE = "norm_ang_dist"  #can be: ["cosine", "norm_ang_dist"]

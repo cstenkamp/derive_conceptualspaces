@@ -1,3 +1,4 @@
+import warnings
 from textwrap import shorten
 
 from tqdm import tqdm
@@ -5,10 +6,12 @@ import sklearn.svm
 import numpy as np
 from sklearn.metrics import confusion_matrix, cohen_kappa_score
 from scipy.stats import rankdata
+import pandas as pd
 
-from derive_conceptualspace.settings import get_setting
+from derive_conceptualspace.settings import get_setting, IS_INTERACTIVE
 from derive_conceptualspace.util.base_changer import NDPlane, ThreeDPlane
 from derive_conceptualspace.util.threedfigure import ThreeDFigure
+from misc_util.pretty_print import pretty_print as print
 
 norm = lambda vec: vec/np.linalg.norm(vec)
 vec_cos = lambda v1, v2: np.arccos(np.clip(np.dot(norm(v1), norm(v2)), -1.0, 1.0))  #https://stackoverflow.com/a/13849249/5122790
@@ -24,22 +27,21 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose):
         # Ensure that regardless of quant_measure `np.array(quants, dtype=bool)` are correct binary classification labels
         raise NotImplementedError()
     for term in tqdm(dcm.all_terms.values(), desc="Creating Candidate SVMs"):
-        cand_mets, decision_plane = create_candidate_svm(embedding, term, dcm.term_quants(term))
+        cand_mets, decision_plane = create_candidate_svm(embedding, term, dcm.term_quants(term), quant_name=dcm.quant_name)
         metrics[term] = cand_mets
         decision_planes[term] = decision_plane
     if verbose:
-        for metricname in list(metrics.values())[0].keys():
-            print(f"\nAverage {metricname}: {sum(i[metricname] for i in metrics.values())/len(metrics):.5f}")
-            sorted_by = sorted([[k,v] for k,v in metrics.items()], key=lambda x:x[1][metricname], reverse=True)[:10]
-            strings = [f"{term.ljust(max(len(i[0]) for i in sorted_by))}: "+
-                        ", ".join(f"{k}: {v:7.4f}" for k,v in metrics.items())+f", samples: {len(dcm.term_existinds(use_index=False)[term])}"
-                        for term, metrics in sorted_by[:10]]
-            print("  "+"\n  ".join(strings))
-    if verbose and embedding.embedding_.shape[1] == 3:
-        best_elem = max(metrics.items(), key=lambda x:x[1]["f_one"])
-        create_candidate_svm(embedding, best_elem[0], dcm.term_quants[best_elem[0]], plot_svm=True, descriptions=descriptions)
-        while (another := input("Another one to display: ").strip()) != "" and another not in dcm.term_existinds(use_index=False):
-            create_candidate_svm(embedding, another, dcm.term_quants[another], plot_svm=True, descriptions=descriptions)
+        df = pd.DataFrame(metrics).T
+        df.columns = df.columns.str.replace("kappa", "k").str.replace("rank2rank", "r2r").str.replace("bin2bin", "b2b").str.replace("f_one", "f1").str.replace("digitized", "dig")
+        for metricname in df.columns:
+            print(f"\nAverage *r*{metricname}*r*: {df[metricname].mean():.5f}")
+            with pd.option_context('display.max_rows', 11, 'display.max_columns', 20, 'display.expand_frame_repr', False, 'display.max_colwidth', 20, 'display.float_format', '{:.4f}'.format):
+                print(str(df.sort_values(by=metricname, ascending=False)[:10]).replace(metricname, f"*r*{metricname}*r*"))
+        if embedding.embedding_.shape[1] == 3 and IS_INTERACTIVE:
+            best_elem = max(metrics.items(), key=lambda x:x[1]["f_one"])
+            create_candidate_svm(embedding, best_elem[0], dcm.term_quants[best_elem[0]], plot_svm=True, descriptions=descriptions)
+            while (another := input("Another one to display: ").strip()) != "" and another not in dcm.term_existinds(use_index=False):
+                create_candidate_svm(embedding, another, dcm.term_quants[another], plot_svm=True, descriptions=descriptions)
     # clusters, cluster_directions = select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda)
     return decision_planes, metrics
 
@@ -82,7 +84,7 @@ def select_salient_terms(metrics, decision_planes, prim_lambda, sec_lambda):
     return clusters, cluster_directions
 
 
-def create_candidate_svm(embedding, term, quants, plot_svm=False, descriptions=None):
+def create_candidate_svm(embedding, term, quants, plot_svm=False, descriptions=None, quant_name=None):
     #TODO [DESC15]: "we adapted the costs of the training instances to deal with class imbalance (using the ratio between entities with/without the term as cost)"
     # TODO figure out if there's a reason to choose LinearSVC over SVC(kernel=linear) or vice versa!
     bin_labels = np.array(quants, dtype=bool) # Ensure that regardless of quant_measure this is correct binary classification labels
@@ -103,10 +105,23 @@ def create_candidate_svm(embedding, term, quants, plot_svm=False, descriptions=N
     distances = [dist(point, decision_plane) for point in embedding.embedding_]
     #sanity check: do most of the points with label=0 have the same sign `np.count_nonzero(np.sign(np.array(distances)[bin_labels])+1)`
     # quant_ranking = np.zeros(quants.shape); quant_ranking[np.where(quants > 0)] = np.argsort(quants[quants > 0])
-    res["kappa_rank2rank"]  = cohen_kappa_score(rankdata(quants, method="dense"), rankdata(distances, method="dense"))
-    res["kappa_rank2rank2"] = cohen_kappa_score(rankdata(quants, method="min"), rankdata(distances, method="dense"))
+    #TODO cohen's kappa hat nen sample_weight parameter!! DESC15 write they select Kappa "due to its tolerance to class imbalance." -> Does that mean I have to set the weight?!
+    res["kappa_rank2rank_dense"]  = cohen_kappa_score(rankdata(quants, method="dense"), rankdata(distances, method="dense")) #if there are 14.900 zeros, the next is a 1
+    res["kappa_rank2rank_min"] = cohen_kappa_score(rankdata(quants, method="min"), rankdata(distances, method="dense")) #if there are 14.900 zeros, the next one is a 14.901
     res["kappa_bin2bin"]    = cohen_kappa_score(bin_labels, [i > 0 for i in distances])
     res["kappa_digitized"]  = cohen_kappa_score(np.digitize(quants, np.histogram_bin_edges(quants)[1:]), np.digitize(distances, np.histogram_bin_edges(distances)[1:]))
+    nonzero_indices = np.where(np.array(quants) > 0)[0]
+    q2, d2 = np.array(quants)[nonzero_indices], np.array(distances)[nonzero_indices]
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', r'invalid value encountered in true_divide')
+        if quant_name == "count":  # in DESC15 they write "measure the correlation between the ranking induced by \vec{vt} and the number of times t appears in the documents associated with each entity", so maybe compare ranking to count?!
+            res["kappa_count2rank"] = cohen_kappa_score(quants, rankdata(distances, method="dense"))
+            res["kappa_count2rank_onlypos"] = cohen_kappa_score(q2, rankdata(d2, method="dense"))
+        res["kappa_rank2rank_onlypos_dense"] = cohen_kappa_score(rankdata(q2, method="dense"), rankdata(d2, method="dense"))
+        res["kappa_rank2rank_onlypos_min"] = cohen_kappa_score(rankdata(q2, method="min"), rankdata(d2, method="min"))
+        res["kappa_digitized_onlypos_1"] = cohen_kappa_score(np.digitize(q2, np.histogram_bin_edges(quants)[1:]), np.digitize(d2, np.histogram_bin_edges(distances)[1:]))
+        #one ^ has as histogram-bins what it would be for ALL data, two only for the nonzero-ones
+        res["kappa_digitized_onlypos_2"] = cohen_kappa_score(np.digitize(q2, np.histogram_bin_edges(q2)[1:]), np.digitize(d2, np.histogram_bin_edges(d2)[1:]))
     if plot_svm and descriptions is not None:
         display_svm(embedding.embedding_, np.array(bin_labels, dtype=int), svm, term=term, descriptions=descriptions, name=f"{term}: accuracy: {accuracy:.2f} | precision: {precision:.2f} | recall: {recall:.2f} | kappa: {kappa:.4f}")
     return res, decision_plane

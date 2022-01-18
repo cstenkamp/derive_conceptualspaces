@@ -48,7 +48,7 @@ from derive_conceptualspace.settings import (
     ENV_PREFIX,
     standardize_config,
     standardize_config_name,
-    FORBIDDEN_COMBIS,
+    FORBIDDEN_COMBIS, IS_INTERACTIVE,
 )
 from misc_util.pretty_print import pretty_print as print, print_multicol
 from misc_util.telegram_notifier import telegram_notify
