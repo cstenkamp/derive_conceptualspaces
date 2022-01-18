@@ -57,7 +57,7 @@ def create_embedding(dissim_mat, embed_dimensions, embed_algo, verbose=False, pp
         embed = create_isomap(dissim_mat, embed_dimensions)
     else:
         raise NotImplementedError(f"Algorithm {embed_algo} is not implemented!")
-    if verbose:
+    if verbose and pp_descriptions is not None:
         min_vals = sorted(squareform(embed.dissimilarity_matrix_))[:10]
         min_indices = np.where(np.isin(embed.dissimilarity_matrix_, min_vals))
         min_indices = [(i,j) for i,j in zip(*min_indices) if i!=j]

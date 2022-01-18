@@ -93,7 +93,7 @@ with set_noninfluentials(): #this context-manager adds all settings from here to
                   "{pp_components}_{translate_policy}_minwords{min_words_per_desc}",
                   "embedding_{quantification_measure}",
                   "{embed_algo}_{embed_dimensions}d",
-                  "{extraction_method}_{dcm_quant_measure}"]
+                  "{extraction_method}_{dcm_quant_measure}_{classifier_compareto_ranking}"]
 
     FORBIDDEN_COMBIS = ["tsne_50d", "tsne_100d"]
     NORMALIFY_PARAMS = ["QUANTIFICATION_MEASURE", "EXTRACTON_METHOD", "EMBED_ALGO", "DCM_QUANT_MEASURE", "CLASSIFIER_COMPARETO_RANKING"]  #for all params that are in this, eg `Tf-IdF` will become `tfidf`
@@ -107,6 +107,8 @@ def get_setting(name, **kwargs):
     #!!! diese funktion darf NICHTS machen außer sys.stdout.ctx.get_config(name) returnen!!! alles an processing gehört in die get_config!!!
     if hasattr(sys.stdout, "ctx"):
         return sys.stdout.ctx.get_config(name, **kwargs)
+    if os.path.basename(sys.argv[0]) == 'run_fb_classifier.py':
+        return False #TODO pass ich das auf das neue an? Ja? nein?
     raise Exception("Unexpected!")
 
 ########################################################################################################################

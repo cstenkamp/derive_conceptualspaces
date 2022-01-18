@@ -72,7 +72,7 @@ class CustomContext(ObjectWrapper):
                 if load_conffile:
                     self.read_configfile()
                 else:
-                    print("A config-file could be loaded, but intentionally isn't.")
+                    print("The env-vars contain the path to a config-file, but it intentionally isn't loaded!")
             self.obj["dataset_class"] = dataset_specifics.load_dataset_class(self.get_config("dataset"))
             if hasattr(self.obj["dataset_class"], "configs"):
                 for param, val in self.obj["dataset_class"].configs.items():

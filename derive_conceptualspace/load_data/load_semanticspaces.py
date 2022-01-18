@@ -13,7 +13,7 @@ TRANSLATE_FNAME = {"movies": "films"}
 
 #TODO If I want to do that for classes as well, I have to create these as well, not only load
 #TODO Do this ones also for the [ALBS20] and [AGKS18] datasets
-data_base, data_set, n_dims = "/home/chris/Documents/UNI_neu/Masterarbeit/data/semanticspaces/", "movies", 20
+data_base, data_set, n_dims = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/", "places", 20
 
 
 def main():
@@ -42,13 +42,14 @@ def get_all():
     #TODO why is feat_vecs more than twice #elems than names?! Can I link BoW and names/MDS?!
     #TODO also, no term of the BoW contains a space, so I don't think I can match this with the keyphrases, wtf!
     all_terms = sorted(list(set(flatten([list(v.keys()) for v in feat_vecs.values()]))))
-    mds = load_mds_representation(data_base, data_set, n_dims, return_array=True)  #./dXX/filmsXX.embedding
+    mds = load_mds_representation(data_base, data_set, n_dims, return_array=True)  #./dXX/filmsXX.mds
     # np.array 15000*n_dims
     names = get_names(data_base, data_set)                                         #./filmNames.txt
     #list 15000 long
     classes = get_classes(data_base, data_set)                                     #./classesXXXXX/*
     canditerms = get_candidateterms(data_base, data_set, n_dims)                   #./dXX/DirectionsHeal/*
-    #4 lists of len 22903 (words, part-of-speech's, np.array of n_dims*1, word+pos)
+    #movies: 4 lists of len 22903 (words, part-of-speech's, np.array of n_dims*1, word+pos)
+    #places: 2 lists of len 21833 (words, vectors)
     clusters = get_clusters(data_base, data_set, n_dims)                           #./dXX/clustersXX.txt
     canditerms, cluster_directions = get_grouped_candidates(data_base, data_set, n_dims, clusters=clusters, canditerms=canditerms)
     # merges get_candidateterms and get_clusters -> ./dXX/DirectionsHeal/* & ./dXX/clustersXX.txt
@@ -59,7 +60,7 @@ def get_all():
     #proj2 are the distances to the origins of the respective dimensions (induced by the clusters), what induces the respective rankings! (see DESC15 p.24u)
     mds_dict = dict(zip(names, list(mds)))
     assert mds_dict.keys() == classes.keys()
-    #soo let's use all data. For every movie, there's a something in `names`, `embedding`, `classes` and `proj2` => `mds_class_dict`
+    #soo let's use all data. For every movie, there's a something in `names`, `mds`, `classes` and `proj2` => `mds_class_dict`
     #`canditerms` uses the `clusters`, `proj1` is the same as `cluster_directions`
     #missing: `feat_vecs` (idk how to map these to names), `all_terms` (extracted phrases are ngrams),
     mds_class_dict = dict(zip(mds_dict.keys(), list(zip(mds_dict.values(), classes.values(), proj2))))
@@ -95,7 +96,10 @@ def load_ppmi_weighted_feature_vectors(data_base, data_set):
             for line in rfile.readlines()[1:]:
                 word, freq = line.strip().split("\t")
                 result[splitext(file)[0]][word] = freq
-    result = dict(sorted([(int(k),v) for k,v in result.items()], key=lambda x:x[0]))
+    if all(i.isnumeric() for i in result.keys()): #movies just have number, placetypes have their type-name
+        result = dict(sorted([(int(k),v) for k,v in result.items()], key=lambda x:x[0]))
+    else:
+        result = dict(sorted([(k, v) for k, v in result.items()], key=lambda x: x[0]))
     result = {k: {k2: int(v2) for k2,v2 in v.items()} for k,v in result.items()}
     with open(join(data_base, data_set, "tokens.json"), "w") as wfile:
         json.dump(result, wfile)
@@ -119,7 +123,7 @@ def load_mds_representation(data_base, data_set, n_dims, return_array=True, fnam
     """
     fname_out = fname_out or []
     assert str(n_dims) in ["3", "20", "50", "100", "200"]
-    fname = join(data_base, data_set, f"d{n_dims}", f"{TRANSLATE_FNAME.get(data_set, data_set)}{n_dims}.embedding")
+    fname = join(data_base, data_set, f"d{n_dims}", f"{TRANSLATE_FNAME.get(data_set, data_set)}{n_dims}.mds")
     fname_out.append(fname)
     res = []
     with open(fname, "r") as rfile:
@@ -147,9 +151,15 @@ def get_classes(data_base, data_set, **kwargs):
             print("Will use `Genres` as type. Alternatives are: Genres, Keywords, Ratings.")
             kwargs["what"] = "Genres"
         return get_movie_classes(data_base, **kwargs)
-    if data_set == "courses":
+    elif data_set == "courses":
         from derive_conceptualspace.load_data.dataset_specifics.courses import get_classes as get_courses_classes
         return get_courses_classes(data_base, **kwargs)
+    elif data_set == "places":
+        if "what" not in kwargs:
+            print("Will use `Geonames` as type. Alternatives are: Foursquare, Geonames, CYC.")
+            kwargs["what"] = "Geonames"
+        from derive_conceptualspace.load_data.dataset_specifics.placetypes import get_classes as get_places_classes
+        return get_places_classes(data_base, **kwargs)
     raise NotImplementedError()
 
 
@@ -157,9 +167,12 @@ def get_candidateterms(data_base, data_set, n_dims, **kwargs):
     if data_set == "movies":
         from derive_conceptualspace.load_data.dataset_specifics.movies import get_candidateterms as get_movie_candidateterms
         return get_movie_candidateterms(data_base, data_set, n_dims, **kwargs)
-    if data_set == "courses":
+    elif data_set == "courses":
         # from src.main.load_data.dataset_specifics.courses import get_classes as get_courses_classes
         raise NotImplementedError() #TODO what are good candidate terms for courses??
+    elif data_set == "places":
+        from derive_conceptualspace.load_data.dataset_specifics.placetypes import get_candidateterms as get_place_candidateterms
+        return get_place_candidateterms(data_base, data_set, n_dims, **kwargs)
     raise NotImplementedError()
 
 
@@ -182,7 +195,7 @@ def get_clusters(data_base, data_set, n_dims):
     return clusters
 
 
-def get_grouped_candidates(data_base, data_set, embed_dimensions, clusters=None, canditerms=None):
+def get_grouped_candidates(data_base, data_set, mds_dimensions, clusters=None, canditerms=None):
     """
     returns a list of all those candidates that ARE in a cluster, and for each of those a list [words, parts-of-speech, vector, orig(words+POSs), clustername].
     And a list of all cluster-vectors
@@ -194,18 +207,29 @@ def get_grouped_candidates(data_base, data_set, embed_dimensions, clusters=None,
                 return origname
             if origname in clustercont:
                 return clustername
-    canditerms = canditerms or get_candidateterms(data_base, data_set, embed_dimensions)
-    clusters = clusters or get_clusters(data_base, data_set, embed_dimensions)
+    canditerms = canditerms or get_candidateterms(data_base, data_set, mds_dimensions)
+    clusters = clusters or get_clusters(data_base, data_set, mds_dimensions)
     alls = set(flatten(list(clusters.values()))) | set(clusters.keys())
-    assert not alls-set(canditerms[3])
+    if data_set == "movies":
+        assert not alls-set(canditerms[3])
+    elif data_set == "places":
+        assert not alls-set(canditerms[0])
+    else:
+        raise NotImplementedError()
     canditerm_clusters = []
     cluster_directions = {key: None for key in clusters.keys()}
-    for words, poss, vec, origname in zip(*canditerms):
-        if check_cluster(clusters, origname, cluster_directions) is not None:
-            canditerm_clusters.append(check_cluster(clusters, origname, cluster_directions))
-        else:
-            assert origname not in alls
-            canditerm_clusters.append(None)
+    if data_set == "movies":
+        for words, poss, vec, origname in zip(*canditerms):
+            if check_cluster(clusters, origname, cluster_directions) is not None:
+                canditerm_clusters.append(check_cluster(clusters, origname, cluster_directions))
+            else:
+                assert origname not in alls
+                canditerm_clusters.append(None)
+    elif data_set == "places":
+        for word, vec in zip(*canditerms):
+
+    else:
+        raise NotImplementedError()
     assert len(canditerm_clusters) == len(canditerms[0])
     canditerms = [i for i in zip(*canditerms, canditerm_clusters) if i[4] is not None]
     assert not any(i is None for i in cluster_directions.keys())

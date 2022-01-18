@@ -160,8 +160,8 @@ def translate_titles(ctx, pp_components, translate_policy, raw_descriptions_file
 @click.option("--translations-file", type=str, default=None)
 @click_pass_add_context
 def translate_descriptions(ctx, translate_policy, raw_descriptions_file, languages_file, translations_file):
-    raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions", ignore_params=["pp_components", "translate_policy"])
-    translate_descriptions_base(raw_descriptions, translate_policy, languages_file, translations_file, ctx.obj["json_persister"])
+    raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions")
+    translate_descriptions_base(raw_descriptions, translate_policy, languages_file, translations_file, ctx.obj["json_persister"], ctx.obj["dataset_class"])
     #no need to save, that's done inside the function.
 
 
@@ -183,7 +183,7 @@ def preprocess_descriptions(ctx, json_persister, dataset_class, raw_descriptions
     except FileNotFoundError:
         title_languages = languages
     if ctx.get_config("translate_policy") == "translate":
-        translations = json_persister.load(translations_file, "translated_descriptions")
+        translations = json_persister.load(translations_file, "translated_descriptions", loader=lambda **kw: kw["translations"])
         title_translations = json_persister.load(title_translations_file, "translated_titles", loader=lambda **kw: kw["title_translations"])
         # TODO[e] depending on pp_compoments, title_languages etc may still allowed to be empty
     else:

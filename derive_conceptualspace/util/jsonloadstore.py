@@ -343,7 +343,7 @@ class JsonPersister():
                "object": kwargs} #object should be last!!
         name = json_dump(obj, join(self.out_dir, subdir, filename+ext), forbid_overwrite=not force_overwrite)
         new_influentials = {k: v for k, v in used_influentials.items() if k not in self.loaded_influentials}
-        print(f"Saved under {name}. New Influential Config: {new_influentials}.")# Relevant Meta-Inf: {relevant_metainf}")
+        print(f"Saved under {name}. \nNew Influential Config: {new_influentials}. \nSaved Meta-Inf: {metainf}.")
         return name
 
     def add_plot(self, title, data):

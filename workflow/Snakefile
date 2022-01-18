@@ -3,7 +3,7 @@ Run default:   `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realp
 specific file: `PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR siddata/debug_True/fautcsdp_translate_minwords100/embedding_ppmi/dissim_mat.json`
 ALL Combis:    `ma_cont snakemake --cores 1 -p all --keep-going`
 ALL for 1 rule `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p all_for --config for_rule=create_embedding)`
-from config:   `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p  by_config --configfile ./config/derrac2015.yml)`
+from config:   `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p  by_config --configfile ./config/derrac2015.yml --keep-going)`
 
 Plot DAG:      `MA_DATASET=siddata PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -np --directory $MA_DATA_DIR --dag default | grep -A99999 "digraph" | dot -Tsvg > dag.svg`
 Get results:   `rsync -az --progress $MA_DATA_DIR etlpipelines:~/data --exclude .snakemake`
@@ -99,13 +99,13 @@ def autoload_context_inputs(ctx, inputs, wildcards, params=None, input_kwargs=No
 ctx = initialize_snakemake()
 
 generated_paths = dict(
-    pp_descriptions = "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/pp_descriptions.json",
-    dissim_mat = "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/dissim_mat.json",
-    embedding = "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/embedding.json",
-    candidate_terms = "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/candidate_terms_{extraction_method}.json",
+    pp_descriptions =          "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/pp_descriptions.json",
+    dissim_mat =               "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/dissim_mat.json",
+    embedding =                "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/embedding.json",
+    candidate_terms =          "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/candidate_terms_{extraction_method}.json",
     postprocessed_candidates = "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/postprocessed_candidates_{extraction_method}.json",
-    filtered_dcm = "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json",
-    clusters = "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}/clusters.json"
+    filtered_dcm =             "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json",
+    clusters =                 "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}_{classifier_compareto_ranking}/clusters.json"
 )
 #TODO can I auto-generate these from jsonpersister?!
 
@@ -130,9 +130,9 @@ rule get_languages:
 rule preprocess_descriptions:
     input:
         raw_descriptions   = "{dataset}/"+ctx.get_config("raw_descriptions_file"),
-        translations       = "{dataset}/"+ctx.get_config("translations_file"),
         languages          = "{dataset}/"+ctx.get_config("languages_file"),
         title_languages    = "{dataset}/"+ctx.get_config("title_languages_file"),
+        translations       = "{dataset}/"+ctx.get_config("translations_file"),
         title_translations = "{dataset}/"+ctx.get_config("title_translations_file"),
     output:
         generated_paths["pp_descriptions"]
@@ -169,19 +169,20 @@ rule create_dissim_mat:
     threads: 1
     run:
         autoload_context_inputs(ctx, input, wildcards)
-        quant_dtm, dissim_mat, metainf = create_dissim_mat_base(ctx.obj["pp_descriptions"], ctx.get_config("quantification_measure"), ctx.get_config("verbose"))
+        quant_dtm, dissim_mat, metainf = create_dissim_mat_base(ctx.obj["pp_descriptions"], ctx.get_config("quantification_measure"), verbose=ctx.get_config("verbose"))
         ctx.p.save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat, metainf=metainf)
 
 
 rule create_embedding:
     input:
+        pp_descriptions = generated_paths["pp_descriptions"], #silent
         dissim_mat = generated_paths["dissim_mat"]
     output:
         generated_paths["embedding"]
     threads: 3
     run:
-        autoload_context_inputs(ctx, input, wildcards)
-        embedding = create_embedding_base(ctx.obj["dissim_mat"], ctx.get_config("embed_dimensions"), ctx.get_config("embed_algo"))
+        autoload_context_inputs(ctx, input, wildcards, silents=["pp_descriptions"])
+        embedding = create_embedding_base(ctx.obj["dissim_mat"], ctx.get_config("embed_dimensions"), ctx.get_config("embed_algo"), verbose=ctx.get_config("verbose"))
         ctx.p.save("embedding.json", embedding=embedding)
 
 
@@ -223,12 +224,12 @@ rule create_doc_cand_matrix:
         autoload_context_inputs(ctx, input, wildcards)
         filtered_dcm = create_filtered_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], min_term_count=ctx.get_config("candidate_min_term_count"),
                                                     dcm_quant_measure=ctx.get_config("dcm_quant_measure"), use_n_docs_count=ctx.get_config("cands_use_ndocs_count"), verbose=ctx.get_config("verbose"))
-        ctx.p.save("filtered_dcm.json", doc_term_matrix=filtered_dcm, metainf={"candidate_min_term_count": ctx.obj["candidate_min_term_count"]})
+        ctx.p.save("filtered_dcm.json", doc_term_matrix=filtered_dcm, metainf={"candidate_min_term_count": ctx.get_config("candidate_min_term_count")})
 
 
 rule create_candidate_svm:
     input:
-        pp_descriptions = generated_paths["pp_descriptions"],
+        pp_descriptions = generated_paths["pp_descriptions"], #silent
         filtered_dcm = generated_paths["filtered_dcm"],
         embedding = generated_paths["embedding"]
     output:

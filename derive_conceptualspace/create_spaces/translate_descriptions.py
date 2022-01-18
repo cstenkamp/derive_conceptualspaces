@@ -87,7 +87,7 @@ def full_translate_titles(raw_descriptions, pp_components, translate_policy, tit
             sec_translate = list(zip(*[i for i in zip(subtitles, title_languages.values()) if i[0] and i[1] != "en"]))
             translateds, did_update, is_complete= translate_elems(to_translate[0]+sec_translate[0], to_translate[1]+sec_translate[1], already_translated=title_translations["title_translations"] if "title_translations" in title_translations else title_translations)
             if did_update:
-                json_persister.save(title_translations_file, title_translations=translateds, is_complete=is_complete, force_overwrite=True)
+                json_persister.save(title_translations_file, title_translations=translateds, is_complete=is_complete, force_overwrite=True, ignore_confs=["DEBUG", "PP_COMPONENTS", "TRANSLATE_POLICY"])
             title_translations = json_persister.load(title_translations_file, "translated_titles", silent=True)
             if not is_complete:
                 print("The translated Titles are not complete yet!")
@@ -113,24 +113,23 @@ def create_languages_file(languages_file, file_basename, column, json_persister,
 
 
 
-def full_translate_descriptions(raw_descriptions, translate_policy, languages_file, translations_file, json_persister):
-    if translate_policy == "translate": #TODO parts of this also needs to be done for onlyeng
+def full_translate_descriptions(raw_descriptions, translate_policy, languages_file, translations_file, json_persister, dataset_class):
+    if translate_policy == "translate":
         languages = create_languages_file(languages_file, "languages", "Beschreibung", json_persister, raw_descriptions, dataset_class)
         try:
-            translations = json_persister.load(translations_file, "translated_descriptions")
+            translations = json_persister.load(translations_file, "translated_descriptions", silent=True)
         except FileNotFoundError:
             translations = dict(translations={}, is_complete=False)
         if "is_complete" not in translations: #for backwards compatibility
-            json_persister.save(translations_file, translations=translations, is_complete=False)
-            translations = json_persister.load(translations_file, "translated_descriptions")
-        if True: #TODO #PRECOMMIT not translations["is_complete"]:
-            descriptions = preprocess_raw_course_file(raw_descriptions)
+            translations = dict(translations=translations, is_complete=False)
+        if not translations["is_complete"]:
+            descriptions = dataset_class.preprocess_raw_file(raw_descriptions)
             assert len(descriptions) == len(languages)
             to_translate = [i for i in zip(descriptions["Beschreibung"], languages.values(), languages.keys()) if i[1] != "en"]
-            translateds, did_update, is_complete= translate_elems(*list(zip(*to_translate)), already_translated=translations["translations"])
+            translateds, did_update, is_complete = translate_elems(*list(zip(*to_translate)), already_translated=translations["translations"])
             if did_update:
-                json_persister.save(translations_file, translations=translateds, is_complete=is_complete, force_overwrite=True)
-            translations = json_persister.load(translations_file, "translated_descriptions")
+                json_persister.save(translations_file, translations=translateds, is_complete=is_complete, force_overwrite=True, ignore_confs=["DEBUG", "PP_COMPONENTS", "TRANSLATE_POLICY"])
+            translations = json_persister.load(translations_file, "translated_descriptions", silent=True)
             if not is_complete:
                 print("The translated Descriptions are not complete yet!")
                 exit(1)
