@@ -1,6 +1,6 @@
 from os.path import join
-
 import os
+
 MONGO_URI = f"mongodb://{os.environ.get('MONGO_INITDB_ROOT_USERNAME')}:{os.environ.get('MONGO_INITDB_ROOT_PASSWORD')}@127.0.0.1/?authMechanism=SCRAM-SHA-1"
 
 DATA_BASE = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/fb_classifier"
@@ -32,10 +32,10 @@ PP_TRAIN_PERCENTAGE = 0.9
 ########################################################################################################################
 ########################################################################################################################
 ########################################################################################################################
-from os.path import isfile, abspath
-
-#actually make all defined directories (global vars that end in "_PATH")
-for key, val in dict(locals()).items():
-    if key.endswith('_PATH') and not isfile(val):
-        locals()[key] = abspath(val)
-        os.makedirs(locals()[key], exist_ok=True)
+# from os.path import isfile, abspath
+#
+# #actually make all defined directories (global vars that end in "_PATH")
+# for key, val in dict(locals()).items():
+#     if key.endswith('_PATH') and not isfile(val):
+#         locals()[key] = abspath(val)
+#         os.makedirs(locals()[key], exist_ok=True)
