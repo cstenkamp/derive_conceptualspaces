@@ -34,7 +34,7 @@ def show_data_info(ctx):
 
     print(f"Data lies at *b*{ctx.obj['json_persister'].in_dir}*b*")
     print("Settings:", ", ".join([f"{k}: *b*{v}*b*" for k, v in ctx.obj["json_persister"].loaded_influentials.items()]))
-    # print("Relevant Metainfo:", ", ".join([f"{k}: *b*{v}*b*" for k, v in ctx.obj["json_persister"].loaded_relevant_metainf.items()]))
+    print("Collected Metainf:", ", ".join([f"{k}: *b*{v}*b*" for k, v in ctx.obj["json_persister"].collected_metainf().items()]))
     data_dirs = {k: v["path"].replace(ctx.obj["json_persister"].in_dir, "data_dir") for k, v in ctx.obj["json_persister"].loaded_objects.items()}
     print("Directories:\n ", "\n  ".join(f"{k.rjust(max(len(i) for i in data_dirs))}: {v}" for k, v in data_dirs.items()))
     dependencies = {k: set([i for i in v["used_in"] if i != "this"]) for k, v in ctx.obj["json_persister"].loaded_objects.items()}
@@ -115,7 +115,9 @@ def merge_streams(s1, s2, for_):
 ########################################################################################################################
 
 
-def rank_courses_saldirs(pp_descriptions, embedding, clusters, filtered_dcm):
+def rank_saldirs(pp_descriptions, embedding, clusters, filtered_dcm, prim_lambda, sec_lambda, metricname):
+    from derive_conceptualspace.semantic_directions.create_candidate_svm import select_salient_terms
+    select_salient_terms(clusters["metrics"], clusters["decision_planes"], prim_lambda, sec_lambda, metricname)
     pp_descriptions.add_embeddings(embedding.embedding_)
     decision_planes, metrics = clusters.values()
     existinds = {k: set(v) for k, v in filtered_dcm.term_existinds(use_index=False).items()}

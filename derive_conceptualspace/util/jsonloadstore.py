@@ -278,7 +278,11 @@ class JsonPersister():
             if file["basename"] in v["used_in"] and k in self.loaded_objects:  #ensure that the info of all currently loaded files corresponds to all of those the file used
                 assert self.loaded_objects[k]["metadata"] == v["metadata"]
         for k, v in file.get("used_influentials", {}).items():
-            assert self.ctx.get_config(k, silent=True) == standardize_config_val(k, v)  #check that all current influential settings are consistent with what the file had
+            if k not in settings.MAY_DIFFER_IN_DEPENDENCIES:
+                assert self.ctx.get_config(k, silent=True, silence_defaultwarning=True) == standardize_config_val(k, v)  #check that all current influential settings are consistent with what the file had
+            elif self.ctx.get_config(k, silent=True) != standardize_config_val(k, v):
+                print(f"The setting {k} was *r*{v}*r* in a dependency and is *b*{self.ctx.get_config(k, silent=True)}*b* here!")
+
         # for k, v in file.get("relevant_metainf", {}).items():
         #     if k in self.loaded_relevant_metainf: assert self.loaded_relevant_metainf[k] == v
         #     else: self.loaded_relevant_metainf[k] = v
@@ -349,3 +353,8 @@ class JsonPersister():
     def add_plot(self, title, data):
         self.created_plots[title] = json.dumps(data, cls=NumpyEncoder)
 
+    def collected_metainf(self):
+        per_file = {k: v.get("metadata", {}).get("metainf", {}) for k, v in self.loaded_objects.items() if v.get("metadata", {}).get("metainf")}
+        tmp = {}
+        [tmp.update(i) for i in per_file.values()]
+        return tmp

@@ -33,7 +33,7 @@ class CustomIO(ObjectWrapper):
         self.date_format = date_format or self.DEFAULT_DATE_FORMAT
 
     def write(self, *args, **kwargs):
-        bkp_args = args
+        bkp_args = args #why the breakpoint? -> a if I print the pandas-dataframe the first line is missing (maybe just .replace("\n", "\r\n") or something on the string?!)
         if self.add_date:
             if not self.initialized:
                 self.initialized = True

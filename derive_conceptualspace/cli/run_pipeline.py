@@ -48,7 +48,7 @@ from derive_conceptualspace.semantic_directions.create_candidate_svm import (
     create_candidate_svms as create_candidate_svms_base
 )
 from derive_conceptualspace.unfinished_commands import (
-    rank_courses_saldirs as rank_courses_saldirs_base,
+    rank_saldirs as rank_saldirs_base,
     show_data_info as show_data_info_base,
 )
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
@@ -184,8 +184,8 @@ def preprocess_descriptions(ctx, json_persister, dataset_class, raw_descriptions
     except FileNotFoundError:
         title_languages = languages
     if ctx.get_config("translate_policy") == "translate":
-        translations = json_persister.load(translations_file, "translated_descriptions", loader=lambda **kw: kw["translations"])
-        title_translations = json_persister.load(title_translations_file, "translated_titles", loader=lambda **kw: kw["title_translations"])
+        translations = json_persister.load(translations_file, "translations", loader=lambda **kw: kw["translations"])
+        title_translations = json_persister.load(title_translations_file, "title_translations", loader=lambda **kw: kw["title_translations"])
         # TODO[e] depending on pp_compoments, title_languages etc may still allowed to be empty
     else:
         translations, title_translations = None, None
@@ -258,7 +258,7 @@ def extract_candidateterms_stanfordlp(ctx):
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
 def extract_candidateterms(ctx, max_ngram):
     #TODO if not NGRAMS_IN_EMBEDDING and extraction_method in tfidf/ppmi, you have to re-extract, otherwise you won't get n-grams
-    candidateterms, metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.get_config("extraction_method"), max_ngram, ctx.get_config("faster_keybert"), verbose=ctx.get_config("verbose"))
+    candidateterms, metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.get_config("extraction_method"), max_ngram, verbose=ctx.get_config("verbose"))
     ctx.obj["json_persister"].save("candidate_terms.json", candidateterms=candidateterms, metainf=metainf)
 
 
@@ -282,7 +282,7 @@ def create_filtered_doc_cand_matrix(ctx, candidate_min_term_count, cands_use_ndo
     ctx.obj["postprocessed_candidates"] = ctx.obj["json_persister"].load(None, "postprocessed_candidates", loader = lambda **args: args["postprocessed_candidates"])
     filtered_dcm = create_filtered_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], min_term_count=candidate_min_term_count,
                                                     dcm_quant_measure=ctx.get_config("dcm_quant_measure"), use_n_docs_count=cands_use_ndocs_count, verbose=ctx.get_config("verbose"))
-    ctx.obj["json_persister"].save("filtered_dcm.json", doc_term_matrix=filtered_dcm, metainf={"candidate_min_term_count": candidate_min_term_count})
+    ctx.obj["json_persister"].save("filtered_dcm.json", doc_term_matrix=filtered_dcm)
 
 
 ########################################################################################################################
@@ -325,13 +325,15 @@ def show_data_info(ctx):
 
 
 @generate_conceptualspace.command()
-# @click.option("--prim-lambda", type=float, default=lambda: get_setting("PRIM_LAMBDA", fordefault=True))
-# @click.option("--sec-lambda", type=float, default=lambda: get_setting("SEC_LAMBDA", fordefault=True))
+@click.option("--prim-lambda", type=float)
+@click.option("--sec-lambda", type=float)
+@click.option("--classifier-succmetric", type=str)
 @click_pass_add_context
-def rank_courses_saldirs(ctx):
+def rank_saldirs(ctx):
+    ctx.obj["pp_descriptions"] = ctx.p.load(None, "pp_descriptions", loader=DescriptionList.from_json, silent=True) #TODO really silent?
     ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, "clusters", loader=cluster_loader)
-    rank_courses_saldirs_base(ctx.obj["pp_descriptions"], ctx.obj["embedding"], ctx.obj["clusters"], ctx.obj["filtered_dcm"])
-    #metainf={"prim_lambda": ctx.obj["prim_lambda"], "sec_lambda": ctx.obj["sec_lambda"]}
+    rank_saldirs_base(ctx.obj["pp_descriptions"], ctx.obj["embedding"], ctx.obj["clusters"], ctx.obj["filtered_dcm"],
+                      prim_lambda=ctx.get_config("prim_lambda"), sec_lambda=ctx.get_config("sec_lambda"), metricname=ctx.get_config("classifier_succmetric"))
 
 
 @generate_conceptualspace.command()

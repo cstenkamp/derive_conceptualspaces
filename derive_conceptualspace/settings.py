@@ -33,6 +33,7 @@ for k, v in {k[4:]: v[0] for k,v in dict(locals()).items() if isinstance(v, list
 DEFAULT_DEBUG = False
 DEFAULT_DEBUG_N_ITEMS = 100
 DEFAULT_RANDOM_SEED = 1
+DEFAULT_SEED_ONLY_IN_DEBUG = True
 DEFAULT_VERBOSE = True
 IS_INTERACTIVE = "PYCHARM_HOSTED" in os.environ
 
@@ -74,7 +75,7 @@ def set_noninfluentials():
     globals()["NON_INFLUENTIAL_CONFIGS"] += [i[len("DEFAULT_"):] if i.startswith("DEFAULT_") else i for i in added_vars]
 
 
-NON_INFLUENTIAL_CONFIGS = ["CONF_FILE", "GOOGLE_CREDENTIALS_FILE", "VERBOSE"]
+NON_INFLUENTIAL_CONFIGS = ["CONF_FILE", "GOOGLE_CREDENTIALS_FILE", "VERBOSE", "STARTUP_ENVVARS", "IS_INTERACTIVE", "ENV_PREFIX", "DEFAULT_SEED_ONLY_IN_DEBUG"]
 with set_noninfluentials(): #this context-manager adds all settings from here to the NON_INFLUENTIAL_CONFIGS variable
 
     DEFAULT_BASE_DIR = abspath(join(dirname(__file__), "..", "..", ENV_PREFIX+"_data"))
@@ -82,9 +83,9 @@ with set_noninfluentials(): #this context-manager adds all settings from here to
 
     DEFAULT_RAW_DESCRIPTIONS_FILE = "raw_descriptions.csv"
     DEFAULT_LANGUAGES_FILE = "languages.json"
-    DEFAULT_TRANSLATIONS_FILE = "translated_descriptions.json"
+    DEFAULT_TRANSLATIONS_FILE = "translations.json"
     DEFAULT_TITLE_LANGUAGES_FILE = "title_languages.json"
-    DEFAULT_TITLE_TRANSLATIONS_FILE = "translated_titles.json"
+    DEFAULT_TITLE_TRANSLATIONS_FILE = "title_translations.json"
     DEFAULT_LOG = "Info"
     DEFAULT_LOGFILE = ""
     DEFAULT_CONF_FILE = None
@@ -99,6 +100,7 @@ with set_noninfluentials(): #this context-manager adds all settings from here to
     FORBIDDEN_COMBIS = ["tsne_50d", "tsne_100d"]
     NORMALIFY_PARAMS = ["QUANTIFICATION_MEASURE", "EXTRACTON_METHOD", "EMBED_ALGO", "DCM_QUANT_MEASURE", "CLASSIFIER_COMPARETO_RANKING"]  #for all params that are in this, eg `Tf-IdF` will become `tfidf`
     CONF_PRIORITY = ["force", "smk_wildcard", "dependency", "cmd_args", "env_vars", "smk_args", "conf_file", "dataset_class", "defaults"] #no distinction between env_file and env_var bc load_dotenv is executed eagerly and just overwrites envvars from envfile
+    MAY_DIFFER_IN_DEPENDENCIES = ["DEBUG", "RANDOM_SEED"]
 
 ########################################################################################################################
 ######################################## set and get settings/env-vars #################################################

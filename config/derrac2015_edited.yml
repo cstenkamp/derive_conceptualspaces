@@ -15,8 +15,8 @@ extraction_method:            tfidf
 candidate_min_term_count:     25 #movies has samples-to-threshold value of 100, placetypes has 35, 20newsgrups has 614, so for 8000 courses any threshold from 2 to 25 seems reasonable (BUT see above, I get too little)!!
 max_ngram:                    5                   # not explicitly, but it takes adjective phrases so it's something >=3
 
-classifier_compareto_ranking: [count, ppmi]       #TODO the ranking induced by count, or the baremetal count?
-classifier_succmetric:        cohen_kappa
+classifier_compareto_ranking: [count, ppmi]
+classifier_succmetric:        kappa_rank2rank_onlypos_min
 prim_lambda:                  0.5
 sec_lambda:                   0.1
 

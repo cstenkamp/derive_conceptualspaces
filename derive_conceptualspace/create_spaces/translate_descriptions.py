@@ -77,7 +77,7 @@ def full_translate_titles(raw_descriptions, pp_components, translate_policy, tit
     if (pp_components.add_coursetitle or pp_components.add_subtitle) and translate_policy == "translate": #TODO parts of this also needs to be done for onlyeng
         title_languages = create_languages_file(title_languages_file, "title_languages", "Name", json_persister, raw_descriptions, dataset_class)
         try:
-            title_translations = json_persister.load(title_translations_file, "translated_titles", silent=True)
+            title_translations = json_persister.load(title_translations_file, "title_translations", silent=True)
         except FileNotFoundError:
             title_translations = dict(title_translations={}, is_complete=False)
         if not title_translations.get("is_complete", False):
@@ -88,7 +88,7 @@ def full_translate_titles(raw_descriptions, pp_components, translate_policy, tit
             translateds, did_update, is_complete= translate_elems(to_translate[0]+sec_translate[0], to_translate[1]+sec_translate[1], already_translated=title_translations["title_translations"] if "title_translations" in title_translations else title_translations)
             if did_update:
                 json_persister.save(title_translations_file, title_translations=translateds, is_complete=is_complete, force_overwrite=True, ignore_confs=["DEBUG", "PP_COMPONENTS", "TRANSLATE_POLICY"])
-            title_translations = json_persister.load(title_translations_file, "translated_titles", silent=True)
+            title_translations = json_persister.load(title_translations_file, "title_translations", silent=True)
             if not is_complete:
                 print("The translated Titles are not complete yet!")
                 exit(1)
@@ -117,7 +117,7 @@ def full_translate_descriptions(raw_descriptions, translate_policy, languages_fi
     if translate_policy == "translate":
         languages = create_languages_file(languages_file, "languages", "Beschreibung", json_persister, raw_descriptions, dataset_class)
         try:
-            translations = json_persister.load(translations_file, "translated_descriptions", silent=True)
+            translations = json_persister.load(translations_file, "translations", silent=True)
         except FileNotFoundError:
             translations = dict(translations={}, is_complete=False)
         if "is_complete" not in translations: #for backwards compatibility
@@ -129,7 +129,7 @@ def full_translate_descriptions(raw_descriptions, translate_policy, languages_fi
             translateds, did_update, is_complete = translate_elems(*list(zip(*to_translate)), already_translated=translations["translations"])
             if did_update:
                 json_persister.save(translations_file, translations=translateds, is_complete=is_complete, force_overwrite=True, ignore_confs=["DEBUG", "PP_COMPONENTS", "TRANSLATE_POLICY"])
-            translations = json_persister.load(translations_file, "translated_descriptions", silent=True)
+            translations = json_persister.load(translations_file, "translations", silent=True)
             if not is_complete:
                 print("The translated Descriptions are not complete yet!")
                 exit(1)

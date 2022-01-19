@@ -16,7 +16,7 @@ candidate_min_term_count:     25 #movies has samples-to-threshold value of 100, 
 max_ngram:                    5                   # not explicitly, but it takes adjective phrases so it's something >=3
 
 classifier_compareto_ranking: count
-classifier_succmetric:        cohen_kappa
+classifier_succmetric:        [kappa_count2rank_onlypos, kappa_rank2rank_onlypos_min]  #unclear if the ranking induced by count, or the baremetal count
 prim_lambda:                  0.5
 sec_lambda:                   0.1
 

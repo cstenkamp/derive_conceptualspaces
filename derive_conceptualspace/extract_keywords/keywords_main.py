@@ -25,12 +25,12 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 ########################################################################################################################
 ########################################################################################################################
 
-def extract_candidateterms(pp_descriptions, extraction_method, max_ngram, faster_keybert=False, verbose=False):
+def extract_candidateterms(pp_descriptions, extraction_method, max_ngram, verbose=False):
     if extraction_method == "keybert":
         raise NotImplementedError("TODO")
         # candidateterms, metainf = extract_candidateterms_keybert_nopp(pp_descriptions, max_ngram, faster_keybert, verbose=verbose)
     elif extraction_method == "pp_keybert":
-        candidateterms, metainf = extract_candidateterms_keybert_preprocessed(pp_descriptions, max_ngram, faster_keybert, verbose=verbose)
+        candidateterms, metainf = extract_candidateterms_keybert_preprocessed(pp_descriptions, max_ngram, get_setting("faster_keybert"), verbose=verbose)
     elif extraction_method == "tfidf":
         candidateterms, metainf = extract_candidateterms_quantific(pp_descriptions, max_ngram, quantific="tfidf", verbose=verbose)
     elif extraction_method == "ppmi":
@@ -96,11 +96,10 @@ def extract_candidateterms_quantific(descriptions, max_ngram, quantific, verbose
         quant = ppmi(dtm, verbose=verbose, descriptions=descriptions)
     else:
         raise NotImplementedError()
-    metainf = dict(kw_max_per_doc_abs=max_per_doc_abs, kw_max_per_doc_rel=max_per_doc_rel, kw_min_per_doc=min_per_doc,
-                   kw_forcetake_percentile=forcetake_percentile, candidate_min_term_count=get_setting("CANDIDATE_MIN_TERM_COUNT"))
+    metainf = dict()
     if min_val_percentile:
         min_val = np.percentile(np.array(flatten([[j[1] for j in i] for i in quant])), min_val_percentile * 100)
-        metainf.update(kw_min_val_percentile=min_val_percentile)
+        metainf.update(kw_min_val_percentile=min_val_percentile, kw_calculated_minval=min_val)
     else:
         metainf.update(kw_min_val=min_val)
     forcetake_val = np.percentile(np.array(flatten([[j[1] for j in i] for i in quant])), forcetake_percentile * 100)

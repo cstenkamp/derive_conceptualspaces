@@ -1,3 +1,4 @@
+import hashlib
 import os
 import random
 
@@ -21,7 +22,7 @@ from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loa
 from derive_conceptualspace.util.jsonloadstore import JsonPersister
 from misc_util.logutils import CustomIO, setup_logging
 from misc_util.object_wrapper import ObjectWrapper
-from misc_util.pretty_print import pretty_print as print, fmt
+from misc_util.pretty_print import pretty_print as print, fmt, TRANSLATOR
 
 
 ########################################################################################################################
@@ -56,6 +57,11 @@ class CustomContext(ObjectWrapper):
             if self.get_config("RANDOM_SEED", silence_defaultwarning=True):
                 print(f"Using a random seed: {self.get_config('RANDOM_SEED')}")
                 random.seed(self.get_config("RANDOM_SEED"))
+        else:
+            if self.get_config("SEED_ONLY_IN_DEBUG", silent=True, silence_defaultwarning=True):
+                self.set_config("RANDOM_SEED", None, "force")
+            elif self.get_config("RANDOM_SEED"):
+                print(f"*r*Using a random seed ({self.get_config('RANDOM_SEED')}) even though DEBUG=False!*r*")
 
     def init_context(self, load_envfile=False, load_conffile=True): #works for both a click-Context and my custom one
         if not self._initialized:
@@ -90,11 +96,11 @@ class CustomContext(ObjectWrapper):
             raise ValueError(fmt(f"You're trying to overwrite config {key} with *r*{val}*r*, but it was already used with value *b*{self.used_configs[key]}*b*!"))
         self.toset_configs.append([key, val, source])
         existing_configs = list(zip(*[i for i in self.toset_configs if i[0] == key and i[2] not in ["defaults", "smk_args"]]))
-        if existing_configs and len(set(existing_configs[1])) > 1:
+        if existing_configs and len(set(existing_configs[1])) > 1 and existing_configs[0][0] not in settings.MAY_DIFFER_IN_DEPENDENCIES:
             ordered_args = sorted(list(zip(*existing_configs[::-1][:2])), key=lambda x:CONF_PRIORITY.index(x[0]))
             ordered_args = {v:k for k,v in list({v: k for k, v in ordered_args[::-1]}.items())[::-1]}
             if "dependency" in ordered_args and ordered_args["dependency"] != ordered_args.get("force", ordered_args["dependency"]):
-                raise ValueError(f"A Dependency requires {existing_configs[0][0]} to be {dict(ordered_args)['dependency']} but your other config demands {ordered_args[1][1]}")
+                raise ValueError(f"A Dependency requires {existing_configs[0][0]} to be {dict(ordered_args)['dependency']} but your other config demands {[v for k,v in ordered_args.items() if k!='dependency'][0]}")
             ordered_args = list(ordered_args.items())
             print(f"{ordered_args[1][0]} demanded config {existing_configs[0][0]} to be *r*{ordered_args[1][1]}*r*, but {ordered_args[0][0]} overwrites it to *b*{ordered_args[0][1]}*b*")
 
@@ -104,12 +110,25 @@ class CustomContext(ObjectWrapper):
     @property
     def important_settings(self): #TODO be able to explicitly add important settings
         #important are: * those that have "ALL_" in settings * those that are part of the dirpath
-        return [k[4:] for k in settings.__dict__ if k.startswith("ALL_")] + self.obj["json_persister"].dirname_vars()
+        # * those are from "force", "smk_wildcard", "cmd_args"
+        res = ([k[4:] for k in settings.__dict__ if k.startswith("ALL_")] + self.obj["json_persister"].dirname_vars() +
+               [i[0] for i in self.toset_configs if i[2] in ["force", "smk_wildcard", "cmd_args"]])
+        return list({standardize_config_name(k):None for k in res}.keys()) #unique but with order
 
     def print_important_settings(self):
-        params = {standardize_config_name(i): self.get_config(i, silent=True) for i in self.important_settings if self.has_config(i)}
+        params = {i: self.get_config(i, silent=True) for i in self.important_settings if self.has_config(i)}
+        params = dict(sorted(params.items(), key=lambda x:x[0]))
         default_params = {k[len("DEFAULT_"):]:v for k,v in settings.__dict__.items() if k in ["DEFAULT_"+i for i in params.keys()]}
-        print("Running with the following settings:", ", ".join([f"{k}: *{'b' if v==default_params.get(k) else 'r'}*{v}*{'b' if v==default_params.get(k) else 'r'}*" for k, v in params.items()]))
+        print(f"Running with the following settings [{self.settingshash}]: ", ", ".join([f"{k}: *{'b' if v==default_params.get(k) else 'r'}*{v}*{'b' if v==default_params.get(k) else 'r'}*" for k, v in params.items()]))
+
+    @property
+    def settingshash(self):
+        influentials = {k: self.get_config(k, silent=True, silence_defaultwarning=True) for k in self.important_settings}
+        hash = hashlib.sha512(str(sorted(influentials.items())).encode("UTF-8")).hexdigest()[:10]
+        colors = [i for i in TRANSLATOR if i.startswith("*") and len(i) == 3]
+        color = colors[int(hash, 16) % len(colors)]
+        return f"{color}{hash}{color}"
+
 
     def has_config(self, key, include_default=True): #if there is a click-arg with "default=None", it will be EXPLICITLY set by default, ONLY that is included if include_default
         return key in self.used_configs or bool([i for i in self.toset_configs if i[0]==standardize_config_name(key) and (include_default or i[2] != "defaults")])
@@ -174,11 +193,11 @@ class SnakeContext():
     # TODO das autoloader_di ist schon ne Mischung von Code und Daten, aber wohin sonst damit?
 
     @staticmethod
-    def loader_context(load_envfile=True, config=None): #for jupyter
+    def loader_context(load_envfile=True, config=None, load_conffile=True): #for jupyter
         ctx = CustomContext(SnakeContext())
         for k, v in (config or {}).items():
             ctx.set_config(k, v, "force")
-        ctx.init_context(load_envfile=load_envfile)
+        ctx.init_context(load_envfile=load_envfile, load_conffile=load_conffile)
         ctx.print_important_settings()
         return ctx
 

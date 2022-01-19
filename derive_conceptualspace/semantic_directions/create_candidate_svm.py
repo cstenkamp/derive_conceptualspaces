@@ -58,13 +58,13 @@ class Comparer():
         return self.already_compared[v1+","+v2]
 
 
-def select_salient_terms(metrics, decision_planes, prim_lambda, sec_lambda):
+def select_salient_terms(metrics, decision_planes, prim_lambda, sec_lambda, metricname):
     #TODO waitwaitwait. Am I 100% sure that the intercepts of the decision_planes are irrelevant?!
-    which_metric = "kappa_rank2rank"
-    get_tlambda = lambda sorted_kappa, lamb: [i[0] for i in metrics.items() if i[1][which_metric] > prim_lambda]
-    get_tlambda2 = lambda sorted_kappa, primlamb, seclamb: list(set(get_tlambda(sorted_kappa, seclamb))-set(get_tlambda(sorted_kappa, primlamb)))
+    print(f"Calculated Metrics: {list(list(metrics.values())[0].keys())}")
+    get_tlambda = lambda metrics, lamb: [i[0] for i in metrics.items() if i[1][metricname] >= prim_lambda]
+    get_tlambda2 = lambda metrics, primlamb, seclamb: [i[0] for i in metrics.items() if i[1][metricname] >= sec_lambda and i[1][metricname] < prim_lambda]
     candidates = get_tlambda(metrics, prim_lambda)
-    salient_directions = [max(metrics.items(), key=lambda x: x[1][which_metric])[0],]
+    salient_directions = [max(metrics.items(), key=lambda x: x[1][metricname])[0],]
     n_terms = min(len(candidates), 2*len(decision_planes[salient_directions[0]].coef)) #from [DESC15]
     comparer = Comparer(decision_planes, vec_cos)
     for nterm in tqdm(range(1, n_terms), desc="Merging Salient Directions"):
@@ -74,7 +74,7 @@ def select_salient_terms(metrics, decision_planes, prim_lambda, sec_lambda):
     print(f"Found {len(salient_directions)} salient directions: {salient_directions}")
     compare_vecs = [decision_planes[term].normal for term in salient_directions]
     clusters = {term: [] for term in salient_directions}
-    #TODO instead do the cluster-assignment with k-means!
+    #TODO optionally instead do the cluster-assignment with k-means!
     for term in tqdm(get_tlambda2(metrics, prim_lambda, sec_lambda), desc="Associating Clusters"):
         # "we then associate with each term d_i a Cluster C_i containing all terms from T^{0.1} which are more similar to d_i than to any of the
         # other directions d_j." TODO: experiment with thresholds, if it's extremely unsimilar to ALL just effing discard it!
@@ -112,7 +112,7 @@ def create_candidate_svm(embedding, term, quants, plot_svm=False, descriptions=N
     res["kappa_digitized"]  = cohen_kappa_score(np.digitize(quants, np.histogram_bin_edges(quants)[1:]), np.digitize(distances, np.histogram_bin_edges(distances)[1:]))
     nonzero_indices = np.where(np.array(quants) > 0)[0]
     q2, d2 = np.array(quants)[nonzero_indices], np.array(distances)[nonzero_indices]
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(): #TODO get rid of what cuases the nans here!!!
         warnings.filterwarnings('ignore', r'invalid value encountered in true_divide')
         if quant_name == "count":  # in DESC15 they write "measure the correlation between the ranking induced by \vec{vt} and the number of times t appears in the documents associated with each entity", so maybe compare ranking to count?!
             res["kappa_count2rank"] = cohen_kappa_score(quants, rankdata(distances, method="dense"))

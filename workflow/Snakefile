@@ -7,6 +7,9 @@ from config:   `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realp
 
 Plot DAG:      `MA_DATASET=siddata PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -np --directory $MA_DATA_DIR --dag default | grep -A99999 "digraph" | dot -Tsvg > dag.svg`
 Get results:   `rsync -az --progress $MA_DATA_DIR/siddata etlpipelines:~/data/siddata --exclude .snakemake`
+Docker in VM   `ma_cont snakemake --cores 3 -p --directory /opt/data/siddata by_config --configfile /opt/derive_conceptualspaces/config/derrac2015_edited.yml`
+                  where ma_cont = `docker run -it --rm --user $(id -u):$(id -g) --name derive_conceptualspaces_cont -v ~/data:/opt/data --env-file ~/derive_conceptualspaces/test_env.env derive_conceptualspaces`
+                  (so there's a bug that you have to specify `--directory` which includes the dataset-name but whatever)
 """
 
 #TODO before writing about it: have a way of not having to set the PYTHONPATH as cmd-arg
@@ -195,8 +198,7 @@ rule extract_candidate_terms:
     threads: 1
     run:
         autoload_context_inputs(ctx, input, wildcards)
-        candidateterms, metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.get_config("extraction_method"), ctx.get_config("max_ngram"),
-                                                              ctx.get_config("faster_keybert"), verbose=ctx.get_config("verbose"))
+        candidateterms, metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.get_config("extraction_method"), ctx.get_config("max_ngram"), verbose=ctx.get_config("verbose"))
         ctx.p.save("candidate_terms.json", candidateterms=candidateterms, metainf=metainf)
 
 
@@ -224,7 +226,7 @@ rule create_doc_cand_matrix:
         autoload_context_inputs(ctx, input, wildcards)
         filtered_dcm = create_filtered_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], min_term_count=ctx.get_config("candidate_min_term_count"),
                                                     dcm_quant_measure=ctx.get_config("dcm_quant_measure"), use_n_docs_count=ctx.get_config("cands_use_ndocs_count"), verbose=ctx.get_config("verbose"))
-        ctx.p.save("filtered_dcm.json", doc_term_matrix=filtered_dcm, metainf={"candidate_min_term_count": ctx.get_config("candidate_min_term_count")})
+        ctx.p.save("filtered_dcm.json", doc_term_matrix=filtered_dcm)
 
 
 rule create_candidate_svm:
