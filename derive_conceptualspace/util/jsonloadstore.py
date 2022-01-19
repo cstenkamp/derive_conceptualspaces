@@ -243,6 +243,8 @@ class JsonPersister():
                 self.loaded_objects[k]["used_in"].extend(v["used_in"])  # jot down that that file was also used for THAT file
             else:
                 self.loaded_objects[k] = v  #add those ones as dependency here
+            for k2, v2 in v.get("metadata", {}).get("used_influentials", {}).items():
+                self.ctx.set_config(k2, v2, "dependency")
             # elif file["basename"] in v["used_in"]: #and if they are already a dependency (either here or in THAT file)
             #     self.loaded_objects[k]["used_in"].extend(v["used_in"])  #jot down that #TODO do I need this?!
         for k, v in file.get("used_influentials", {}).items():
@@ -275,6 +277,10 @@ class JsonPersister():
         if required_metainf is not None:
             raise NotImplementedError("TODO: custom checking of metainf!")
         for k, v in file.get("loaded_files", {}).items():
+            for k2, v2 in v.get("metadata", {}).get("used_influentials", {}).items():
+                if k2 not in settings.MAY_DIFFER_IN_DEPENDENCIES and self.ctx.has_config(k2, include_default=False) and self.ctx.get_config(k2, silent=True) != standardize_config_val(k2, v2):
+                    raise ValueError(f"config {k2} is supposed to be {self.ctx.get_config(k2, silent=True, silence_defaultwarning=True)} but dependency {k} requires it to be {v2}")
+                    #TODO instead of the valuerror, print (and optionally directly perform) the commands to create it with these configs instead
             if file["basename"] in v["used_in"] and k in self.loaded_objects:  #ensure that the info of all currently loaded files corresponds to all of those the file used
                 assert self.loaded_objects[k]["metadata"] == v["metadata"]
         for k, v in file.get("used_influentials", {}).items():
@@ -306,9 +312,9 @@ class JsonPersister():
         elif splitext(filename)[1] == ".json":
             obj = json_load(join(self.in_dir, filename))
             full_metadata = {k: v for k,v in obj.items() if k not in ["object", "loaded_files"]} if "object" in obj else {}
+            self.check_file_metas(obj, required_metainf) #must be first check than add, otherwise a dependency can just overwrite demanded params
             if not silent:
                 self.add_file_metas(obj)
-            self.check_file_metas(obj, required_metainf)
             if "object" in obj:
                 obj = obj["object"]
             if loader is not None:
