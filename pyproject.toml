@@ -1,0 +1,14 @@
+[project]
+name = "derive-conceptualspace"
+description = "Codebase for Data-Driven Embedding of educational resources in a vector-space with interpretable Dimensions for Explainable Recommendation"
+authors = ["Chris Stenkamp <cstenkamp@uos.de>"]
+readme = "README.md"
+python = ">=3.8.8"
+homepage = "https://github.com/cstenkamp/MastersThesisText/"
+repository = "https://github.com/cstenkamp/derive_conceptualspaces/"
+documentation = "TODO"
+
+
+[build-system]
+requires = ["setuptools >= 40.6.0", "wheel", "toml"]
+build-backend = "setuptools.build_meta"

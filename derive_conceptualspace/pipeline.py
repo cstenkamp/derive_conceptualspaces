@@ -20,7 +20,7 @@ from derive_conceptualspace.util.base_changer import NDPlane
 from derive_conceptualspace.util.desc_object import DescriptionList
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
 from derive_conceptualspace.util.jsonloadstore import JsonPersister
-from misc_util.logutils import CustomIO, setup_logging
+from misc_util.logutils import CustomIO
 from misc_util.object_wrapper import ObjectWrapper
 from misc_util.pretty_print import pretty_print as print, fmt, TRANSLATOR
 

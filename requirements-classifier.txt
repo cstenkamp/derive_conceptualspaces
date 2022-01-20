@@ -1,7 +1,7 @@
 seaborn
 tensorflow>=2.3
 #tensorflow-gpu>=2.3
-numpy<1.19.0
+#numpy<1.19.0 #TODO why that version? I think it's incompatible with something in main code
 pandas
 matplotlib
 tensorflow-hub

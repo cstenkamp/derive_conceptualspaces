@@ -1,4 +1,5 @@
-numpy==1.22.1
+numpy<1.21  #resampy and librosa (TODO: why do I need those) require numba, which requires numpy<1.21
+numba==0.55.0
 jupyter==1.0.0
 jupyterlab==3.0.14
 matplotlib==3.4.1
