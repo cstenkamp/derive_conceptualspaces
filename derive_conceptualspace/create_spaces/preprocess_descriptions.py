@@ -23,11 +23,12 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 ########################################################################################################################
 
 class PPComponents():
-    SKCOUNTVEC_SUPPORTS = ["add_coursetitle", "add_subtitle", "remove_stopwords", "convert_lower", "remove_diacritics", "add_fachbereich"]
+    SKCOUNTVEC_SUPPORTS = ["add_coursetitle", "add_subtitle", "remove_htmltags", "remove_stopwords", "convert_lower", "remove_diacritics", "add_fachbereich"]
     OPTION_LETTER = dict(
-        add_fachbereich="f",
-        add_coursetitle="a",
+        add_fachbereich="f", #TODO generalize this for other datasets
+        add_coursetitle="a", #TODO generalize this for other datasets
         add_subtitle="u",
+        remove_htmltags="h",
         sent_tokenize="t",
         convert_lower="c",
         remove_stopwords="s",
@@ -176,6 +177,8 @@ def get_countvec(pp_components, max_ngram, min_df=1):
 
 
 def pp_descriptions_countvec(descriptions, pp_components, max_ngram):
+    if pp_components.remove_htmltags:
+        descriptions.process_all(lambda data: re.compile(r'<.*?>').sub('', data), "remove_htmltags")
     cnt = get_countvec(pp_components, max_ngram, min_df=1) #as the build_analyzer, in contrast to fit_transform, doesn't respect min_df anyway!!
     descriptions.process_all(cnt.build_preprocessor(), "preprocess")
     descriptions.process_all(cnt.build_tokenizer(), "tokenize")

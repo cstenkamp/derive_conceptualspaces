@@ -318,7 +318,10 @@ class JsonPersister():
             if "object" in obj:
                 obj = obj["object"]
             if loader is not None:
-                obj = loader(**obj)
+                if isinstance(obj, dict) and len(obj) == len(inspect.getfullargspec(loader).args) and all(i in obj for i in inspect.getfullargspec(loader).args):
+                    obj = loader(**obj)
+                else:
+                    print(f"Demanded loader for {save_basename} doesn't apply - Trying to load without it.")
         if not silent:
             # for k, v in self.loaded_relevant_params.items():
             #     if k in self.ctx.obj: assert self.ctx.obj[k] == v, f"{k} is demanded to be {self.ctx.obj[k]}, but is {v} in {tmp['basename']} at {join(subdir, filename)}"

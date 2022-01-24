@@ -10,7 +10,7 @@ from itertools import accumulate
 from derive_conceptualspace.settings import get_setting
 
 
-def translate_text(text, target="en", charlim=24000, origlans=None):
+def translate_text(text, target="en", charlim=100000, origlans=None):
     # and I can still use the data from THIS call!!
     """Translates text into the target language. Target must be an ISO 639-1 language code.
     See https://g.co/cloud/translate/v2/translate-reference#supported_languages

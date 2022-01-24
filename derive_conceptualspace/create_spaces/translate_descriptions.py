@@ -125,8 +125,8 @@ def full_translate_descriptions(raw_descriptions, translate_policy, languages_fi
         if not translations["is_complete"]:
             descriptions = dataset_class.preprocess_raw_file(raw_descriptions)
             assert len(descriptions) == len(languages)
-            to_translate = [i for i in zip(descriptions["Beschreibung"], languages.values(), languages.keys()) if i[1] != "en"]
-            translateds, did_update, is_complete = translate_elems(*list(zip(*to_translate)), already_translated=translations["translations"])
+            to_translate = dict([i for i in zip(descriptions["Beschreibung"], languages.values()) if i[1] != "en" and i[0] not in translations["translations"]])
+            translateds, did_update, is_complete = translate_elems(list(to_translate.keys()), list(to_translate.values()), already_translated=translations["translations"])
             if did_update:
                 json_persister.save(translations_file, translations=translateds, is_complete=is_complete, force_overwrite=True, ignore_confs=["DEBUG", "PP_COMPONENTS", "TRANSLATE_POLICY"])
             translations = json_persister.load(translations_file, "translations", silent=True)

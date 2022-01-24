@@ -1,23 +1,20 @@
 import logging
-from math import log
-from os.path import join, isdir, isfile, abspath, dirname, splitext, basename, split
-import unidecode
-from collections import Counter
 from functools import partial, lru_cache
-from typing import List
+from math import log
+from os.path import join, dirname, basename
+import re
 
-import numpy as np
-from tqdm import tqdm
 import nltk
+import numpy as np
+import unidecode
 from HanTa import HanoverTagger as ht
 from nltk.corpus import stopwords as nlstopwords
 
 from derive_conceptualspace.settings import get_setting
-from derive_conceptualspace.util.desc_object import Description, DescriptionList
-from derive_conceptualspace.util.dtm_object import DocTermMatrix
+from derive_conceptualspace.util.desc_object import DescriptionList
 from derive_conceptualspace.util.nltk_util import NLTK_LAN_TRANSLATOR, wntag
-from derive_conceptualspace.util.tokenizers import tokenize_text
 from derive_conceptualspace.util.np_tools import np_divide, np_log
+from derive_conceptualspace.util.tokenizers import tokenize_text
 
 logger = logging.getLogger(basename(__file__))
 
@@ -53,6 +50,8 @@ def run_preprocessing_funcs(descriptions:DescriptionList, components, word_token
     # TODO use TreeTagger? https://textmining.wp.hs-hannover.de/Preprocessing.html#Alternative:-Treetagger
     # https://textmining.wp.hs-hannover.de/Preprocessing.html#Satzerkennung-und-Tokenization
     assert components.convert_lower, "Stopwords are lower-case so not converting is not allowed (bad for german...!)"
+    if components.remove_htmltags:
+        descriptions.process_all(lambda data: re.compile(r'<.*?>').sub('', data), "remove_htmltags")
     if components.sent_tokenize:
         descriptions.process_all(nltk.sent_tokenize, "sent_tokenize", indiv_kwargs=dict(language=lambda desc: NLTK_LAN_TRANSLATOR[desc.lang]))
     if components.convert_lower:

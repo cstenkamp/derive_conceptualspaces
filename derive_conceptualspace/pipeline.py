@@ -113,6 +113,7 @@ class CustomContext(ObjectWrapper):
         # * those are from "force", "smk_wildcard", "cmd_args"
         res = ([k[4:] for k in settings.__dict__ if k.startswith("ALL_")] + self.obj["json_persister"].dirname_vars() +
                [i[0] for i in self.toset_configs if i[2] in ["force", "smk_wildcard", "cmd_args"]])
+        if self.get_config("DEBUG", silent=True, silence_defaultwarning=True): res.append("DEBUG_N_ITEMS")
         return list({standardize_config_name(k):None for k in res}.keys()) #unique but with order
 
     def print_important_settings(self):

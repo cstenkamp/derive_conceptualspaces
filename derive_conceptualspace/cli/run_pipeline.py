@@ -185,7 +185,7 @@ def preprocess_descriptions(ctx, json_persister, dataset_class, raw_descriptions
         title_languages = languages
     if ctx.get_config("translate_policy") == "translate":
         translations = json_persister.load(translations_file, "translations", loader=lambda **kw: kw["translations"])
-        title_translations = json_persister.load(title_translations_file, "title_translations", loader=lambda **kw: kw["title_translations"])
+        title_translations = translations #json_persister.load(title_translations_file, "title_translations", loader=lambda **kw: kw["title_translations"]) #TODO maybe add back some time
         # TODO[e] depending on pp_compoments, title_languages etc may still allowed to be empty
     else:
         translations, title_translations = None, None
