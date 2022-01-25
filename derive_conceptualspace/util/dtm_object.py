@@ -3,6 +3,7 @@ from collections import Counter
 
 from plotly.serializers import np
 from scipy.sparse import csr_matrix
+from sklearn.feature_extraction.text import TfidfTransformer
 from tqdm import tqdm
 
 from derive_conceptualspace.settings import get_setting
@@ -196,7 +197,8 @@ class DocTermMatrix():
 def apply_quant(quant, dtm, verbose=False, descriptions=None):
     from derive_conceptualspace.util.text_tools import tf_idf, ppmi
     if quant == "tfidf":
-        quantification = tf_idf(dtm, verbose=verbose, descriptions=descriptions)
+        # quantification = tf_idf(dtm, verbose=verbose, descriptions=descriptions)
+        quantification = csr_to_list(TfidfTransformer().fit_transform(dtm.as_csr().T))
     elif quant == "ppmi":
         quantification = ppmi(dtm, verbose=verbose, descriptions=descriptions)
     elif quant == "count":

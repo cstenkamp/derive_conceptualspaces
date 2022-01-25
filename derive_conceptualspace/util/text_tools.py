@@ -1,3 +1,4 @@
+import gc
 import logging
 from functools import partial, lru_cache
 from math import log
@@ -9,6 +10,7 @@ import numpy as np
 import unidecode
 from HanTa import HanoverTagger as ht
 from nltk.corpus import stopwords as nlstopwords
+from tqdm import tqdm
 
 from derive_conceptualspace.settings import get_setting
 from derive_conceptualspace.util.desc_object import DescriptionList
@@ -206,24 +208,56 @@ def pmi(doc_term_matrix, positive=False, verbose=False, mds_obj=None, descriptio
     see https://www.overleaf.com/project/609bbdd6a07c203c38a07ab4
     """
     logger.info("Calculating PMIs...")
+    arr = doc_term_matrix.as_csr()
     #see doc_term_matrix.as_csr().toarray() - spalten pro doc und zeilen pro term
-    words_per_doc = doc_term_matrix.as_csr().sum(axis=0)       #old name: col_totals
-    total_words = words_per_doc.sum()                          #old name: total
-    ges_occurs_per_term = doc_term_matrix.as_csr().sum(axis=1) #old name: row_totals
+    words_per_doc = arr.sum(axis=0)       #old name: col_totals
+    total_words = words_per_doc.sum()     #old name: total
+    ges_occurs_per_term = arr.sum(axis=1) #old name: row_totals
     expected = np.outer(ges_occurs_per_term, words_per_doc)
-    expected = np_divide(expected, total_words)
-    quantifications = np_divide(doc_term_matrix.as_csr(), expected)
+    expected = np_divide(expected, total_words)  #TODO maybe I can convert this to a csr to save RAM?
+    quantifications = np_divide(arr, expected)
+    del expected
+    gc.collect()
     # Silence distracting warnings about log(0):
     with np.errstate(divide='ignore'):
         quantifications = np_log(quantifications)
     if positive:
         quantifications[quantifications < 0] = 0.0
-    quantifications  = [[[i,elem] for i, elem in enumerate(quantifications[:,i]) if elem != 0] for i in range(quantifications.shape[1])]
+    quantifications  = [[[i,elem] for i, elem in enumerate(quantifications[:,i]) if elem != 0] for i in tqdm(range(quantifications.shape[1]), desc="Last PPMI Step")]
     if verbose:
         print_quantification(doc_term_matrix, quantifications, descriptions)
     return quantifications
 
 ppmi = partial(pmi, positive=True)
+
+
+
+
+# def pmi(arr, **kwargs):
+#     '''
+#     https://gist.github.com/TheLoneNut/208cd69bbca7cd7c53af26470581ec1e
+#     Calculate the positive pointwise mutal information score for each entry
+#     https://en.wikipedia.org/wiki/Pointwise_mutual_information
+#     We use the log( p(y|x)/p(y) ), y being the column, x being the row
+#     '''
+#     # p(y|x) probability of each t1 overlap within the row
+#     row_totals = arr.sum(axis=1).astype(float)
+#     prob_cols_given_row = (arr.T / row_totals).T
+#
+#     # p(y) probability of each t1 in the total set
+#     col_totals = arr.sum(axis=0).astype(float)
+#     prob_of_cols = col_totals / sum(col_totals)
+#
+#     # PMI: log( p(y|x) / p(y) )
+#     # This is the same data, normalized
+#     ratio = prob_cols_given_row / prob_of_cols
+#     ratio[ratio==0] = 0.00001
+#     _pmi = np.log(ratio)
+#     _pmi[_pmi < 0] = 0
+#
+#     return _pmi
+#
+# ppmi = pmi
 
 
 
