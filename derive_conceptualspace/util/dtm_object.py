@@ -158,7 +158,7 @@ class DocTermMatrix():
             term_counts = Counter(flatten(flat_terms))
         used_terms = {k: v for k, v in term_counts.items() if v >= min_count}
         if cap_max:
-            used_terms = {k: v for k, v in term_counts.items() if v <= len(dtm)-min_count}
+            used_terms = {k: v for k, v in used_terms.items() if v <= len(dtm)-min_count}
         if verbose:
             print(f"Filtering such that terms occur " + (f"in at least {min_count} documents" if use_n_docs_count else
                                                          f"at least {min_count} times") + f", which are {len(used_terms)} of {len(term_counts)} terms.")

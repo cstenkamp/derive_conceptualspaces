@@ -4,7 +4,7 @@ import gc
 
 from tqdm import tqdm
 
-def np_divide(first, second, buffersize=5000):
+def np_divide(first, second, buffersize=8000):
     """in pmi, we want to just say `df = df/expected`, however that gives a sigkill.
     so this function will do first = first / second, but split up"""
     assert first.shape == second.shape or second.shape == ()
@@ -22,7 +22,7 @@ def np_divide(first, second, buffersize=5000):
     return res
 
 
-def np_log(arr, buffersize=2000):
+def np_log(arr, buffersize=5000):
     res = np.empty(arr.shape)
     for rowsplit in tqdm(range(1, math.ceil(arr.shape[0]/buffersize)+1), desc=f"NP-Log for {arr.shape}"):
         from_row = (rowsplit-1)*buffersize
