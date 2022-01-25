@@ -41,7 +41,7 @@ from derive_conceptualspace.extract_keywords.keywords_main import (
 from derive_conceptualspace.extract_keywords.postprocess_candidates import (
     postprocess_candidateterms as postprocess_candidateterms_base,
 )
-from derive_conceptualspace.pipeline import CustomContext, SnakeContext
+from derive_conceptualspace.pipeline import CustomContext, SnakeContext, load_lang_translate_files
 from derive_conceptualspace.semantic_directions.create_candidate_svm import (
     create_candidate_svms as create_candidate_svms_base
 )
@@ -100,13 +100,13 @@ def autoload_context_inputs(ctx, inputs, wildcards, params=None, input_kwargs=No
 ctx = initialize_snakemake()
 
 generated_paths = dict(
-    pp_descriptions =          "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/pp_descriptions.json",
-    dissim_mat =               "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/dissim_mat.json",
-    embedding =                "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/embedding.json",
-    candidate_terms =          "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/candidate_terms_{extraction_method}.json",
-    postprocessed_candidates = "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/postprocessed_candidates_{extraction_method}.json",
-    filtered_dcm =             "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json",
-    clusters =                 "{dataset}/debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}_{classifier_compareto_ranking}/clusters.json"
+    pp_descriptions =          "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/pp_descriptions.json",
+    dissim_mat =               "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/dissim_mat.json",
+    embedding =                "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/embedding.json",
+    candidate_terms =          "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/candidate_terms_{extraction_method}.json",
+    postprocessed_candidates = "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/postprocessed_candidates_{extraction_method}.json",
+    filtered_dcm =             "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json",
+    clusters =                 "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}_{classifier_compareto_ranking}/clusters.json"
 )
 #TODO can I auto-generate these from jsonpersister?!
 
@@ -115,48 +115,54 @@ generated_paths = dict(
 ########################################################################################################################
 
 
-rule get_languages:
-    input:
-        raw_descriptions = "{dataset}/"+ctx.get_config("raw_descriptions_file"),
-    output:
-        languages        = "{dataset}/"+ctx.get_config("languages_file"),
-        title_languages  = "{dataset}/"+ctx.get_config("title_languages_file"),
-    threads: 1
-    run:
-        autoload_context_inputs(ctx, input, wildcards)
-        create_languages_file_base(ctx.get_config("dataset")+os.sep+ctx.get_config("languages_file"), "languages", "Beschreibung", ctx.p, ctx.obj["raw_descriptions"], ctx.obj["dataset_class"], declare_silent=True)
-        create_languages_file_base(ctx.get_config("dataset")+os.sep+ctx.get_config("title_languages_file"), "title_languages", "Name", ctx.p, ctx.obj["raw_descriptions"], ctx.obj["dataset_class"], declare_silent=True)
-
+# rule get_languages:
+#     input:
+#         raw_descriptions = "{dataset}/"+ctx.get_config("raw_descriptions_file"),
+#     output:
+#         languages        = "{dataset}/"+ctx.get_config("languages_file"),
+#         title_languages  = "{dataset}/"+ctx.get_config("title_languages_file"),
+#     threads: 1
+#     run:
+#         autoload_context_inputs(ctx, input, wildcards)
+#         create_languages_file_base(ctx.get_config("dataset")+os.sep+ctx.get_config("languages_file"), "languages", "Beschreibung", ctx.p, ctx.obj["raw_descriptions"], ctx.obj["dataset_class"], declare_silent=True)
+#         create_languages_file_base(ctx.get_config("dataset")+os.sep+ctx.get_config("title_languages_file"), "title_languages", "Name", ctx.p, ctx.obj["raw_descriptions"], ctx.obj["dataset_class"], declare_silent=True)
+#TODO check what's newfor this
 
 rule preprocess_descriptions:
     input:
-        raw_descriptions   = "{dataset}/"+ctx.get_config("raw_descriptions_file"),
-        languages          = "{dataset}/"+ctx.get_config("languages_file"),
-        title_languages    = "{dataset}/"+ctx.get_config("title_languages_file"),
-        translations       = "{dataset}/"+ctx.get_config("translations_file"),
-        title_translations = "{dataset}/"+ctx.get_config("title_translations_file"),
+        raw_descriptions         = "{dataset}/"+ctx.get_config("raw_descriptions_file"),
+        description_languages    = "{dataset}/description_languages.json",
+        title_languages          = "{dataset}/title_languages.json",
+        # subtitle_languages       = "{dataset}/subtitle_languages.json",
+        description_translations = "{dataset}/description_translations_{language}.json",
+        title_translations       = "{dataset}/title_translations_{language}.json",
+        # subtitle_translations    = "{dataset}/title_translations.json",
     output:
         generated_paths["pp_descriptions"]
     threads: 1
     run:
-        autoload_context_inputs(ctx, input, wildcards)
-        descriptions, metainf = preprocess_descriptions_base(ctx.obj["raw_descriptions"], ctx.obj["dataset_class"], ctx.get_config("pp_components"), ctx.get_config("translate_policy"),
-                                                             ctx.obj["languages"], ctx.obj["translations"], ctx.obj["title_languages"], ctx.obj["title_translations"])
-        ctx.p.save("pp_descriptions.json", descriptions=descriptions, metainf=metainf) #TODO overhaul 16.01.2022: what about it?!
+        autoload_context_inputs(ctx, {"raw_descriptions": input["raw_descriptions"]}, wildcards)
+        languages, translations = load_lang_translate_files(ctx, ctx.p, ctx.get_config("pp_components"))
+        descriptions, metainf = preprocess_descriptions_base(ctx.obj["raw_descriptions"], ctx.obj["dataset_class"], ctx.get_config("pp_components"),
+                                                             ctx.get_config("language"), ctx.get_config("translate_policy"), languages, translations)
+        ctx.p.save("pp_descriptions.json", descriptions=descriptions, metainf=metainf)
 
 
 rule preprocess_descriptions_notranslate:
     input:
-        raw_descriptions   = "{dataset}/"+ctx.get_config("raw_descriptions_file"),
-        languages          = "{dataset}/"+ctx.get_config("languages_file"),
+        raw_descriptions       = "{dataset}/"+ctx.get_config("raw_descriptions_file"),
+        description_languages  = "{dataset}/description_languages.json",
+        title_languages        = "{dataset}/title_languages.json",
+        # subtitle_languages     = "{dataset}/subtitle_languages.json",
     output:
         generated_paths["pp_descriptions"]
     threads: 1
     run:
         assert ctx.get_config("translate_policy") != "translate", "This rule shouldn't be triggered if translate-policy == translate!!"
-        autoload_context_inputs(ctx, input, wildcards)
+        autoload_context_inputs(ctx, {"raw_descriptions": input["raw_descriptions"]}, wildcards)
+        languages, _ = load_lang_translate_files(ctx, ctx.p, ctx.get_config("pp_components"))
         descriptions, metainf = preprocess_descriptions_base(ctx.obj["raw_descriptions"], ctx.obj["dataset_class"], ctx.get_config("pp_components"),
-                                                             ctx.get_config("translate_policy"), ctx.obj["languages"])
+                                                             ctx.get_config("language"), ctx.get_config("translate_policy"), languages)
         ctx.p.save("pp_descriptions.json", descriptions=descriptions, metainf=metainf)
 
 ruleorder: preprocess_descriptions > preprocess_descriptions_notranslate

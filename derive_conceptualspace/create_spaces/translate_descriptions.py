@@ -7,7 +7,6 @@ from langdetect import detect
 from langdetect.lang_detect_exception import LangDetectException
 from tqdm import tqdm
 
-from derive_conceptualspace.settings import get_setting
 from misc_util.pretty_print import pretty_print as print
 from derive_conceptualspace.util.google_translate import translate_text
 from derive_conceptualspace.create_spaces.preprocess_descriptions import PPComponents
@@ -19,9 +18,9 @@ logger = logging.getLogger(basename(__file__))
 ########################################################################################################################
 ########################################################################################################################
 
-def get_langs(whatever_list, assert_len=True):
+def get_langs(whatever_list, assert_len=True, pgbar_name=None):
     lans = {}
-    for item in tqdm(whatever_list):
+    for item in tqdm(whatever_list, desc=pgbar_name):
         try:
             lans[item] = detect(item)
         except LangDetectException as e:
@@ -72,69 +71,46 @@ def translate_elems(whatever_list, languages=None, keys=None, already_translated
 
 
 
-def full_translate_titles(raw_descriptions, pp_components, translate_policy, title_languages_file, title_translations_file, json_persister, dataset_class):
-    pp_components = PPComponents.from_str(pp_components)
-    if (pp_components.add_coursetitle or pp_components.add_subtitle) and translate_policy == "translate": #TODO parts of this also needs to be done for onlyeng
-        title_languages = create_languages_file(title_languages_file, "title_languages", "Name", json_persister, raw_descriptions, dataset_class)
+def create_languages_file(raw_descriptions, columns, json_persister, dataset_class, declare_silent=False, pp_components=None, proc_descs=None):
+    if isinstance(columns, str):
+        columns = [columns]
+    results = {}
+    for col in columns:
         try:
-            title_translations = json_persister.load(title_translations_file, "title_translations", silent=True)
+            languages = json_persister.load(None, f"{col}_languages", loader=lambda langs: langs, silent=declare_silent)
         except FileNotFoundError:
-            title_translations = dict(title_translations={}, is_complete=False)
-        if not title_translations.get("is_complete", False):
-            descriptions = dataset_class.preprocess_raw_file(raw_descriptions)
-            subtitles = [i if str(i) != "nan" else None for i in descriptions["Untertitel"]]
-            to_translate = list(zip(*[(k, v) for k, v in title_languages.items() if v != "en"]))
-            sec_translate = list(zip(*[i for i in zip(subtitles, title_languages.values()) if i[0] and i[1] != "en"]))
-            translateds, did_update, is_complete= translate_elems(to_translate[0]+sec_translate[0], to_translate[1]+sec_translate[1], already_translated=title_translations["title_translations"] if "title_translations" in title_translations else title_translations)
-            if did_update:
-                json_persister.save(title_translations_file, title_translations=translateds, is_complete=is_complete, force_overwrite=True, ignore_confs=["DEBUG", "PP_COMPONENTS", "TRANSLATE_POLICY"])
-            title_translations = json_persister.load(title_translations_file, "title_translations", silent=True)
-            if not is_complete:
-                print("The translated Titles are not complete yet!")
-                exit(1)
-            else:
-                print("The translated titles are now complete! Yay!")
-
-        return title_translations, title_languages
-    return None, None
+            if proc_descs is None:
+                proc_descs = dataset_class.preprocess_raw_file(raw_descriptions, pp_components=PPComponents.from_str(pp_components))
+            langs = get_langs(proc_descs[col], assert_len=False, pgbar_name=f"Getting Language of {col}")
+            langs = {i[col]: langs[i[col]] for _,i in proc_descs.iterrows()}
+            json_persister.save(f"{col}_languages.json", langs=langs, ignore_confs=["DEBUG", "PP_COMPONENTS", "TRANSLATE_POLICY", "LANGUAGE"])
+            languages = json_persister.load(None, f"{col}_languages", loader=lambda langs: langs, silent=declare_silent)
+        else:
+            print(f"Languages-file for {col} already exists!")
+        results[col] = languages
+    return results
 
 
-def create_languages_file(languages_file, file_basename, column, json_persister, raw_descriptions, dataset_class, declare_silent=False):
-    try:
-        languages = json_persister.load(languages_file, file_basename, loader=lambda langs: langs, silent=declare_silent)
-    except FileNotFoundError:
-        descriptions = dataset_class.preprocess_raw_file(raw_descriptions)
-        langs = get_langs(descriptions[column], assert_len=False)
-        langs = {i["Name"]: langs[i[column]] for _,i in descriptions.iterrows()}
-        json_persister.save(basename(languages_file), langs=langs, ignore_confs=["DEBUG"])
-        languages = json_persister.load(languages_file, file_basename, loader=lambda langs: langs, silent=declare_silent)
-    return languages
-
-
-
-
-def full_translate_descriptions(raw_descriptions, translate_policy, languages_file, translations_file, json_persister, dataset_class):
-    if translate_policy == "translate":
-        languages = create_languages_file(languages_file, "languages", "Beschreibung", json_persister, raw_descriptions, dataset_class)
+def full_translate_column(raw_descriptions, translate_policy, language, column, json_persister, dataset_class, pp_components=None):
+    pp_components = PPComponents.from_str(pp_components)
+    if translate_policy == "translate" and ((column == "description") or (column == "title" and pp_components.add_title) or (column == "subtitle" and pp_components.add_subtitle)):
         try:
-            translations = json_persister.load(translations_file, "translations", silent=True)
+            translations = json_persister.load(None, f"{column}_translations", silent=True)
         except FileNotFoundError:
             translations = dict(translations={}, is_complete=False)
         if "is_complete" not in translations: #for backwards compatibility
             translations = dict(translations=translations, is_complete=False)
         if not translations["is_complete"]:
-            descriptions = dataset_class.preprocess_raw_file(raw_descriptions)
-            assert len(descriptions) == len(languages)
-            to_translate = dict([i for i in zip(descriptions["Beschreibung"], languages.values()) if i[1] != "en" and i[0] not in translations["translations"]])
+            descriptions = dataset_class.preprocess_raw_file(raw_descriptions, pp_components=pp_components)
+            languages = create_languages_file(raw_descriptions, column, json_persister, dataset_class, proc_descs=descriptions)[column]
+            to_translate = {i: languages[i] for i in descriptions[column] if languages[i] != language and i not in translations["translations"]}
             translateds, did_update, is_complete = translate_elems(list(to_translate.keys()), list(to_translate.values()), already_translated=translations["translations"])
             if did_update:
-                json_persister.save(translations_file, translations=translateds, is_complete=is_complete, force_overwrite=True, ignore_confs=["DEBUG", "PP_COMPONENTS", "TRANSLATE_POLICY"])
-            translations = json_persister.load(translations_file, "translations", silent=True)
+                json_persister.save(f"{column}_translations.json", translations=translateds, is_complete=is_complete, force_overwrite=True, ignore_confs=["DEBUG", "PP_COMPONENTS", "TRANSLATE_POLICY"])
+            translations = json_persister.load(None, f"{column}_translations", silent=True)
             if not is_complete:
-                print("The translated Descriptions are not complete yet!")
+                print(f"The translated {column}s are not complete yet!")
                 exit(1)
             else:
-                print("The translated Descriptions are now complete! Yay!")
-
-        return translations, languages
-    return None, None
+                print(f"The translated {column}s are now complete! Yay!")
+        return translations

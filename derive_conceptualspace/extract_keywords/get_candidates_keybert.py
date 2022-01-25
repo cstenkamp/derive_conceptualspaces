@@ -127,7 +127,7 @@ class KeyBertExtractor():
         print(f"This does not work: {cand}")
 
 
-    def __call__(self, text, lang="en"):
+    def __call__(self, text, lang="en"): #TODO lang shouldn't be en!!!
         """see scripts/notebooks/proof_of_concept/proofofconcept_keyBERT.ipynb for why this is like this"""
         #TODO so extract_keywords can be passed a `vectorizer`, and that is by default Sklearn's CountVectorizer.
         # You can ALSO pass `candidates`, "to use instead of extracting them from the document(s)"!!!

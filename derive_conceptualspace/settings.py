@@ -11,8 +11,8 @@ ENV_PREFIX = "MA"
 ########################################################################################################################
 
 #!! use singular for these (bzw the form you'd use if there wasn't the "ALL_" before)
-ALL_PP_COMPONENTS = ["faucsd2"]#, "autcsldp"] #,"tcsdp"                 # If in preprocessing it should add coursetitle, lemmatize, etc #TODO "autcsldp", "tcsldp" (gehen gerade nicht weil die nicht mit ngrams klarkommen)
-ALL_TRANSLATE_POLICY = ["translate", "onlyeng"]#, "origlang", "onlyeng"]          # If non-english descriptions should be translated
+ALL_PP_COMPONENTS = ["mfacsd2"]#, "autcsldp"] #,"tcsdp"                # If in preprocessing it should add coursetitle, lemmatize, etc #TODO "autcsldp", "tcsldp" (gehen gerade nicht weil die nicht mit ngrams klarkommen)
+ALL_TRANSLATE_POLICY = ["onlyorig", "translate"]#, "origlang"          # If non-english descriptions should be translated
 ALL_EMBED_ALGO = ["mds"]#, "tsne", "isomap"]                           # Actual Embedding of the Descriptions
 ALL_EMBED_DIMENSIONS = [100]#, 3] #, 50, 200                           # Actual Embedding of the Descriptions
 ALL_QUANTIFICATION_MEASURE = ["ppmi"]#, "tfidf", "count", "binary"]    # For the dissimiliarity Matrix of the Descripts
@@ -38,6 +38,7 @@ DEFAULT_VERBOSE = True
 IS_INTERACTIVE = "PYCHARM_HOSTED" in os.environ
 
 #Settings that influence the algorithm
+DEFAULT_LANGUAGE = "de"
 DEFAULT_DISSIM_MEASURE = "norm_ang_dist"  #can be: ["cosine", "norm_ang_dist"]
 DEFAULT_CANDIDATE_MIN_TERM_COUNT = 25
 DEFAULT_FASTER_KEYBERT = False
@@ -82,16 +83,12 @@ with set_noninfluentials(): #this context-manager adds all settings from here to
     DEFAULT_NOTIFY_TELEGRAM = False
 
     DEFAULT_RAW_DESCRIPTIONS_FILE = "raw_descriptions.csv"
-    DEFAULT_LANGUAGES_FILE = "languages.json"
-    DEFAULT_TRANSLATIONS_FILE = "translations.json"
-    DEFAULT_TITLE_LANGUAGES_FILE = "title_languages.json"
-    DEFAULT_TITLE_TRANSLATIONS_FILE = "title_translations.json"
     DEFAULT_LOG = "Info"
     DEFAULT_LOGFILE = ""
     DEFAULT_CONF_FILE = None
 
     DIR_STRUCT = ["{dataset}",
-                  "debug_{debug}",
+                  "{language}_debug_{debug}",
                   "{pp_components}_{translate_policy}_minwords{min_words_per_desc}",
                   "embedding_{quantification_measure}",
                   "{embed_algo}_{embed_dimensions}d",

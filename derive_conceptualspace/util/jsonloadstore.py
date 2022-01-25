@@ -230,8 +230,9 @@ class JsonPersister():
             if dirname(cand) == dirstruct:
                 correct_cands.append(cand)
         if not correct_cands:
-            print(f"You may need the file *b*{join(dirstruct, save_basename+'.json')}*b*")
-            #command is then `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR filepath)`
+            if candidates: #otherwise dirstruct is not defined
+                print(f"You may need the file *b*{join(dirstruct, save_basename+'.json')}*b*")
+                #command is then `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR filepath)`
             raise FileNotFoundError(f"There is no candidate for {save_basename} with the current config!")
         assert len(correct_cands) == 1
         return correct_cands[0]
@@ -318,7 +319,7 @@ class JsonPersister():
             if "object" in obj:
                 obj = obj["object"]
             if loader is not None:
-                if isinstance(obj, dict) and len(obj) == len(inspect.getfullargspec(loader).args) and all(i in obj for i in inspect.getfullargspec(loader).args):
+                if isinstance(obj, dict) and ((len(obj) == len(inspect.getfullargspec(loader).args) and all(i in obj for i in inspect.getfullargspec(loader).args)) or (len(inspect.getfullargspec(loader).args) == 0)):
                     obj = loader(**obj)
                 else:
                     print(f"Demanded loader for {save_basename} doesn't apply - Trying to load without it.")

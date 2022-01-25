@@ -20,6 +20,7 @@ from derive_conceptualspace.util.base_changer import NDPlane
 from derive_conceptualspace.util.desc_object import DescriptionList
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
 from derive_conceptualspace.util.jsonloadstore import JsonPersister
+from derive_conceptualspace.create_spaces.preprocess_descriptions import PPComponents
 from misc_util.logutils import CustomIO
 from misc_util.object_wrapper import ObjectWrapper
 from misc_util.pretty_print import pretty_print as print, fmt, TRANSLATOR
@@ -205,3 +206,24 @@ class SnakeContext():
     def load(self, *whats):
         for what in whats:
             self.obj[what] = self.obj["json_persister"].load(None, what, loader=self.autoloader_di.get(what, lambda **kwargs: kwargs[what]))
+
+
+
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
+
+def load_lang_translate_files(ctx, json_persister, pp_components):
+    pp_components = PPComponents.from_str(pp_components)
+    description_languages = json_persister.load(None, "description_languages", loader=lambda langs: langs)
+    title_languages = json_persister.load(None, "title_languages", loader=lambda langs: langs) if pp_components.add_title else None
+    subtitle_languages = json_persister.load(None, "subtitle_languages", loader=lambda langs: langs) if pp_components.add_subtitle else None
+    if ctx.get_config("translate_policy") == "translate":
+        description_translations = json_persister.load(None, "description_translations", loader=lambda **kw: kw["translations"])
+        title_translations = json_persister.load(None, "title_translations", loader=lambda **kw: kw["translations"]) if pp_components.add_title else None
+        subtitle_translations = json_persister.load(None, "subtitle_translations", loader=lambda **kw: kw["translations"]) if pp_components.add_subtitle else None
+    else:
+        description_translations = title_translations = subtitle_translations = None
+    languages = dict(description=description_languages, title=title_languages, subtitle=subtitle_languages)
+    translations = dict(description=description_translations, title=title_translations, subtitle=subtitle_translations)
+    return languages, translations

@@ -24,8 +24,10 @@ from misc_util.pretty_print import fmt
 ########################################################################################################################
 
 class Description():
-    def __init__(self, text, lang, title,
-                 orig_textlang=None, origlang_text=None, subtitle=None, orig_titlelang=None, origlang_title=None, origlang_subtitle=None,
+    def __init__(self, text, title,
+                 lang, orig_textlang=None, origlang_text=None,
+                 orig_titlelang=None, origlang_title=None,
+                 subtitle=None, origlang_subtitle=None, orig_subtitlelang=None,
                  additionals=None):
         self.text = text
         self.lang = lang
@@ -36,6 +38,7 @@ class Description():
         self._orig_textlang = orig_textlang
         self._origlang_text = origlang_text
         self._orig_titlelang = orig_titlelang
+        self._orig_subtitlelang = orig_subtitlelang
         self._origlang_title = origlang_title
         self._origlang_subtitle = origlang_subtitle
 
@@ -211,10 +214,11 @@ class DescriptionList():
     def __len__(self):
         return len(self._descriptions)
 
-    def confirm(self, confirmwhat):
+    def confirm(self, confirmwhat, **kwargs):
         if confirmwhat == "translate_policy":
-            assert all((i.is_translated and i.lang == "en" and i.orig_textlang != "en") or
-                       (not i.is_translated and i.orig_textlang == i.lang and i.orig_textlang == "en") for i in self._descriptions)
+            assert "language" in kwargs
+            assert all((i.is_translated and i.lang == kwargs["language"] and i.orig_textlang != kwargs["language"]) or
+                       (not i.is_translated and i.orig_textlang == i.lang and i.orig_textlang == kwargs["language"]) for i in self._descriptions)
         else:
             assert False, f"cannot confirm {confirmwhat}"
 

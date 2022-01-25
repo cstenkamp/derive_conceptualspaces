@@ -23,8 +23,7 @@ from derive_conceptualspace.settings import (
     IS_INTERACTIVE,
 )
 from derive_conceptualspace.create_spaces.translate_descriptions import (
-    full_translate_titles as translate_titles_base,
-    full_translate_descriptions as translate_descriptions_base,
+    full_translate_column as translate_column_base,
     create_languages_file as create_languages_file_base,
     # count_translations as count_translations_base
 )
@@ -52,8 +51,7 @@ from derive_conceptualspace.unfinished_commands import (
     show_data_info as show_data_info_base,
 )
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
-from derive_conceptualspace.pipeline import cluster_loader
-from derive_conceptualspace.pipeline import CustomContext
+from derive_conceptualspace.pipeline import cluster_loader, CustomContext, load_lang_translate_files
 
 logger = logging.getLogger(basename(__file__))
 
@@ -129,67 +127,51 @@ def process_result(*args, **kwargs):
 #     return count_translations_base(ctx.obj["base_dir"], mds_basename=mds_basename, descriptions_basename=descriptions_basename)
 
 @cli.command()
+@click.option("--pp-components", type=str, default=None)
 @click.option("--raw-descriptions-file", type=str, default=None)
-@click.option("--languages-file", type=str, default=None)
-@click.option("--title-languages-file", type=str, default=None)
 @click_pass_add_context
-def check_languages(ctx, raw_descriptions_file, languages_file, title_languages_file):
+def check_languages(ctx, raw_descriptions_file, pp_components):
     raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions")
-    create_languages_file_base(languages_file, "languages", "Beschreibung", ctx.obj["json_persister"], raw_descriptions, ctx.obj["dataset_class"], declare_silent=True)
-    create_languages_file_base(title_languages_file, "title_languages", "Name", ctx.obj["json_persister"], raw_descriptions, ctx.obj["dataset_class"], declare_silent=True)
+    create_languages_file_base(raw_descriptions, ["description", "title", "subtitle"], ctx.obj["json_persister"], ctx.obj["dataset_class"], declare_silent=True, pp_components=pp_components)
     #no need to save, that's done inside the function.
 
 
 
+# @cli.command()
+# @click.option("--pp-components", type=str, default=None)
+# @click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=None)
+# @click.option("--raw-descriptions-file", type=str, default=None)
+# @click_pass_add_context
+# def translate_titles(ctx, pp_components, translate_policy, raw_descriptions_file, title_languages_file, title_translations_file):
+#     raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions")
+#     translate_titles_base(raw_descriptions, "titles", title_languages_file, title_translations_file, ctx.obj["json_persister"], ctx.obj["dataset_class"], pp_components=ctx.get_config("pp_components"), translate_policy=translate_policy)
+#     #no need to save, that's done inside the function.
+
+
 @cli.command()
+@click.argument("column", type=click.Choice(["description", "title", "subtitle"], case_sensitive=True))
+@click.option("--language", type=str, default=None)
 @click.option("--pp-components", type=str, default=None)
 @click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=None)
 @click.option("--raw-descriptions-file", type=str, default=None)
-@click.option("--title-languages-file", type=str, default=None)
-@click.option("--title-translations-file", type=str, default=None)
 @click_pass_add_context
-def translate_titles(ctx, pp_components, translate_policy, raw_descriptions_file, title_languages_file, title_translations_file):
+def translate_descriptions(ctx, translate_policy, raw_descriptions_file, language, pp_components):
     raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions")
-    translate_titles_base(raw_descriptions, pp_components, translate_policy, title_languages_file, title_translations_file, ctx.obj["json_persister"], ctx.obj["dataset_class"])
+    translate_column_base(raw_descriptions, translate_policy, language, "title", ctx.obj["json_persister"], ctx.obj["dataset_class"], pp_components=pp_components)
     #no need to save, that's done inside the function.
 
 
 @cli.command()
-@click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=None)
-@click.option("--raw-descriptions-file", type=str, default=None)
-@click.option("--languages-file", type=str, default=None)
-@click.option("--translations-file", type=str, default=None)
-@click_pass_add_context
-def translate_descriptions(ctx, translate_policy, raw_descriptions_file, languages_file, translations_file):
-    raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions")
-    translate_descriptions_base(raw_descriptions, translate_policy, languages_file, translations_file, ctx.obj["json_persister"], ctx.obj["dataset_class"])
-    #no need to save, that's done inside the function.
-
-
-@cli.command()
+@click.option("--language", type=str, default=None)
 @click.option("--pp-components", type=str, default=None)
 @click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=None)
 @click.option("--raw-descriptions-file", type=str, default=None)
-@click.option("--languages-file", type=str, default=None)
-@click.option("--translations-file", type=str, default=None)
-@click.option("--title-languages-file", type=str, default=None)
-@click.option("--title-translations-file", type=str, default=None)
 @click.option("--max-ngram", type=int, default=None)
 @click_pass_add_context
-def preprocess_descriptions(ctx, json_persister, dataset_class, raw_descriptions_file, languages_file, translations_file, title_languages_file, title_translations_file):
+def preprocess_descriptions(ctx, json_persister, dataset_class, raw_descriptions_file, pp_components, language):
     raw_descriptions = json_persister.load(raw_descriptions_file, "raw_descriptions")
-    languages = json_persister.load(languages_file, "languages", loader=lambda langs: langs)
-    try:
-        title_languages = json_persister.load(title_languages_file, "title_languages", loader=lambda langs: langs)
-    except FileNotFoundError:
-        title_languages = languages
-    if ctx.get_config("translate_policy") == "translate":
-        translations = json_persister.load(translations_file, "translations", loader=lambda **kw: kw["translations"])
-        title_translations = translations #json_persister.load(title_translations_file, "title_translations", loader=lambda **kw: kw["title_translations"]) #TODO maybe add back some time
-        # TODO[e] depending on pp_compoments, title_languages etc may still allowed to be empty
-    else:
-        translations, title_translations = None, None
-    descriptions, metainf = preprocess_descriptions_base(raw_descriptions, dataset_class, ctx.get_config("pp_components"), ctx.get_config("translate_policy"), languages, translations, title_languages, title_translations)
+    languages, translations = load_lang_translate_files(ctx, json_persister, pp_components)
+    descriptions, metainf = preprocess_descriptions_base(raw_descriptions, dataset_class, pp_components, language, ctx.get_config("translate_policy"), languages, translations)
     json_persister.save("pp_descriptions.json", descriptions=descriptions, metainf=metainf)
 
 
@@ -199,6 +181,7 @@ def preprocess_descriptions(ctx, json_persister, dataset_class, raw_descriptions
 #create-spaces group
 
 @cli.group()
+@click.option("--language", type=str, default=None)
 @click.option("--pp-components", type=str, default=None)
 @click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=None)
 @click.option("--quantification-measure", type=click.Choice(ALL_QUANTIFICATION_MEASURE, case_sensitive=False), default=None)
