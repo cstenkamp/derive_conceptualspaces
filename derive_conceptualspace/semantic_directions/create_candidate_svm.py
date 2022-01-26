@@ -1,5 +1,4 @@
 from itertools import repeat
-from multiprocessing import Pool
 from multiprocessing.pool import ThreadPool
 import warnings
 from textwrap import shorten
@@ -19,9 +18,6 @@ from misc_util.pretty_print import pretty_print as print
 norm = lambda vec: vec/np.linalg.norm(vec)
 vec_cos = lambda v1, v2: np.arccos(np.clip(np.dot(norm(v1), norm(v2)), -1.0, 1.0))  #https://stackoverflow.com/a/13849249/5122790
 
-import ray
-from derive_conceptualspace.settings import N_CPUS
-from datetime import datetime
 
 def create_candidate_svms(dcm, embedding, descriptions, verbose):
     metrics = {}
@@ -32,48 +28,20 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose):
     elif dcm.quant_name != compareto_ranking:
         # Ensure that regardless of quant_measure `np.array(quants, dtype=bool)` are correct binary classification labels
         raise NotImplementedError()
-
-    terms = list(dcm.all_terms.values())[:40]
+    terms = dcm.all_terms.values()
     quants_s = [dcm.term_quants(term) for term in terms]
-
-    # print("Starting Single-Threaded at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
-    # for term, quants in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs"):
-    #     cand_mets, decision_plane, term = create_candidate_svm(embedding.embedding_, term, quants, quant_name=dcm.quant_name)
-    #     metrics[term] = cand_mets
-    #     decision_planes[term] = decision_plane
-    # print("Done Single-Threaded at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
-
-
-    print("Starting with MP at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
-    with tqdm(total=40) as pgbar, ThreadPool(N_CPUS) as p:
-        res = p.starmap(create_candidate_svm, zip(repeat(embedding.embedding_), terms, quants_s, repeat(False), repeat(None), repeat(dcm.quant_name), repeat(pgbar)))
-    print("Done with MP at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
-    print()
-
-
-    # embedding_id = ray.put(embedding.embedding_)
-    # result_ids = []
-    # print("Starting with ray at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
-    # for term, quants in zip(terms, quants_s):
-    #     tmp = create_candidate_svm.remote(embedding_id, term, quants, quant_name=dcm.quant_name)
-    #     result_ids.append(tmp)
-    # results = ray.get(result_ids)
-    # print("Done with ray at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
-    # print()
-
-
-    # def to_iterator(obj_ids):
-    #     while obj_ids:
-    #         done, obj_ids = ray.wait(obj_ids)
-    #         yield ray.get(done[0])
-    # embedding_id = ray.put(embedding.embedding_)
-    # print("Starting with ray at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
-    # obj_ids = [create_candidate_svm.remote(embedding_id, term, quants, quant_name=dcm.quant_name) for term, quants in zip(terms, quants_s)]
-    # for cand_mets, decision_plane, term in tqdm(to_iterator(obj_ids), total=len(obj_ids)):
-    #     metrics[term] = cand_mets
-    #     decision_planes[term] = decision_plane
-    # print("Done with ray at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
-
+    if get_setting("N_CPUS") == 1:
+        for term, quants in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs"):
+            cand_mets, decision_plane, term = create_candidate_svm(embedding.embedding_, term, quants, quant_name=dcm.quant_name)
+            metrics[term] = cand_mets
+            decision_planes[term] = decision_plane
+    else:
+        print(f"Running Multithreaded with {get_setting('N_CPUS')} threads.")
+        with tqdm(total=len(quants_s), desc="Creating Candidate SVMs") as pgbar, ThreadPool(get_setting("N_CPUS")) as p:
+            res = p.starmap(create_candidate_svm, zip(repeat(embedding.embedding_), terms, quants_s, repeat(False), repeat(None), repeat(dcm.quant_name), repeat(pgbar)))
+        for cand_mets, decision_plane, term in res:
+            metrics[term] = cand_mets
+            decision_planes[term] = decision_plane
 
     if verbose:
         df = pd.DataFrame(metrics).T
@@ -128,13 +96,13 @@ def select_salient_terms(metrics, decision_planes, prim_lambda, sec_lambda, metr
     # TODO maybe have a smart weighting function that takes into account the kappa-score of the term and/or the closeness to the original clustercenter
     return clusters, cluster_directions
 
-# @ray.remote
 def create_candidate_svm(embedding, term, quants, plot_svm=False, descriptions=None, quant_name=None, pgbar=None):
-    #TODO [DESC15]: "we adapted the costs of the training instances to deal with class imbalance (using the ratio between entities with/without the term as cost)"
-    # TODO figure out if there's a reason to choose LinearSVC over SVC(kernel=linear) or vice versa!
     bin_labels = np.array(quants, dtype=bool) # Ensure that regardless of quant_measure this is correct binary classification labels
     # (tmp := len(quants)/(2*np.bincount(bin_labels)))[0]/tmp[1] is roughly equal to bin_labels.mean() so balancing is good
-    svm = sklearn.svm.LinearSVC(dual=False, class_weight="balanced")
+    # see https://stackoverflow.com/q/33843981/5122790, https://stackoverflow.com/q/35076586/5122790
+    # svm = sklearn.svm.SVC(kernel="linear", class_weight="balanced")  #slow as fuck
+    # svm = sklearn.svm.LinearSVC(dual=False, class_weight="balanced") #squared-hinge instead of hinge (but fastest!)
+    svm = sklearn.svm.LinearSVC(class_weight="balanced", loss="hinge", max_iter=8000)
     svm.fit(embedding, bin_labels)
     svm_results = svm.decision_function(embedding)
     tn, fp, fn, tp = confusion_matrix(bin_labels, [i > 0 for i in svm_results]).ravel()

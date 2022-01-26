@@ -1,0 +1,20 @@
+#!/bin/bash
+#$ -N log_Tensor
+#$ -l mem=3G
+#$ -pe default 2
+
+
+wget -q https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+bash Miniconda3-latest-Linux-x86_64.sh -b -p "$HOME/miniconda"
+rm Miniconda3-latest-Linux-x86_64.sh
+
+export PATH="$HOME/miniconda/bin:$PATH"
+
+conda create -y -q --name tensorflow python=3.9.1
+
+conda activate derive_conceptualspaces
+
+conda deactivate derive_conceptualspaces
+
+cd $HOME/miniconda/pkgs
+rm *.tar.bz2 -f 2> /dev/null

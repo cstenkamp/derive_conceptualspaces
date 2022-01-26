@@ -37,7 +37,7 @@ DEFAULT_RANDOM_SEED = 1
 DEFAULT_SEED_ONLY_IN_DEBUG = True
 DEFAULT_VERBOSE = True
 IS_INTERACTIVE = "PYCHARM_HOSTED" in os.environ
-N_CPUS = psutil.cpu_count(logical=False)
+DEFAULT_N_CPUS = max(psutil.cpu_count(logical=False), psutil.cpu_count(logical=True)-2)
 
 #Settings that influence the algorithm
 DEFAULT_LANGUAGE = "de"
@@ -78,7 +78,7 @@ def set_noninfluentials():
     globals()["NON_INFLUENTIAL_CONFIGS"] += [i[len("DEFAULT_"):] if i.startswith("DEFAULT_") else i for i in added_vars]
 
 
-NON_INFLUENTIAL_CONFIGS = ["CONF_FILE", "GOOGLE_CREDENTIALS_FILE", "VERBOSE", "STARTUP_ENVVARS", "IS_INTERACTIVE", "ENV_PREFIX", "DEFAULT_SEED_ONLY_IN_DEBUG"]
+NON_INFLUENTIAL_CONFIGS = ["CONF_FILE", "GOOGLE_CREDENTIALS_FILE", "VERBOSE", "STARTUP_ENVVARS", "IS_INTERACTIVE", "ENV_PREFIX", "DEFAULT_SEED_ONLY_IN_DEBUG", "N_CPUS"]
 with set_noninfluentials(): #this context-manager adds all settings from here to the NON_INFLUENTIAL_CONFIGS variable
 
     DEFAULT_BASE_DIR = abspath(join(dirname(__file__), "..", "..", ENV_PREFIX+"_data"))

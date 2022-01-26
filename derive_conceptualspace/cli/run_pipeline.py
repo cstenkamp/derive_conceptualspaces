@@ -12,7 +12,6 @@ if abspath(join(dirname(__file__), "../..")) not in sys.path:
 
 from dotenv import load_dotenv
 import click
-import ray
 
 from misc_util.telegram_notifier import telegram_notify
 from misc_util.pretty_print import pretty_print as print
@@ -23,7 +22,6 @@ from derive_conceptualspace.settings import (
     ALL_TRANSLATE_POLICY, ALL_QUANTIFICATION_MEASURE, ALL_EXTRACTION_METHOD, ALL_EMBED_ALGO, ALL_DCM_QUANT_MEASURE,
     ENV_PREFIX,
     IS_INTERACTIVE,
-    N_CPUS,
 )
 from derive_conceptualspace.create_spaces.translate_descriptions import (
     full_translate_column as translate_column_base,
@@ -112,7 +110,6 @@ def cli(ctx):
     print("Starting up at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
     setup_logging(ctx.get_config("log"), ctx.get_config("logfile"))
     ctx.init_context() #after this point, no new env-vars should be set anymore (are not considered)
-    # ray.init(num_cpus=N_CPUS)
 
 @cli.resultcallback()
 def process_result(*args, **kwargs):
