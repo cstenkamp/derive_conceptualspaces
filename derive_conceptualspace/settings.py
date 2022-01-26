@@ -1,3 +1,4 @@
+import psutil
 import contextlib
 from os.path import abspath, dirname, join
 import os
@@ -36,6 +37,7 @@ DEFAULT_RANDOM_SEED = 1
 DEFAULT_SEED_ONLY_IN_DEBUG = True
 DEFAULT_VERBOSE = True
 IS_INTERACTIVE = "PYCHARM_HOSTED" in os.environ
+N_CPUS = psutil.cpu_count(logical=False)
 
 #Settings that influence the algorithm
 DEFAULT_LANGUAGE = "de"

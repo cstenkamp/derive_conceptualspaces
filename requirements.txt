@@ -36,3 +36,5 @@ plotly==4.14.3
 
 snakemake==6.9.1
 gensim==4.1.2
+
+psutil

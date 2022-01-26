@@ -1,3 +1,6 @@
+from itertools import repeat
+from multiprocessing import Pool
+from multiprocessing.pool import ThreadPool
 import warnings
 from textwrap import shorten
 
@@ -16,6 +19,9 @@ from misc_util.pretty_print import pretty_print as print
 norm = lambda vec: vec/np.linalg.norm(vec)
 vec_cos = lambda v1, v2: np.arccos(np.clip(np.dot(norm(v1), norm(v2)), -1.0, 1.0))  #https://stackoverflow.com/a/13849249/5122790
 
+import ray
+from derive_conceptualspace.settings import N_CPUS
+from datetime import datetime
 
 def create_candidate_svms(dcm, embedding, descriptions, verbose):
     metrics = {}
@@ -26,10 +32,49 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose):
     elif dcm.quant_name != compareto_ranking:
         # Ensure that regardless of quant_measure `np.array(quants, dtype=bool)` are correct binary classification labels
         raise NotImplementedError()
-    for term in tqdm(dcm.all_terms.values(), desc="Creating Candidate SVMs"):
-        cand_mets, decision_plane = create_candidate_svm(embedding, term, dcm.term_quants(term), quant_name=dcm.quant_name)
-        metrics[term] = cand_mets
-        decision_planes[term] = decision_plane
+
+    terms = list(dcm.all_terms.values())[:40]
+    quants_s = [dcm.term_quants(term) for term in terms]
+
+    # print("Starting Single-Threaded at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
+    # for term, quants in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs"):
+    #     cand_mets, decision_plane, term = create_candidate_svm(embedding.embedding_, term, quants, quant_name=dcm.quant_name)
+    #     metrics[term] = cand_mets
+    #     decision_planes[term] = decision_plane
+    # print("Done Single-Threaded at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
+
+
+    print("Starting with MP at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
+    with tqdm(total=40) as pgbar, ThreadPool(N_CPUS) as p:
+        res = p.starmap(create_candidate_svm, zip(repeat(embedding.embedding_), terms, quants_s, repeat(False), repeat(None), repeat(dcm.quant_name), repeat(pgbar)))
+    print("Done with MP at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
+    print()
+
+
+    # embedding_id = ray.put(embedding.embedding_)
+    # result_ids = []
+    # print("Starting with ray at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
+    # for term, quants in zip(terms, quants_s):
+    #     tmp = create_candidate_svm.remote(embedding_id, term, quants, quant_name=dcm.quant_name)
+    #     result_ids.append(tmp)
+    # results = ray.get(result_ids)
+    # print("Done with ray at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
+    # print()
+
+
+    # def to_iterator(obj_ids):
+    #     while obj_ids:
+    #         done, obj_ids = ray.wait(obj_ids)
+    #         yield ray.get(done[0])
+    # embedding_id = ray.put(embedding.embedding_)
+    # print("Starting with ray at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
+    # obj_ids = [create_candidate_svm.remote(embedding_id, term, quants, quant_name=dcm.quant_name) for term, quants in zip(terms, quants_s)]
+    # for cand_mets, decision_plane, term in tqdm(to_iterator(obj_ids), total=len(obj_ids)):
+    #     metrics[term] = cand_mets
+    #     decision_planes[term] = decision_plane
+    # print("Done with ray at", datetime.now().strftime("%d.%m.%Y, %H:%M:%S"))
+
+
     if verbose:
         df = pd.DataFrame(metrics).T
         df.columns = df.columns.str.replace("kappa", "k").str.replace("rank2rank", "r2r").str.replace("bin2bin", "b2b").str.replace("f_one", "f1").str.replace("digitized", "dig")
@@ -39,9 +84,9 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose):
                 print(str(df.sort_values(by=metricname, ascending=False)[:10]).replace(metricname, f"*r*{metricname}*r*"))
         if embedding.embedding_.shape[1] == 3 and IS_INTERACTIVE:
             best_elem = max(metrics.items(), key=lambda x:x[1]["f_one"])
-            create_candidate_svm(embedding, best_elem[0], dcm.term_quants[best_elem[0]], plot_svm=True, descriptions=descriptions)
+            create_candidate_svm(embedding, best_elem[0], dcm, plot_svm=True, descriptions=descriptions)
             while (another := input("Another one to display: ").strip()) != "" and another not in dcm.term_existinds(use_index=False):
-                create_candidate_svm(embedding, another, dcm.term_quants[another], plot_svm=True, descriptions=descriptions)
+                create_candidate_svm(embedding, another, dcm, plot_svm=True, descriptions=descriptions)
     # clusters, cluster_directions = select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda)
     return decision_planes, metrics
 
@@ -83,15 +128,15 @@ def select_salient_terms(metrics, decision_planes, prim_lambda, sec_lambda, metr
     # TODO maybe have a smart weighting function that takes into account the kappa-score of the term and/or the closeness to the original clustercenter
     return clusters, cluster_directions
 
-
-def create_candidate_svm(embedding, term, quants, plot_svm=False, descriptions=None, quant_name=None):
+# @ray.remote
+def create_candidate_svm(embedding, term, quants, plot_svm=False, descriptions=None, quant_name=None, pgbar=None):
     #TODO [DESC15]: "we adapted the costs of the training instances to deal with class imbalance (using the ratio between entities with/without the term as cost)"
     # TODO figure out if there's a reason to choose LinearSVC over SVC(kernel=linear) or vice versa!
     bin_labels = np.array(quants, dtype=bool) # Ensure that regardless of quant_measure this is correct binary classification labels
     # (tmp := len(quants)/(2*np.bincount(bin_labels)))[0]/tmp[1] is roughly equal to bin_labels.mean() so balancing is good
     svm = sklearn.svm.LinearSVC(dual=False, class_weight="balanced")
-    svm.fit(embedding.embedding_, bin_labels)
-    svm_results = svm.decision_function(embedding.embedding_)
+    svm.fit(embedding, bin_labels)
+    svm_results = svm.decision_function(embedding)
     tn, fp, fn, tp = confusion_matrix(bin_labels, [i > 0 for i in svm_results]).ravel()
     precision = tp / (tp + fp); recall = tp / (tp + fn); accuracy = (tp + tn) / len(quants)
     f_one = 2*(precision*recall)/(precision+recall)
@@ -102,7 +147,7 @@ def create_candidate_svm(embedding, term, quants, plot_svm=False, descriptions=N
     #see notebooks/proof_of_concept/get_svm_decisionboundary.ipynb#Checking-projection-methods-&-distance-measures-from-point-to-projection for the ranking
     decision_plane = NDPlane(svm.coef_[0], svm.intercept_[0])  #don't even need the plane class here
     dist = lambda x, plane: np.dot(plane.normal, x) + plane.intercept
-    distances = [dist(point, decision_plane) for point in embedding.embedding_]
+    distances = [dist(point, decision_plane) for point in embedding]
     #sanity check: do most of the points with label=0 have the same sign `np.count_nonzero(np.sign(np.array(distances)[bin_labels])+1)`
     # quant_ranking = np.zeros(quants.shape); quant_ranking[np.where(quants > 0)] = np.argsort(quants[quants > 0])
     #TODO cohen's kappa hat nen sample_weight parameter!! DESC15 write they select Kappa "due to its tolerance to class imbalance." -> Does that mean I have to set the weight?!
@@ -123,8 +168,10 @@ def create_candidate_svm(embedding, term, quants, plot_svm=False, descriptions=N
         #one ^ has as histogram-bins what it would be for ALL data, two only for the nonzero-ones
         res["kappa_digitized_onlypos_2"] = cohen_kappa_score(np.digitize(q2, np.histogram_bin_edges(q2)[1:]), np.digitize(d2, np.histogram_bin_edges(d2)[1:]))
     if plot_svm and descriptions is not None:
-        display_svm(embedding.embedding_, np.array(bin_labels, dtype=int), svm, term=term, descriptions=descriptions, name=f"{term}: accuracy: {accuracy:.2f} | precision: {precision:.2f} | recall: {recall:.2f} | kappa: {kappa:.4f}")
-    return res, decision_plane
+        display_svm(embedding, np.array(bin_labels, dtype=int), svm, term=term, descriptions=descriptions, name=f"{term}: accuracy: {accuracy:.2f} | precision: {precision:.2f} | recall: {recall:.2f} | kappa: {kappa:.4f}")
+    if pgbar is not None:
+        pgbar.update(1)
+    return res, decision_plane, term
 
 
 
