@@ -319,6 +319,17 @@ def rank_saldirs(ctx):
                       prim_lambda=ctx.get_config("prim_lambda"), sec_lambda=ctx.get_config("sec_lambda"), metricname=ctx.get_config("classifier_succmetric"))
 
 
+@cli.command()
+@click_pass_add_context
+def list_paramcombis(ctx):
+    # TODO this should ONLY consider command-line-args as config to compare the candidates to
+    candidates = [join(path, name)[len(ctx.p.in_dir):] for path, subdirs, files in os.walk(join(ctx.p.in_dir, "")) for
+                  name in files if name.startswith("clusters.json")]
+    candidates = [i for i in candidates if i.startswith(ctx.p.get_subdir({i: ctx.get_config(i) for i in ["DEBUG", "DATASET", "LANGUAGE"]})[0])]
+
+
+
+
 @generate_conceptualspace.command()
 @click_pass_add_context
 def run_lsi_gensim(ctx):

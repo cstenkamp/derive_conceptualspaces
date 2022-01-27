@@ -74,6 +74,7 @@ class Comparer():
 def select_salient_terms(metrics, decision_planes, prim_lambda, sec_lambda, metricname):
     #TODO waitwaitwait. Am I 100% sure that the intercepts of the decision_planes are irrelevant?!
     print(f"Calculated Metrics: {list(list(metrics.values())[0].keys())}")
+    print(f"Lambda1: {prim_lambda}, Lambda2: {sec_lambda}, compareto-metric: {metricname}")
     get_tlambda = lambda metrics, lamb: [i[0] for i in metrics.items() if i[1][metricname] >= prim_lambda]
     get_tlambda2 = lambda metrics, primlamb, seclamb: [i[0] for i in metrics.items() if i[1][metricname] >= sec_lambda and i[1][metricname] < prim_lambda]
     candidates = get_tlambda(metrics, prim_lambda)
