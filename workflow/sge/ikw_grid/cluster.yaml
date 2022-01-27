@@ -13,3 +13,7 @@ __default__:
   join: yes
   output: logs/sge/snakejob.{rulename}.{jobid}.log
   error: logs/sge/snakejob.{rulename}.{jobid}.log
+  mem: 1 #the ikw grid requires the "-l mem" argument (and this cookiecutter requires it to be the GB-amount as int)
+
+nonrequestables:
+  - "tmpdir" #the ikw grid doesn't allow to request a tmpdir

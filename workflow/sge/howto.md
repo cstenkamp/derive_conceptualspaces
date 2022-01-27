@@ -5,7 +5,7 @@
 * then you can run `python -m derive_conceptualspace --env-file /home/student/c/cstenkamp/derive_conceptualspaces/config/siddata.env generate-conceptualspace show-data-info` (not on the gate however! `ssh` form there onto another machine first)
 * For snakemake, see https://snakemake.readthedocs.io/en/stable/executing/cluster.html 
 
-===== 
+
 
 ## Set up the snakemake-profile for the grid
 

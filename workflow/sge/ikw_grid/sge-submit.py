@@ -73,7 +73,7 @@ RESOURCE_MAPPING = {
     # default host resources
     "slots"            : ("slots",),
     "s_vmem"           : ("s_vmem", "soft_memory", "soft_virtual_memory"),
-    "h_vmem"           : ("h_vmem", "mem", "memory", "virtual_memory"),
+    "mem"              : ("h_vmem", "mem", "memory", "virtual_memory"), #it must be named "mem" for the ikw-grid
     "s_fsize"          : ("s_fsize", "soft_file_size"),
     "h_fsize"          : ("h_fsize", "file_size"),
 }
@@ -143,10 +143,12 @@ def format_job_properties(string):
     return string.format(rulename=job_properties['rule'], jobid=job_properties['jobid'])
 
 
-def parse_qsub_settings(source, resource_mapping=RESOURCE_MAPPING, option_mapping=OPTION_MAPPING):
+def parse_qsub_settings(source, resource_mapping=RESOURCE_MAPPING, option_mapping=OPTION_MAPPING, nonrequestables=None):
     job_options = { "options" : {}, "resources" : {}}
 
     for skey, sval in source.items():
+        if nonrequestables and skey in nonrequestables:
+            continue
         found = False
         for rkey, rval in resource_mapping.items():
             if skey in rval:
@@ -237,21 +239,21 @@ add_custom_resources(cluster_config["__resources__"])
 add_custom_options(cluster_config["__options__"])
 
 # qsub default arguments
-update_double_dict(qsub_settings, parse_qsub_settings(parse_qsub_defaults(QSUB_DEFAULTS)))
+update_double_dict(qsub_settings, parse_qsub_settings(parse_qsub_defaults(QSUB_DEFAULTS), nonrequestables=cluster_config["nonrequestables"]))
 
 # cluster_config defaults
-update_double_dict(qsub_settings, parse_qsub_settings(cluster_config["__default__"]))
+update_double_dict(qsub_settings, parse_qsub_settings(cluster_config["__default__"], nonrequestables=cluster_config["nonrequestables"]))
 
 # resources defined in the snakemake file (note that these must be integer)
 # we pass an empty dictionary for option_mapping because options should not be
 # specified in the snakemake file
-update_double_dict(qsub_settings, parse_qsub_settings(job_properties.get("resources", {}), option_mapping={}))
+update_double_dict(qsub_settings, parse_qsub_settings(job_properties.get("resources", {}), option_mapping={}, nonrequestables=cluster_config["nonrequestables"]))
 
 # get any rule specific options/resources from the default cluster config
-update_double_dict(qsub_settings, parse_qsub_settings(cluster_config.get(job_properties.get("rule"), {})))
+update_double_dict(qsub_settings, parse_qsub_settings(cluster_config.get(job_properties.get("rule"), {}), nonrequestables=cluster_config["nonrequestables"]))
 
 # get any options/resources specified through the --cluster-config command line argument
-update_double_dict(qsub_settings, parse_qsub_settings(job_properties.get("cluster", {})))
+update_double_dict(qsub_settings, parse_qsub_settings(job_properties.get("cluster", {}), nonrequestables=cluster_config["nonrequestables"]))
 
 # ensure qsub output dirs exist
 for o in ("o", "e"):

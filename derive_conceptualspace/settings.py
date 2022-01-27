@@ -38,6 +38,7 @@ DEFAULT_SEED_ONLY_IN_DEBUG = True
 DEFAULT_VERBOSE = True
 IS_INTERACTIVE = "PYCHARM_HOSTED" in os.environ
 DEFAULT_N_CPUS = max(psutil.cpu_count(logical=False), psutil.cpu_count(logical=True)-2)
+#TODO on the grid there is $NSLOTS (see https://doc.ikw.uni-osnabrueck.de/content/grid-computing) - use that as well!
 
 #Settings that influence the algorithm
 DEFAULT_LANGUAGE = "de"
