@@ -11,6 +11,7 @@ Docker in VM   `ma_cont snakemake --cores 3 -p --directory /opt/data/siddata by_
                   where ma_cont = `docker run -it --rm --user $(id -u):$(id -g) --name derive_conceptualspaces_cont -v ~/data:/opt/data --env-file ~/derive_conceptualspaces/test_env.env derive_conceptualspaces`
                   (so there's a bug that you have to specify `--directory` which includes the dataset-name but whatever)
 """
+#TODO: Job Groups! See https://snakemake.readthedocs.io/en/stable/executing/cluster.html
 
 import itertools
 import os

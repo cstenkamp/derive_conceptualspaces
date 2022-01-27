@@ -1,6 +1,7 @@
 import hashlib
 import os
 import random
+from datetime import datetime
 
 import click
 import numpy as np
@@ -46,9 +47,9 @@ class CustomContext(ObjectWrapper):
         return self.obj["json_persister"]
 
     def reattach(self, ctx): #If I have this ontop of click's context, then for every subcommand call I have to reattach the click-context
-        toset, used, init = self.toset_configs, self.used_configs, self._initialized
+        restore_attrs = {k: getattr(self, k) for k in self._wrapped.__dict__.keys() - click.core.Context(self.command).__dict__.keys()}
         self.wrapper_setattr("_wrapped", ctx)
-        self.toset_configs, self.used_configs, self._initialized = toset, used, init
+        [setattr(self, k, v) for k, v in restore_attrs.items()]
         return self
 
     def set_debug(self):
@@ -89,6 +90,7 @@ class CustomContext(ObjectWrapper):
             self.set_debug()
             if self.has_config("base_dir", include_default=False):
                 os.chdir(self.get_config("base_dir"))
+            self._init_time = datetime.now()
             self._initialized = True
 
     def set_config(self, key, val, source): #this is only a suggestion, it will only be finally set once it's accessed!

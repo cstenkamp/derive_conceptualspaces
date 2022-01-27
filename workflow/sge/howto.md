@@ -1,4 +1,6 @@
 ## How to run this on the IKW Grid
-* `qsub install_conda.sge` (ensure you don't run out of space)
-* then, add an env-file, eg `siddata.env` (see `./sample.env`)
-* then you can run `python -m derive_conceptualspace --env-file /home/student/c/cstenkamp/derive_conceptualspaces/config/siddata.env generate-conceptualspace show-data-info`
+* Install the Code-base: `qsub install_conda.sge` (ensure you don't run out of space)
+* Add an env-file for the config, eg `siddata.env` (see `./sample.env`)
+* Upload the data you need, eg. using `rsync`: `rsync -az --progress path/to/your/dataset/siddata2022/ grid:/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/siddata2022 --exclude .snakemake`
+* then you can run `python -m derive_conceptualspace --env-file /home/student/c/cstenkamp/derive_conceptualspaces/config/siddata.env generate-conceptualspace show-data-info` (not on the gate however! `ssh` form there onto another machine first)
+* For snakemake, see https://snakemake.readthedocs.io/en/stable/executing/cluster.html 

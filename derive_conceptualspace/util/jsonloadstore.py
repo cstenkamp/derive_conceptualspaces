@@ -6,7 +6,7 @@ import re
 import subprocess
 import sys
 import warnings
-from datetime import datetime
+from datetime import datetime, timedelta
 from os.path import isfile, splitext, dirname, join
 
 import numpy as np
@@ -351,9 +351,10 @@ class JsonPersister():
         loaded_files = {k: dict(path=v["path"], used_in=makelist(v["used_in"], basename), metadata=v["metadata"]) for k, v in self.loaded_objects.items()}
         # assert all(self.ctx.obj[v] == k for v, k in self.loaded_relevant_params.items()) #TODO overhaul 16.01.2022: add back?!
         os.makedirs(join(self.out_dir, subdir), exist_ok=True)
+        runtime = int((datetime.now()-self.ctx._init_time).total_seconds()) #restore as string: str(timedelta(seconds=runtime))
         obj = {"loaded_files": loaded_files, "used_influentials": used_influentials,
                "basename": basename, "obj_info": get_all_info(), "created_plots": self.created_plots,
-               "used_config": (self.ctx.used_configs, self.ctx.toset_configs), "metainf": metainf,
+               "used_config": (self.ctx.used_configs, self.ctx.toset_configs), "metainf": metainf, "runtime": runtime,
                "object": kwargs} #object should be last!!
         name = json_dump(obj, join(self.out_dir, subdir, filename+ext), forbid_overwrite=not force_overwrite)
         new_influentials = {k: v for k, v in used_influentials.items() if k not in self.loaded_influentials}

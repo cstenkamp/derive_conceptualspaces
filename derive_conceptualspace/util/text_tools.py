@@ -38,7 +38,7 @@ def load_desc15_stopwords():
 def get_stopwords(language, include_desc15_stopwords=True, include_custom=True):
     if language in NLTK_LAN_TRANSLATOR:
         language = NLTK_LAN_TRANSLATOR[language]
-    assert language in NLTK_LAN_TRANSLATOR.values()
+    assert language in NLTK_LAN_TRANSLATOR.values(), f"Cannot deal with language {language}"
     stopwords = set(nlstopwords.words(language))
     if include_desc15_stopwords and language == "english":
         stopwords |= load_desc15_stopwords()

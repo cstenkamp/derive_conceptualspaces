@@ -38,3 +38,4 @@ snakemake==6.9.1
 gensim==4.1.2
 
 psutil
+graphviz==0.19.1 #to visualize the dependency graph
