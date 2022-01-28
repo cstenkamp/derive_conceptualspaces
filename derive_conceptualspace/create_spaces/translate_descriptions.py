@@ -93,24 +93,26 @@ def create_languages_file(raw_descriptions, columns, json_persister, dataset_cla
 
 def full_translate_column(raw_descriptions, translate_policy, language, column, json_persister, dataset_class, pp_components=None):
     pp_components = PPComponents.from_str(pp_components)
-    if translate_policy == "translate" and ((column == "description") or (column == "title" and pp_components.add_title) or (column == "subtitle" and pp_components.add_subtitle)):
-        try:
-            translations = json_persister.load(None, f"{column}_translations", silent=True)
-        except FileNotFoundError:
-            translations = dict(translations={}, is_complete=False)
-        if "is_complete" not in translations: #for backwards compatibility
-            translations = dict(translations=translations, is_complete=False)
-        if not translations["is_complete"]:
-            descriptions = dataset_class.preprocess_raw_file(raw_descriptions, pp_components=pp_components)
-            languages = create_languages_file(raw_descriptions, column, json_persister, dataset_class, proc_descs=descriptions)[column]
-            to_translate = {i: languages[i] for i in descriptions[column] if languages[i] != language and i not in translations["translations"]}
-            translateds, did_update, is_complete = translate_elems(list(to_translate.keys()), list(to_translate.values()), already_translated=translations["translations"])
-            if did_update:
-                json_persister.save(f"{column}_translations.json", translations=translateds, is_complete=is_complete, force_overwrite=True, ignore_confs=["DEBUG", "PP_COMPONENTS", "TRANSLATE_POLICY"])
-            translations = json_persister.load(None, f"{column}_translations", silent=True)
-            if not is_complete:
-                print(f"The translated {column}s are not complete yet!")
-                exit(1)
-            else:
-                print(f"The translated {column}s are now complete! Yay!")
-        return translations
+    if not (translate_policy == "translate" and ((column == "description") or (column == "title" and pp_components.add_title) or (column == "subtitle" and pp_components.add_subtitle))):
+        print(f"Translate-policy is {translate_policy}, column is {column}, pp-components is {pp_components}, I don't translate with that!")
+        return
+    try:
+        translations = json_persister.load(None, f"{column}_translations", silent=True)
+    except FileNotFoundError:
+        translations = dict(translations={}, is_complete=False)
+    if "is_complete" not in translations: #for backwards compatibility
+        translations = dict(translations=translations, is_complete=False)
+    if not translations["is_complete"]:
+        descriptions = dataset_class.preprocess_raw_file(raw_descriptions, pp_components=pp_components)
+        languages = create_languages_file(raw_descriptions, column, json_persister, dataset_class, proc_descs=descriptions)[column]
+        to_translate = {i: languages[i] for i in descriptions[column] if languages[i] != language and i not in translations["translations"]}
+        translateds, did_update, is_complete = translate_elems(list(to_translate.keys()), list(to_translate.values()), already_translated=translations["translations"])
+        if did_update:
+            json_persister.save(f"{column}_translations.json", translations=translateds, is_complete=is_complete, force_overwrite=True, ignore_confs=["DEBUG", "PP_COMPONENTS", "TRANSLATE_POLICY"])
+        translations = json_persister.load(None, f"{column}_translations", silent=True)
+        if not is_complete:
+            print(f"The translated {column}s are not complete yet!")
+            exit(1)
+        else:
+            print(f"The translated {column}s are now complete! Yay!")
+    return translations

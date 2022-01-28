@@ -6,12 +6,14 @@ ALL for 1 rule `(export $(cat $MA_SELECT_ENV_FILE | xargs) && snakemake --cores 
 from config:   `(export $(cat $MA_SELECT_ENV_FILE | xargs) && snakemake --cores 1 -p  by_config --configfile ./config/derrac2015.yml --keep-going)`
 
 Plot DAG:      `MA_DATASET=siddata snakemake --cores 1 -np --directory $MA_DATA_DIR --dag default | grep -A99999 "digraph" | dot -Tsvg > dag.svg`
-    Get results:   `rsync -az --progress $MA_DATA_DIR/siddata etlpipelines:~/data/siddata --exclude .snakemake`
-Docker in VM   `ma_cont snakemake --cores 3 -p --directory /opt/data/siddata by_config --configfile /opt/derive_conceptualspaces/config/derrac2015_edited.yml`
+Get results:   `rsync -az --progress $MA_DATA_DIR/siddata etlpipelines:~/data/siddata --exclude .snakemake`
+Docker in VM:  `ma_cont snakemake --cores 3 -p --directory /opt/data/siddata by_config --configfile /opt/derive_conceptualspaces/config/derrac2015_edited.yml`
                   where ma_cont = `docker run -it --rm --user $(id -u):$(id -g) --name derive_conceptualspaces_cont -v ~/data:/opt/data --env-file ~/derive_conceptualspaces/test_env.env derive_conceptualspaces`
                   (so there's a bug that you have to specify `--directory` which includes the dataset-name but whatever)
+SGE-Grid (IKW) `snakemake -p by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --profile $HOME/derive_conceptualspaces/workflow/ikw_grid/sge` inside an .sge-file (see ./sge)
 """
 #TODO: Job Groups! See https://snakemake.readthedocs.io/en/stable/executing/cluster.html
+#TODO: the rules that have multiprocessing (currently: create_candidate_svm) should require more CPUs!
 
 import itertools
 import os
@@ -62,7 +64,7 @@ NONDEFAULT_RULES = ["all", "default", "all_for", "by_config"]
 
 ########################################################################################################################
 ########################################################################################################################
-######### the file `kurse-beschreibungen.csv` is the absolute basis, that one I need to get and cannot create. #########
+########### the file `raw_descriptions.csv` is the absolute basis, that one I need to get and cannot create. ###########
 ########################################################################################################################
 ########################################################################################################################
 
@@ -175,6 +177,8 @@ rule create_dissim_mat:
     output:
         generated_paths["dissim_mat"]
     threads: 1
+    resources:
+        mem_mb = lambda wildcards: 24*1024 if wildcards.quantification_measure == "ppmi" else None #TODO make also dependent on the size of the dataset ("input" is also allowed as arg)
     run:
         autoload_context_inputs(ctx, input, wildcards)
         quant_dtm, dissim_mat, metainf = create_dissim_mat_base(ctx.obj["pp_descriptions"], ctx.get_config("quantification_measure"), verbose=ctx.get_config("verbose"))
@@ -227,6 +231,8 @@ rule create_doc_cand_matrix:
     output:
         generated_paths["filtered_dcm"]
     threads: 1
+    resources:
+        mem_mb=lambda wildcards: 24 * 1024 if wildcards.dcm_quant_measure == "ppmi" else None  #TODO make also dependent on the size of the dataset ("input" is also allowed as arg)
     run:
         autoload_context_inputs(ctx, input, wildcards)
         filtered_dcm = create_filtered_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], min_term_count=ctx.get_config("candidate_min_term_count"),
@@ -241,7 +247,7 @@ rule create_candidate_svm:
         embedding = generated_paths["embedding"]
     output:
         generated_paths["clusters"]
-    threads: 3
+    threads: 8
     run:
         autoload_context_inputs(ctx, input, wildcards, silents=["pp_descriptions"])
         decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"))

@@ -39,31 +39,61 @@ for i in range(STATUS_ATTEMPTS):
         logger.error("qstat process error")
         logger.error(e)
     except KeyError as e:
+        # `qacct` doesn't work on the IKW-grid. I asked Marc, he said "Es wird kein accounting file auf den Knoten geschrieben. Nur auf dem Master und darauf hast du keinen Zugriff"
+        job_status = "success"
+
         # if the job has finished it won't appear in qstat and we should check qacct
         # this will also provide the exit status (0 on success, 128 + exit_status on fail)
         # Try getting job with scontrol instead in case sacct is misconfigured
-        try:
-            qacct_res = sp.check_output(shlex.split(f"qacct -j {jobid}"))
-
-            exit_code = int(re.search("exit_status  ([0-9]+)", qacct_res.decode()).group(1))
-
-            if exit_code == 0:
-                job_status = "success"
-                break
-
-            if exit_code != 0:
-                job_status = "failed"
-                break
-
-        except sp.CalledProcessError as e:
-            logger.warning("qacct process error")
-            logger.warning(e)
-            if i >= STATUS_ATTEMPTS - 1:
-                job_status = "failed"
-                break
-            else:
-                # qacct can be quite slow to update on large servers
-                time.sleep(5)
+        # try:
+        #     qacct_res = sp.check_output(shlex.split(f"qacct -j {jobid}"))
+        #
+        #     exit_code = int(re.search("exit_status  ([0-9]+)", qacct_res.decode()).group(1))
+        #
+        #     if exit_code == 0:
+        #         job_status = "success"
+        #         break
+        #
+        #     if exit_code != 0:
+        #         job_status = "failed"
+        #         break
+        #
+        # except sp.CalledProcessError as e:
+        #     logger.warning("qacct process error")
+        #     logger.warning(e)
+        #     if i >= STATUS_ATTEMPTS - 1:
+        #         job_status = "failed"
+        #         break
+        #     else:
+        #         # qacct can be quite slow to update on large servers
+        #         time.sleep(5)
         pass
 
 print(job_status)
+
+
+# /net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/logs/sge/snakejob.create_candidate_svm.8.log
+# contains:
+# 	```
+# 	Job killed after exceeding memory limits
+# 	/var/lib/gridengine/util/starter.sh: line 41:  6114 Killed                  /usr/bin/cgexec -g freezer,memory,cpuset:${CGPATH} $@
+# 	```
+# 	-> but for some reason, the other log-files are emtpy even though they are probably killed for the same reason!
+#
+# /net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/.snakemake/tmp.0f0dpjxj/snakejob.create_candidate_svm.8.sh
+# 	contains the line `# properties = {..... "resources": {"tmpdir": "/tmp/734385.1.training.q"}, "jobid": 8}`
+# 	-> das tmp/734385 ist die job-id!
+# 	-> der komplette `tmp.0f0dpjxj` ordner wird nach ende des main files gelöscht
+# 	-> eigentlich sollten in dem selben direcotry auch `.jobfailed` dateien sein but they aren't, unfortunately
+#
+# das log vom main file enhält:
+# 	* submit job 1,11,8,9 (jobid 734386ff) für die 4 param-kombis die es machen soll (wrong tmpdir though!)
+# 	* versucht das accounting-file zu bekommen
+# 	* says job 1 failed, says jobscript is at "/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/.snakemake/tmp.0f0dpjxj/snakejob.create_candidate_svm.1.sh", tries to restart with new external but equal internal job id
+# 	* retries creating these 4 jobs over and over, exits because execution failed, says complete log is at "/net/home/student/c/cstenkamp/derive_conceptualspaces/.snakemake/log/2022-01-28T093428.328083.snakemake.log", ends.
+# 	* all error-logs are also stored in `~/derive_conceptualspaces/.snakemake/log`
+#
+# ==> How *could* one do an `sge-status.py` script without `qacct`:
+# * check all files `/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/.snakemake/tmp.*/snakejob.*.sh` for `"resources": {"tmpdir": "/tmp/<EXTERNALJOBID>.1.training.q"}` if the job-id is the demanded one, from that you get the jobname and the internal job id (in the filename) (`create_candidate_svm.8`)
+# * With that, you can look at the file /net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/logs/sge/snakejob.<JOBNAME>.<INTERNALJOBID>.log and check if it says "job killed" or the like, if yes you can return killed (and maybe even give the reason? it says `Job killed after exceeding memory limits`)
+# * Also need to figure out the data-dir (my jobs may need to create an env-var where the data is stored)

@@ -157,7 +157,7 @@ def check_languages(ctx, raw_descriptions_file, pp_components):
 @click_pass_add_context
 def translate_descriptions(ctx, translate_policy, raw_descriptions_file, language, pp_components):
     raw_descriptions = ctx.obj["json_persister"].load(raw_descriptions_file, "raw_descriptions")
-    translate_column_base(raw_descriptions, translate_policy, language, "title", ctx.obj["json_persister"], ctx.obj["dataset_class"], pp_components=pp_components)
+    translate_column_base(raw_descriptions, translate_policy, language, ctx.get_config("column"), ctx.obj["json_persister"], ctx.obj["dataset_class"], pp_components=pp_components)
     #no need to save, that's done inside the function.
 
 
@@ -326,6 +326,8 @@ def list_paramcombis(ctx):
     candidates = [join(path, name)[len(ctx.p.in_dir):] for path, subdirs, files in os.walk(join(ctx.p.in_dir, "")) for
                   name in files if name.startswith("clusters.json")]
     candidates = [i for i in candidates if i.startswith(ctx.p.get_subdir({i: ctx.get_config(i) for i in ["DEBUG", "DATASET", "LANGUAGE"]})[0])]
+    for cand in candidates:
+        print(cand)
 
 
 

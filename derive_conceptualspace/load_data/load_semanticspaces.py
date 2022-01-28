@@ -13,7 +13,7 @@ TRANSLATE_FNAME = {"movies": "films"}
 
 #TODO If I want to do that for classes as well, I have to create these as well, not only load
 #TODO Do this ones also for the [ALBS20] and [AGKS18] datasets
-data_base, data_set, n_dims = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/", "places", 20
+data_base, data_set, n_dims = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/", "movies", 20
 
 
 def main():
@@ -48,7 +48,7 @@ def get_all():
     #list 15000 long
     classes = get_classes(data_base, data_set)                                     #./classesXXXXX/*
     canditerms = get_candidateterms(data_base, data_set, n_dims)                   #./dXX/DirectionsHeal/*
-    #movies: 4 lists of len 22903 (words, part-of-speech's, np.array of n_dims*1, word+pos)
+    #movies: 4 lists of len 22903 (words, part-of-speech's, np.array of n_dims*1, word+pos) [gets overwritten below!] #TODO hö? rather len 9429 (words, part-of-speech's, np.array of n_dims*1, word+pos, cluster it belongs to)
     #places: 2 lists of len 21833 (words, vectors)
     clusters = get_clusters(data_base, data_set, n_dims)                           #./dXX/clustersXX.txt
     canditerms, cluster_directions = get_grouped_candidates(data_base, data_set, n_dims, clusters=clusters, canditerms=canditerms)
@@ -227,7 +227,7 @@ def get_grouped_candidates(data_base, data_set, mds_dimensions, clusters=None, c
                 canditerm_clusters.append(None)
     elif data_set == "places":
         for word, vec in zip(*canditerms):
-
+            raise NotImplementedError()
     else:
         raise NotImplementedError()
     assert len(canditerm_clusters) == len(canditerms[0])
