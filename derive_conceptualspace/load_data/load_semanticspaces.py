@@ -13,11 +13,28 @@ TRANSLATE_FNAME = {"movies": "films"}
 
 #TODO If I want to do that for classes as well, I have to create these as well, not only load
 #TODO Do this ones also for the [ALBS20] and [AGKS18] datasets
-data_base, data_set, n_dims = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/", "movies", 20
+
+def get_raw_movies_dataset():
+    data_base = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/"
+    feat_vecs = load_ppmi_weighted_feature_vectors(data_base, "movies")
+    considered_movies = {j: feat_vecs[j] for j in [i[0] for i in sorted({k:sum(v.values()) for k, v in feat_vecs.items()}.items(), key=lambda x:x[1], reverse=True)[:15000]]}
+    # "we selected the 15.000 movies whose associated reviews contained the highest number of words"
+    # now I still have two problems:
+    #   * How on earth do the keys of this map to the movienames? what's the order?!
+    #   * no term of the BoW contains a space, so I cannot extract n-grams from this, which the original authors however did!
+    considered_movies = dict(sorted({int(k): v for k, v in considered_movies.items()}.items()))
+    names = get_names(data_base, "movies")
+    movies = dict(zip(names, considered_movies.values()))
+    #movies['xXx: State of the Union 2005']['xxx'] == 172 --> evidence that this is correct!
+    canditerms, cluster_directions = get_grouped_candidates(data_base, "movies", 50)
+    print()
 
 
 def main():
-    canditerms, cluster_directions, mds_class_dict = get_all()
+    get_raw_movies_dataset()
+    return
+    data_base, data_set, n_dims = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/", "movies", 20
+    canditerms, cluster_directions, mds_class_dict = get_all(data_base, data_set, n_dims)
     three_dims = list(cluster_directions.keys())[:3]
     entities = {k: (v[1], np.array([v[2][k2] for k2 in three_dims])) for k, v in mds_class_dict.items()}
     display_svm(entities, {k: cluster_directions[k] for k in three_dims})
@@ -35,11 +52,13 @@ def display_svm(entities, cluster_directions):
         fig.add_markers([0, 0, 0], size=3, name="Coordinate Center")  # coordinate center
         fig.show()
 
-
-def get_all():
+def get_all(data_base, data_set, n_dims):
     feat_vecs = load_ppmi_weighted_feature_vectors(data_base, data_set)            #./Tokens/*  & Tokens.json
     # dict(len 38649): key: bag-of-words
     #TODO why is feat_vecs more than twice #elems than names?! Can I link BoW and names/MDS?!
+    # {k: v for k,v in feat_vecs.items() if len(v) > 522} is 14993 (closest I can get)
+    # {k:v for k, v in feat_vecs.items() if sum(v.values()) > 850} is 15001 (closest I can get)
+
     #TODO also, no term of the BoW contains a space, so I don't think I can match this with the keyphrases, wtf!
     all_terms = sorted(list(set(flatten([list(v.keys()) for v in feat_vecs.values()]))))
     mds = load_mds_representation(data_base, data_set, n_dims, return_array=True)  #./dXX/filmsXX.mds

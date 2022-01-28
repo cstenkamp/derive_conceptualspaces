@@ -31,7 +31,7 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose):
     terms = dcm.all_terms.values()
     quants_s = [dcm.term_quants(term) for term in terms]
     if get_setting("N_CPUS") == 1:
-        for term, quants in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs"):
+        for term, quants in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs", total=len(terms)):
             cand_mets, decision_plane, term = create_candidate_svm(embedding.embedding_, term, quants, quant_name=dcm.quant_name)
             metrics[term] = cand_mets
             decision_planes[term] = decision_plane
