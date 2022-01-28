@@ -97,3 +97,5 @@ print(job_status)
 # * check all files `/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/.snakemake/tmp.*/snakejob.*.sh` for `"resources": {"tmpdir": "/tmp/<EXTERNALJOBID>.1.training.q"}` if the job-id is the demanded one, from that you get the jobname and the internal job id (in the filename) (`create_candidate_svm.8`)
 # * With that, you can look at the file /net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/logs/sge/snakejob.<JOBNAME>.<INTERNALJOBID>.log and check if it says "job killed" or the like, if yes you can return killed (and maybe even give the reason? it says `Job killed after exceeding memory limits`)
 # * Also need to figure out the data-dir (my jobs may need to create an env-var where the data is stored)
+#
+# Another way to check if the rule ran sucessfully is to check if the output is there? I mean rn it says "Job id: 1 completed successfully, but some output files are missing"
