@@ -78,6 +78,10 @@ RESOURCE_MAPPING = {
     "h_fsize"          : ("h_fsize", "file_size"),
 }
 
+TRANSLATOR_MAPPING = {
+    "mem_mb": ("mem", lambda val: str(round(int(val)/1024))+"G"), #snakemake has "mem_mb" as resource, but on the grid it must be "mem"
+}
+
 def add_custom_resources(resources, resource_mapping=RESOURCE_MAPPING):
     """Adds new resources to resource_mapping.
 
@@ -143,20 +147,24 @@ def format_job_properties(string):
     return string.format(rulename=job_properties['rule'], jobid=job_properties['jobid'])
 
 
-def parse_qsub_settings(source, resource_mapping=RESOURCE_MAPPING, option_mapping=OPTION_MAPPING, nonrequestables=None):
+def parse_qsub_settings(source, resource_mapping=RESOURCE_MAPPING, option_mapping=OPTION_MAPPING, translator_mapping=TRANSLATOR_MAPPING, nonrequestables=None):
     job_options = { "options" : {}, "resources" : {}}
 
     for skey, sval in source.items():
         if nonrequestables and skey in nonrequestables:
             continue
         found = False
+        for tkey, tval in translator_mapping.items():
+            if skey == tkey:
+                skey = tval[0]
+                sval = tval[1](sval)
         for rkey, rval in resource_mapping.items():
             if skey in rval:
                 found = True
                 # Snakemake resources can only be defined as integers, but SGE interprets
                 # plain integers for memory as bytes. This hack means we interpret memory
                 # requests as gigabytes
-                if (rkey == 's_vmem') or (rkey == 'h_vmem'):
+                if rkey in ["s_vmem", "h_vmem", "mem"] and str(sval).isnumeric():
                     job_options["resources"].update({rkey : str(sval) + 'G'})
                 else:
                     job_options["resources"].update({rkey : sval})
@@ -208,11 +216,11 @@ def sge_resource_string(key, val):
         return f"-l {key}"
     if type(val) == bool:
         return f"-{key}=" + ("true" if val else "false")
-    if "mem" in key and str(val).isnumeric(): #when qsub-ing, you HAVE TO specify if it's G or not!
-        val = str(val)+"G"
     if key == "mem_mb": #A snakefile automatically has the mem_mb resource (see https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html#resources), but the grid wants only "mem"!
         key = "mem"
         val = str(round(int(val)/1024))+"G"
+    if "mem" in key and str(val).isnumeric(): #when qsub-ing, you HAVE TO specify if it's G or not!
+        val = str(val)+"G"
     return f"-l {key}={val}"
 
 def submit_job(jobscript, qsub_settings):
