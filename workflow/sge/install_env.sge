@@ -1,5 +1,5 @@
 #!/bin/bash
-#$ -N log_Tensor
+#$ -N install_env
 #$ -l mem=3G
 #$ -pe default 2
 

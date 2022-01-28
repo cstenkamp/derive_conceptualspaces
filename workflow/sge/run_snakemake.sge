@@ -1,5 +1,5 @@
 #!/bin/bash
-#$ -N log_Tensor
+#$ -N snakemake_runner
 #$ -l mem=200M
 
 export PATH="$HOME/miniconda/bin:$PATH"
@@ -11,7 +11,7 @@ export PYTHONPATH="$HOME/derive_conceptualspaces:$PYTHONPATH"
 export MA_ENV_FILE="$HOME/derive_conceptualspaces/config/siddata.env"
 
 #snakemake --cores 3 -p default
-#snakemake by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --unlock
+snakemake by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --unlock
 snakemake -p by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid
 
 source $HOME/miniconda/bin/deactivate

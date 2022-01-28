@@ -208,6 +208,11 @@ def sge_resource_string(key, val):
         return f"-l {key}"
     if type(val) == bool:
         return f"-{key}=" + ("true" if val else "false")
+    if "mem" in key and str(val).isnumeric(): #when qsub-ing, you HAVE TO specify if it's G or not!
+        val = str(val)+"G"
+    if key == "mem_mb": #A snakefile automatically has the mem_mb resource (see https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html#resources), but the grid wants only "mem"!
+        key = "mem"
+        val = str(round(int(val)/1024))+"G"
     return f"-l {key}={val}"
 
 def submit_job(jobscript, qsub_settings):
@@ -217,7 +222,7 @@ def submit_job(jobscript, qsub_settings):
     batch_resources = flatten([sge_resource_string(k, v).split() for k, v in qsub_settings["resources"].items()])
     try:
         # -terse means only the jobid is returned rather than the normal 'Your job...' string
-        warnings.warn(f'Will submit the following: {["qsub", "-terse"] + batch_options + batch_resources + [jobscript]}')
+        warnings.warn(f'Will submit the following: `{"".join(["qsub", "-terse"] + batch_options + batch_resources + [jobscript])}`')
         jobid = subprocess.check_output(["qsub", "-terse"] + batch_options + batch_resources + [jobscript]).decode().rstrip()
     except subprocess.CalledProcessError as e:
         raise e

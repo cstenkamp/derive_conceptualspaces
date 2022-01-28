@@ -247,7 +247,9 @@ rule create_candidate_svm:
         embedding = generated_paths["embedding"]
     output:
         generated_paths["clusters"]
-    threads: 8
+    threads: 4
+    resources:
+        mem_mb=16*1024
     run:
         autoload_context_inputs(ctx, input, wildcards, silents=["pp_descriptions"])
         decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"))
