@@ -11,8 +11,7 @@ from tqdm import tqdm
 
 from .dtm_object import DocTermMatrix, csr_to_list
 from .jsonloadstore import Struct
-from ..settings import get_setting
-
+from ..settings import get_setting, forbid_setting
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 logger = logging.getLogger(basename(__file__))
@@ -28,12 +27,13 @@ class Description():
                  lang, orig_textlang=None, origlang_text=None,
                  orig_titlelang=None, origlang_title=None,
                  subtitle=None, origlang_subtitle=None, orig_subtitlelang=None,
-                 additionals=None):
+                 additionals=None, bow=None):
         self.text = text
         self.lang = lang
         self.title = title
         self.subtitle = subtitle
         self._additionals = additionals
+        self._bow = bow
 
         self._orig_textlang = orig_textlang
         self._origlang_text = origlang_text
@@ -158,7 +158,7 @@ class Description():
         return self.bow.get(item, 0)
 
     def bow(self):
-        if not hasattr(self, "_bow"):
+        if not hasattr(self, "_bow") or self._bow is None:
             if isinstance(self.processed_text[0], list):
                 self._bow = Counter(flatten(self.processed_text))
             else:
@@ -166,6 +166,8 @@ class Description():
         return self._bow
 
     def n_words(self):
+        if hasattr(self, "_bow"):
+            return sum(self.bow().values())
         if isinstance(self.processed_text, str):
             return self.processed_text.count(" ")+1
         elif isinstance(self.processed_text[0], str):
@@ -251,7 +253,14 @@ class DescriptionList():
 
 
     def generate_DocTermMatrix(self, min_df=1, max_ngram=None):
-        if hasattr(self, "recover_settings"):
+        if self.proc_steps[-1] == "bow":
+            print("Preprocessed produced a bag-of-words already. Config `max_ngram` becomes useless!")
+            forbid_setting("max_ngram")
+            all_words = dict(enumerate(flatten(i.bow().keys() for i in self._descriptions)))
+            rev = {v: k for k, v in all_words.items()}
+            dtm = [[[rev[k], v] for k, v in i.bow().items()] for i in self._descriptions]
+            return DocTermMatrix(dtm=dtm, all_terms=all_words, quant_name="count")
+        elif hasattr(self, "recover_settings"):
             from derive_conceptualspace.create_spaces.preprocess_descriptions import PPComponents, get_countvec
             pp_components = PPComponents.from_str(self.recover_settings["pp_components"])
             if pp_components.use_skcountvec:

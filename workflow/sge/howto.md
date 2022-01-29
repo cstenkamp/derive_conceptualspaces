@@ -12,4 +12,15 @@
 * see https://snakemake.readthedocs.io/en/stable/executing/cli.html#profiles and accordingly https://github.com/Snakemake-Profiles/sge : Let's install a custom snakemake-profile for the sun grid engine:
 * Install cookiecutter: `pip install cookiecutter`
 * Install the config from https://github.com/Snakemake-Profiles/sge: `cookiecutter https://github.com/Snakemake-Profiles/sge.git`
-* 
+
+
+* **TODO: write up all the stuff I did!**
+
+
+* Useful commands:
+  ```
+  qhost -F         #all information about all hosts (short version: just `qhost`)
+  qconf -sq all.q  #parameters for the `all` group-queue (inc. walltime)
+  qstat -j <jobid> #why your job isn't scheduled
+  qconf -sc        #everything resource etc you can demand
+  ```

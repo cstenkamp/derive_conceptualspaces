@@ -45,7 +45,7 @@ class Dataset(BaseDataset):
         return df
 
 
-def merge_col(col, pgbar=False):
+def merge_col(col, pgbar=None):
     new_col = []
     col = [eval(i) if isinstance(i, str) else "" for i in col]
     if pgbar: col = tqdm(col, desc=pgbar)

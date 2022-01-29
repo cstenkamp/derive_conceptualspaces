@@ -1,3 +1,4 @@
+import warnings
 from os.path import basename, isfile, join, dirname
 import re
 import logging
@@ -58,6 +59,8 @@ class PPComponents():
 
     @staticmethod
     def from_str(string):
+        if str(string).lower() == "none":
+            return PPComponents(**{k: False for k in PPComponents.OPTION_LETTER.keys()})
         tmp = PPComponents(**{k: v in str(string) for k, v in PPComponents.OPTION_LETTER.items()})
         assert str(tmp) == str(string), f"Is {str(tmp)} but should be {string}!"
         return tmp
@@ -70,22 +73,38 @@ def preprocess_descriptions_full(raw_descriptions, dataset_class, pp_components,
     max_ngram = get_setting("MAX_NGRAM") if get_setting("NGRAMS_IN_EMBEDDING") else 1
     pp_components = PPComponents.from_str(pp_components)
     descriptions = dataset_class.preprocess_raw_file(raw_descriptions, pp_components)
-    if get_setting("DEBUG"):
-        descriptions = pd.DataFrame([descriptions.iloc[key] for key in random.sample(range(len(descriptions)), k=get_setting("DEBUG_N_ITEMS"))])
-    descriptions = create_bare_desclist(languages, translations, for_language, list(descriptions["title"]), list(descriptions["description"]),
-                        [i if str(i) != "nan" else None for i in descriptions["subtitle"]], translate_policy, pp_components=pp_components,
-                        assert_all_translated=False, additionals={i: list(descriptions[i]) for i in dataset_class.additionals} if pp_components.add_additionals else None)
-    if pp_components.use_skcountvec:
-        descriptions = pp_descriptions_countvec(descriptions, pp_components, max_ngram, for_language).filter_words(min_words=get_setting("MIN_WORDS_PER_DESC"))
-        metainf = {"n_samples": len(descriptions), "ngrams_in_embedding": get_setting("NGRAMS_IN_EMBEDDING"), **({"pp_max_ngram": get_setting("MAX_NGRAM")} if get_setting("NGRAMS_IN_EMBEDDING") else {}),
-                   "min_words": get_setting("MIN_WORDS_PER_DESC")}
+    if get_setting("preprocessed_bow", default_false=True):
+        descriptions = descriptions_from_bow(descriptions, languages, translations, translate_policy).filter_words(min_words=get_setting("MIN_WORDS_PER_DESC"))
+        if len(raw_descriptions["vecs"]) > len(descriptions):
+            warnings.warn(f"Because of the min-words-per-desc setting, {len(raw_descriptions['vecs'])-len(descriptions)} of the original items needed to be removed!")
+        metainf = {"n_samples": len(descriptions), "min_words": get_setting("MIN_WORDS_PER_DESC")}
     else:
-        assert max_ngram == 1, "Cannot deal with n-grams without SKLearn!"
-        descriptions = preprocess_descriptions(descriptions, pp_components).filter_words(min_words=get_setting("MIN_WORDS_PER_DESC"))
-        metainf = {"n_samples": len(descriptions), "ngrams_in_embedding": False, "min_words": get_setting("MIN_WORDS_PER_DESC")}
+        if get_setting("DEBUG"):
+            descriptions = pd.DataFrame([descriptions.iloc[key] for key in random.sample(range(len(descriptions)), k=get_setting("DEBUG_N_ITEMS"))])
+        descriptions = create_bare_desclist(languages, translations, for_language, list(descriptions["title"]), list(descriptions["description"]),
+                            [i if str(i) != "nan" else None for i in descriptions["subtitle"]], translate_policy, pp_components=pp_components,
+                            assert_all_translated=False, additionals={i: list(descriptions[i]) for i in dataset_class.additionals} if pp_components.add_additionals else None)
+        if pp_components.use_skcountvec:
+            descriptions = pp_descriptions_countvec(descriptions, pp_components, max_ngram, for_language).filter_words(min_words=get_setting("MIN_WORDS_PER_DESC"))
+            metainf = {"n_samples": len(descriptions), "ngrams_in_embedding": get_setting("NGRAMS_IN_EMBEDDING"), **({"pp_max_ngram": get_setting("MAX_NGRAM")} if get_setting("NGRAMS_IN_EMBEDDING") else {}),
+                       "min_words": get_setting("MIN_WORDS_PER_DESC")}
+        else:
+            assert max_ngram == 1, "Cannot deal with n-grams without SKLearn!"
+            descriptions = preprocess_descriptions(descriptions, pp_components).filter_words(min_words=get_setting("MIN_WORDS_PER_DESC"))
+            metainf = {"n_samples": len(descriptions), "ngrams_in_embedding": False, "min_words": get_setting("MIN_WORDS_PER_DESC")}
     show_hist([i.n_words() for i in descriptions._descriptions], "Words per Description", xlabel="Number of Words")
     return descriptions, metainf
 
+
+def descriptions_from_bow(descs, languages, translations, translate_policy):
+    if translate_policy != "onlyorig" or languages != "en":
+        raise NotImplementedError()
+    desc_list = DescriptionList(add_title=False, add_subtitle=False, translate_policy=translate_policy, additionals_names=list(descs["classes"].keys()))
+    for name, bow in descs["vecs"].items():
+        desc_list.add(Description(lang=languages, text=None, title=name, subtitle=None, orig_textlang=None, bow=bow,
+                                  additionals={k: v.get(name) for k, v in descs["classes"].items()}))
+    desc_list.proc_steps.append("bow")
+    return desc_list
 
 
 def create_bare_desclist(languages, translations, for_language, names, descriptions, subtitles, translate_policy, pp_components,

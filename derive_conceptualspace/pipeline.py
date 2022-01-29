@@ -38,6 +38,7 @@ class CustomContext(ObjectWrapper):
         super(CustomContext, self).__init__(orig_ctx)
         self.toset_configs = []
         self.used_configs = {}
+        self.forbidden_configs = []
         self._initialized = False
         if hasattr(orig_ctx, "post_init"):
             type(orig_ctx).post_init(self)
@@ -85,6 +86,8 @@ class CustomContext(ObjectWrapper):
             if hasattr(self.obj["dataset_class"], "configs"):
                 for param, val in self.obj["dataset_class"].configs.items():
                     self.set_config(param, val, "dataset_class")
+            if hasattr(self.obj["dataset_class"], "init"):
+                self.obj["dataset_class"].init(self)
             CustomIO.init(self)
             self.obj["json_persister"] = JsonPersister(self, settings.DIR_STRUCT)
             self.set_debug()
@@ -92,6 +95,13 @@ class CustomContext(ObjectWrapper):
                 os.chdir(self.get_config("base_dir"))
             self._init_time = datetime.now()
             self._initialized = True
+
+    def forbid_config(self, confkey, check_unused=True):
+        if check_unused:
+            assert confkey not in self.used_configs
+        print(f"The config {confkey} is now forbidden!")
+        self.forbidden_configs.append(confkey)
+
 
     def set_config(self, key, val, source): #this is only a suggestion, it will only be finally set once it's accessed!
         key, val = standardize_config(key, val)
@@ -137,13 +147,15 @@ class CustomContext(ObjectWrapper):
     def has_config(self, key, include_default=True): #if there is a click-arg with "default=None", it will be EXPLICITLY set by default, ONLY that is included if include_default
         return key in self.used_configs or bool([i for i in self.toset_configs if i[0]==standardize_config_name(key) and (include_default or i[2] != "defaults")])
 
-    def get_config(self, key, silent=False, silence_defaultwarning=False):
+    def get_config(self, key, silent=False, silence_defaultwarning=False, default_false=False):
         key = standardize_config_name(key)
+        if key in self.forbidden_configs:
+            assert False, f"Config {key} is forbidden!"
         if key not in self.used_configs:
             conf_suggestions = [i[1:] for i in self.toset_configs if i[0] == key]
             final_conf = min([i for i in conf_suggestions], key=lambda x: CONF_PRIORITY.index(x[1])) if len(conf_suggestions) > 0 else [None, "defaults"]
             if final_conf[1] == "defaults":
-                final_conf[0] = get_defaultsetting(key, silent=silence_defaultwarning)
+                final_conf[0] = get_defaultsetting(key, silent=silence_defaultwarning, default_false=default_false)
             if silent:
                 return final_conf[0]
             self.used_configs[key] = final_conf[0]

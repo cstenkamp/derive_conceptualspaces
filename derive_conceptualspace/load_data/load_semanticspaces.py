@@ -7,6 +7,8 @@ import numpy as np
 from derive_conceptualspace.util.base_changer import ThreeDPlane
 from derive_conceptualspace.util.threedfigure import ThreeDFigure, make_meshgrid
 
+from derive_conceptualspace.util.jsonloadstore import json_dump
+
 flatten = lambda l: [item for sublist in l for item in sublist]
 
 TRANSLATE_FNAME = {"movies": "films"}
@@ -30,8 +32,15 @@ def get_raw_movies_dataset():
     print()
 
 
+def get_raw_places_dataset():
+    data_base = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/"
+    vecs = load_ppmi_weighted_feature_vectors(data_base, "places")
+    classes = get_classes(data_base, "places", what=["Foursquare", "Geonames"]) #TODO also CYC but I don't understand their file or their explanation of what they did
+    json_dump(dict(vecs=vecs, classes=classes), "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/placetypes/raw_descriptions.json")
+
+
 def main():
-    get_raw_movies_dataset()
+    get_raw_places_dataset()
     return
     data_base, data_set, n_dims = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/", "movies", 20
     canditerms, cluster_directions, mds_class_dict = get_all(data_base, data_set, n_dims)
@@ -56,9 +65,8 @@ def get_all(data_base, data_set, n_dims):
     feat_vecs = load_ppmi_weighted_feature_vectors(data_base, data_set)            #./Tokens/*  & Tokens.json
     # dict(len 38649): key: bag-of-words
     #TODO why is feat_vecs more than twice #elems than names?! Can I link BoW and names/MDS?!
-    # {k: v for k,v in feat_vecs.items() if len(v) > 522} is 14993 (closest I can get)
-    # {k:v for k, v in feat_vecs.items() if sum(v.values()) > 850} is 15001 (closest I can get)
-
+    # closest I can get: {k: v for k,v in feat_vecs.items() if len(v) > 522} == 14993 ; {k:v for k, v in feat_vecs.items() if sum(v.values()) > 850} == 15001
+    # BUT DESC15 just said "the 15.000 words with the most words", so I'll just do that (with sum(v.values()), and if I do the original order APPEARS to correspond title-list
     #TODO also, no term of the BoW contains a space, so I don't think I can match this with the keyphrases, wtf!
     all_terms = sorted(list(set(flatten([list(v.keys()) for v in feat_vecs.values()]))))
     mds = load_mds_representation(data_base, data_set, n_dims, return_array=True)  #./dXX/filmsXX.mds

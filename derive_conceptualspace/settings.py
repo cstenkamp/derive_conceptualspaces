@@ -38,7 +38,10 @@ DEFAULT_SEED_ONLY_IN_DEBUG = True
 DEFAULT_VERBOSE = True
 IS_INTERACTIVE = "PYCHARM_HOSTED" in os.environ
 DEFAULT_N_CPUS = max(psutil.cpu_count(logical=False), psutil.cpu_count(logical=True)-2)
+if os.getenv("NSLOTS"):
+    print("This machine has been given NSLOTS and it is", os.getenv("NSLOTS"))
 #TODO on the grid there is $NSLOTS (see https://doc.ikw.uni-osnabrueck.de/content/grid-computing) - use that as well!
+#"To ensure that your job is scheduled on a host you are advised not to have request more  than $NCPU -1 parallel environments."
 
 #Settings that influence the algorithm
 DEFAULT_LANGUAGE = "de"
@@ -115,6 +118,11 @@ def get_setting(name, **kwargs):
         return False #TODO pass ich das auf das neue an? Ja? nein?
     raise Exception("Unexpected!")
 
+def forbid_setting(name, **kwargs):
+    if hasattr(sys.stdout, "ctx"):
+        return sys.stdout.ctx.forbid_config(name, **kwargs)
+    raise Exception("Unexpected!")
+
 ########################################################################################################################
 
 def cast_config(k, v):
@@ -147,9 +155,12 @@ def standardize_config(configname, configval):
     configname = standardize_config_name(configname)
     return configname, standardize_config_val(configname, configval)
 
-def get_defaultsetting(key, silent=False):
+def get_defaultsetting(key, silent=False, default_false=False):
     if "DEFAULT_" + key not in globals():
-        raise ValueError(f"You didn't provide a value for {key} and there is no default-value!")
+        if not default_false:
+            raise ValueError(f"You didn't provide a value for {key} and there is no default-value!")
+        else:
+            return False
     default = globals()["DEFAULT_"+key]
     if key not in NON_INFLUENTIAL_CONFIGS and not silent:
         if not os.getenv(f"{ENV_PREFIX}shutups_{key}"):
