@@ -116,20 +116,14 @@ generated_paths = dict(
 ########################################################################################################################
 ########################################################################################################################
 ########################################################################################################################
-import signal
-import sys
-def handler(signum, stack):
-    print("Signal handler called with signal ",signum)
-    raise Exception("Exception in Main thread!!")
-
-signal.signal(signal.SIGUSR1,handler)
 
 rule test_rule:
     output:
-        "success.file"
+        touch("success.file")
     run:
+        print("Loop starting..")
         import time
-        for num in range(100):
+        for num in range(40):
             try:
                 time.sleep(1)
             except Exception as e:

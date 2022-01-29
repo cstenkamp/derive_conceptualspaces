@@ -1,5 +1,5 @@
 #!/bin/bash
-#$ -N snakemake_runner
+#$ -N smk_runner
 #$ -l mem=200M
 #$ -l h_rt=01:29:00
 
@@ -7,6 +7,7 @@ export WALLTIME=01:29:00
 # You have to ensure that the $WALLTIME is both equal to the h_rt specified in the line above as well as the one in cluster.yaml.__default__ !!
 export WALL_SECS=$(echo $WALLTIME | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }' )
 
+export DATAPATH="/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data"
 export PATH="$HOME/miniconda/bin:$PATH"
 export RUNNERFILE="$HOME/derive_conceptualspaces/workflow/sge/run_snakemake.sge"
 export RUN_NR=${RUN_NR:-1}
@@ -21,9 +22,10 @@ echo "This is  run nr $RUN_NR"
 
 sleep 5 # give the other snakemake instance time to die
 
-snakemake by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --unlock
-timeout -k $WALL_SECS $WALL_SECS-10 snakemake -p test_rule --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid
-# timeout -k $WALL_SECS $(( $WALL_SECS-10 )) snakemake -p by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid
+
+snakemake --directory $DATAPATH by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --unlock
+timeout -k $WALL_SECS $(( $WALL_SECS-10 )) snakemake --directory $DATAPATH -p test_rule --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid
+# timeout -k $WALL_SECS $(( $WALL_SECS-10 )) snakemake --directory $DATAPATH -p by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid
 
 if [ $? != 0 ] ; then # if the timeout killed the program
   if (( $RUN_NR < 5 )); then # TODO calculate this from the walltime maybe?

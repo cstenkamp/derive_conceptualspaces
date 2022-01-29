@@ -99,3 +99,4 @@ print(job_status)
 # * Also need to figure out the data-dir (my jobs may need to create an env-var where the data is stored)
 #
 # Another way to check if the rule ran sucessfully is to check if the output is there? I mean rn it says "Job id: 1 completed successfully, but some output files are missing"
+# UPDATE: logs können auch in ~/derive_conceptualspaces/logs/sge sein!

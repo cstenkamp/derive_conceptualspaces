@@ -16,6 +16,7 @@
 
 * **TODO: write up all the stuff I did!**
 
+* ON THE IKW-GRID, `s_rt` **DOES NOT WORK**. I cannot check if it actually sends `SIGUSR1` because code that is called with it just doesn't produce any output.
 
 * Useful commands:
   ```
