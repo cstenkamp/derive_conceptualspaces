@@ -22,8 +22,8 @@ echo "This is  run nr $RUN_NR"
 sleep 5 # give the other snakemake instance time to die
 
 snakemake by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --unlock
-# timeout -k $WALL_SECS $WALL_SECS-10 snakemake -p by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid
-# timeout -k $WALL_SECS $WALL_SECS-10 snakemake -p by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid
+timeout -k $WALL_SECS $WALL_SECS-10 snakemake -p test_rule --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid
+# timeout -k $WALL_SECS $(( $WALL_SECS-10 )) snakemake -p by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid
 
 if [ $? != 0 ] ; then # if the timeout killed the program
   if (( $RUN_NR < 5 )); then # TODO calculate this from the walltime maybe?

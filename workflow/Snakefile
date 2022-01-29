@@ -129,13 +129,15 @@ rule test_rule:
         "success.file"
     run:
         import time
-        while True:
+        for num in range(100):
             try:
                 time.sleep(1)
             except Exception as e:
                 print("Yes there was an exception in the main")
                 print(e)
                 break
+        print("Loop ended")
+        print(num)
 
 # rule get_languages:
 #     input:
