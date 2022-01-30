@@ -23,7 +23,8 @@ echo "This is  run nr $RUN_NR"
 sleep 5 # give the other snakemake instance time to die
 
 
-snakemake --directory $DATAPATH by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --unlock
+# snakemake --directory $DATAPATH by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --unlock
+snakemake --directory $DATAPATH -p test_rule --unlock
 timeout -k $WALL_SECS $(( $WALL_SECS-10 )) snakemake --directory $DATAPATH -p test_rule --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid
 # timeout -k $WALL_SECS $(( $WALL_SECS-10 )) snakemake --directory $DATAPATH -p by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid
 

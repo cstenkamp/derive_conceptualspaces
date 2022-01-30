@@ -62,6 +62,19 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 LAST_RULE = "create_candidate_svm"
 NONDEFAULT_RULES = ["all", "default", "all_for", "by_config"]
 
+import time
+import signal
+
+class TimeOutException(Exception):
+    pass
+def handler(signum, frame):
+    raise TimeOutException("Timeout!")
+signal.signal(signal.SIGALRM, handler)
+if os.getenv("WALLTIME"):
+    walltime = int(os.environ["WALLTIME"])
+    print(f"walltime: {walltime}")
+    signal.alarm(walltime)
+
 ########################################################################################################################
 ########################################################################################################################
 ########### the file `raw_descriptions.csv` is the absolute basis, that one I need to get and cannot create. ###########
@@ -123,10 +136,11 @@ rule test_rule:
     run:
         print("Loop starting..")
         import time
-        for num in range(40):
+        for num in range(10):
             try:
                 time.sleep(1)
-            except Exception as e:
+                print(num)
+            except TimeOutException as e:
                 print("Yes there was an exception in the main")
                 print(e)
                 break

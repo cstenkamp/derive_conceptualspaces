@@ -228,6 +228,9 @@ def submit_job(jobscript, qsub_settings):
     flatten = lambda l: [item for sublist in l for item in sublist]
     batch_options = flatten([sge_option_string(k,v).split() for k, v in qsub_settings["options"].items()])
     batch_resources = flatten([sge_resource_string(k, v).split() for k, v in qsub_settings["resources"].items()])
+    if qsub_settings["resources"].get("h_rt"):
+        wall_secs = sum(60**(2-i[0])*int(i[1]) for i in enumerate(qsub_settings["resources"]["h_rt"].split(":")))
+        batch_options += ["-v", f"WALLTIME={wall_secs}"]
     try:
         # -terse means only the jobid is returned rather than the normal 'Your job...' string
         warnings.warn(f'Will submit the following: `{" ".join(["qsub", "-terse"] + batch_options + batch_resources + [jobscript])}`')
