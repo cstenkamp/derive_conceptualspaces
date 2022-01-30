@@ -259,6 +259,8 @@ class DescriptionList():
             all_words = dict(enumerate(set(flatten(i.bow().keys() for i in self._descriptions))))
             rev = {v: k for k, v in all_words.items()}
             dtm = [[[rev[k], v] for k, v in i.bow().items()] for i in self._descriptions]
+            if min_df > 1:
+                return DocTermMatrix.filter(dtm, min_df, all_terms=all_words, use_n_docs_count=True) #TODO make use_n_docs_count an arg
             return DocTermMatrix(dtm=dtm, all_terms=all_words, quant_name="count")
         elif hasattr(self, "recover_settings"):
             from derive_conceptualspace.create_spaces.preprocess_descriptions import PPComponents, get_countvec

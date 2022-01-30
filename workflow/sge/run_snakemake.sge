@@ -3,14 +3,16 @@
 #$ -l mem=200M
 #$ -l h_rt=01:29:00
 
-export WALLTIME=01:29:00
-# You have to ensure that the $WALLTIME is both equal to the h_rt specified in the line above as well as the one in cluster.yaml.__default__ !!
-export WALL_SECS=$(echo $WALLTIME | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }' )
-
 export DATAPATH="/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data"
 export PATH="$HOME/miniconda/bin:$PATH"
 export RUNNERFILE="$HOME/derive_conceptualspaces/workflow/sge/run_snakemake.sge"
 export RUN_NR=${RUN_NR:-1}
+
+# set runtime from the yaml
+source $HOME/derive_conceptualspaces/workflow/sge/ikw_grid/parse_yml.sh
+eval $(parse_yaml $HOME/derive_conceptualspaces/workflow/sge/ikw_grid/cluster.yaml | grep __default___h_rt)
+export WALLTIME=$__default___h_rt
+export WALL_SECS=$(echo $WALLTIME | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }' )
 
 source $HOME/miniconda/bin/activate derive_conceptualspaces
 

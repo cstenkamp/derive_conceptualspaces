@@ -13,6 +13,7 @@ if os.getenv("WALL_SECS"):
 
 
 def func():
+    print("WALL_SECS", os.getenv("WALL_SECS"))
     print("Loop starting..")
     for num in range(10):
         time.sleep(1)
