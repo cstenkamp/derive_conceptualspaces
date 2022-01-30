@@ -256,7 +256,7 @@ class DescriptionList():
         if self.proc_steps[-1] == "bow":
             print("Preprocessed produced a bag-of-words already. Config `max_ngram` becomes useless!")
             forbid_setting("max_ngram")
-            all_words = dict(enumerate(flatten(i.bow().keys() for i in self._descriptions)))
+            all_words = dict(enumerate(set(flatten(i.bow().keys() for i in self._descriptions))))
             rev = {v: k for k, v in all_words.items()}
             dtm = [[[rev[k], v] for k, v in i.bow().items()] for i in self._descriptions]
             return DocTermMatrix(dtm=dtm, all_terms=all_words, quant_name="count")

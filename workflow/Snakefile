@@ -56,24 +56,13 @@ from derive_conceptualspace.settings import (
 )
 from misc_util.pretty_print import pretty_print as print, print_multicol
 from misc_util.telegram_notifier import telegram_notify
+from workflow.func_arg import func
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
 LAST_RULE = "create_candidate_svm"
 NONDEFAULT_RULES = ["all", "default", "all_for", "by_config"]
 
-import time
-import signal
-
-class TimeOutException(Exception):
-    pass
-def handler(signum, frame):
-    raise TimeOutException("Timeout!")
-signal.signal(signal.SIGALRM, handler)
-if os.getenv("WALLTIME"):
-    walltime = int(os.environ["WALLTIME"])
-    print(f"walltime: {walltime}")
-    signal.alarm(walltime)
 
 ########################################################################################################################
 ########################################################################################################################
@@ -134,18 +123,7 @@ rule test_rule:
     output:
         touch("success.file")
     run:
-        print("Loop starting..")
-        import time
-        for num in range(10):
-            try:
-                time.sleep(1)
-                print(num)
-            except TimeOutException as e:
-                print("Yes there was an exception in the main")
-                print(e)
-                break
-        print("Loop ended")
-        print(num)
+        func()
 
 # rule get_languages:
 #     input:
