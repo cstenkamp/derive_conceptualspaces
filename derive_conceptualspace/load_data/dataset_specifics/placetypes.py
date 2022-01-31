@@ -12,12 +12,13 @@ class Dataset(BaseDataset):
         raw_descriptions_file = "raw_descriptions.json",
         all_descriptions_lang = "en",
         preprocessed_bow = True,
+        candidate_min_term_count = 50, #written in DESC15
     )
 
     @staticmethod
     def init(ctx):
         ctx.set_config("pp_components", "none", "force") #for this class, pp_components don't make any sense.
-        ctx.set_config("language", "en", "force")
+        ctx.set_config("language", "en", "force") #TODO maybe automatically do this if `ctx.has_config("all_descriptions_lang") and ctx.get_config("all_descriptions_lang")`
 
     @staticmethod
     def preprocess_raw_file(jsn, pp_components):

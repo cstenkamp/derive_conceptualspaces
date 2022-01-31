@@ -171,7 +171,7 @@ def translate_descriptions(ctx, translate_policy, raw_descriptions_file, languag
 def preprocess_descriptions(ctx, json_persister, dataset_class, raw_descriptions_file, pp_components, language):
     raw_descriptions = json_persister.load(raw_descriptions_file, "raw_descriptions")
     if ctx.has_config("all_descriptions_lang") and ctx.get_config("all_descriptions_lang"):
-        languages, translations = "en", None
+        languages, translations = ctx.get_config("all_descriptions_lang"), None
     else:
         languages, translations = load_lang_translate_files(ctx, json_persister, pp_components)
     descriptions, metainf = preprocess_descriptions_base(raw_descriptions, dataset_class, pp_components, language, ctx.get_config("translate_policy"), languages, translations)

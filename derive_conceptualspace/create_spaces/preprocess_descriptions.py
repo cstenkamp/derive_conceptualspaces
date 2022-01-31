@@ -104,6 +104,7 @@ def descriptions_from_bow(descs, languages, translations, translate_policy):
         desc_list.add(Description(lang=languages, text=None, title=name, subtitle=None, orig_textlang=None, bow=bow,
                                   additionals={k: v.get(name) for k, v in descs["classes"].items()}))
     desc_list.proc_steps.append("bow")
+    desc_list.proc_min_df = 1
     return desc_list
 
 

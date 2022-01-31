@@ -10,7 +10,7 @@ Get results:   `rsync -az --progress $MA_DATA_DIR/siddata etlpipelines:~/data/si
 Docker in VM:  `ma_cont snakemake --cores 3 -p --directory /opt/data/siddata by_config --configfile /opt/derive_conceptualspaces/config/derrac2015_edited.yml`
                   where ma_cont = `docker run -it --rm --user $(id -u):$(id -g) --name derive_conceptualspaces_cont -v ~/data:/opt/data --env-file ~/derive_conceptualspaces/test_env.env derive_conceptualspaces`
                   (so there's a bug that you have to specify `--directory` which includes the dataset-name but whatever)
-SGE-Grid (IKW) `snakemake -p by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --profile $HOME/derive_conceptualspaces/workflow/ikw_grid/sge` inside an .sge-file (see ./sge)
+SGE-Grid (IKW) `snakemake -p by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --directory $DATAPATH --profile $HOME/derive_conceptualspaces/workflow/ikw_grid/sge` inside an .sge-file (see ./sge)
 """
 #TODO: Job Groups! See https://snakemake.readthedocs.io/en/stable/executing/cluster.html
 #TODO: the rules that have multiprocessing (currently: create_candidate_svm) should require more CPUs!
@@ -20,6 +20,8 @@ import os
 from functools import partial
 from string import Formatter
 import sys
+from pathlib import Path
+import yaml
 
 from snakemake import rules
 from snakemake.io import expand, touch
@@ -56,19 +58,23 @@ from derive_conceptualspace.settings import (
 )
 from misc_util.pretty_print import pretty_print as print, print_multicol
 from misc_util.telegram_notifier import telegram_notify
-from workflow.func_arg import func
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
 LAST_RULE = "create_candidate_svm"
 NONDEFAULT_RULES = ["all", "default", "all_for", "by_config"]
 
+WORKFLOW_DIR = os.path.abspath(os.path.join(os.path.dirname(settings.__file__), "..", "workflow"))
+CLUSTERCONF_FILE = os.path.join(WORKFLOW_DIR, "sge", "ikw_grid", "cluster.yaml")
 
 ########################################################################################################################
 ########################################################################################################################
 ########### the file `raw_descriptions.csv` is the absolute basis, that one I need to get and cannot create. ###########
 ########################################################################################################################
 ########################################################################################################################
+
+with open(CLUSTERCONF_FILE, "r") as rfile:
+    CLUSTER_CONF = yaml.load(rfile,Loader=yaml.SafeLoader)
 
 def initialize_snakemake():
     if int(os.getenv(f"{ENV_PREFIX}_SNAKEMAKE_TELEGRAM", 0)):
@@ -119,11 +125,12 @@ generated_paths = dict(
 ########################################################################################################################
 ########################################################################################################################
 
-rule test_rule:
-    output:
-        touch("success.file")
-    run:
-        func()
+# from workflow.func_arg import func
+# rule test_rule:
+#     output:
+#         touch("success.file")
+#     run:
+#         func()
 
 # rule get_languages:
 #     input:
@@ -136,11 +143,24 @@ rule test_rule:
 #         autoload_context_inputs(ctx, input, wildcards)
 #         create_languages_file_base(ctx.get_config("dataset")+os.sep+ctx.get_config("languages_file"), "languages", "Beschreibung", ctx.p, ctx.obj["raw_descriptions"], ctx.obj["dataset_class"], declare_silent=True)
 #         create_languages_file_base(ctx.get_config("dataset")+os.sep+ctx.get_config("title_languages_file"), "title_languages", "Name", ctx.p, ctx.obj["raw_descriptions"], ctx.obj["dataset_class"], declare_silent=True)
-#TODO check what's newfor this
+#TODO check what's new for this
+
+
+########################################################################################################################
+#preprocess-descriptions (multiple rules bc multiple usecases)
+
+def raw_descriptions_input(wildcards):
+    # I cannot do `raw_descriptions = "{dataset}/"+ctx.get_config("raw_descriptions_file")` in the input-block of snakemake, because
+    # the inputs are executed before eg. the dataset-class is loaded and I would lock the config too early. So https://bioinformatics.stackexchange.com/a/17828/10588
+    try:
+        return next((Path(".")/wildcards.dataset).glob("raw_descriptions.*"))
+    except StopIteration as err:
+        raise Exception("No raw_descriptions file found") from err
+
 
 rule preprocess_descriptions:
     input:
-        raw_descriptions         = "{dataset}/"+ctx.get_config("raw_descriptions_file"),
+        raw_descriptions         = raw_descriptions_input,
         description_languages    = "{dataset}/description_languages.json",
         title_languages          = "{dataset}/title_languages.json",
         # subtitle_languages       = "{dataset}/subtitle_languages.json",
@@ -160,7 +180,7 @@ rule preprocess_descriptions:
 
 rule preprocess_descriptions_notranslate:
     input:
-        raw_descriptions       = "{dataset}/"+ctx.get_config("raw_descriptions_file"),
+        raw_descriptions       = raw_descriptions_input,
         description_languages  = "{dataset}/description_languages.json",
         title_languages        = "{dataset}/title_languages.json",
         # subtitle_languages     = "{dataset}/subtitle_languages.json",
@@ -175,8 +195,23 @@ rule preprocess_descriptions_notranslate:
                                                              ctx.get_config("language"), ctx.get_config("translate_policy"), languages)
         ctx.p.save("pp_descriptions.json", descriptions=descriptions, metainf=metainf)
 
-ruleorder: preprocess_descriptions > preprocess_descriptions_notranslate
 
+rule preprocess_descriptions_singlelanguage:
+    input:
+        raw_descriptions = raw_descriptions_input,
+    output:
+        generated_paths["pp_descriptions"]
+    threads: 1
+    run:
+        autoload_context_inputs(ctx, input, wildcards)
+        assert ctx.has_config("all_descriptions_lang") and ctx.get_config("all_descriptions_lang"), "This rule should only be triggered if all_descriptions_lang is set for the dataset!"
+        descriptions, metainf = preprocess_descriptions_base(ctx.obj["raw_descriptions"], ctx.obj["dataset_class"], ctx.get_config("pp_components"),
+                                                             ctx.get_config("language"), ctx.get_config("translate_policy"), ctx.get_config("all_descriptions_lang"))
+        ctx.p.save("pp_descriptions.json", descriptions=descriptions, metainf=metainf)
+
+ruleorder: preprocess_descriptions > preprocess_descriptions_notranslate > preprocess_descriptions_singlelanguage
+
+########################################################################################################################
 
 rule create_dissim_mat:
     input:
@@ -185,7 +220,7 @@ rule create_dissim_mat:
         generated_paths["dissim_mat"]
     threads: 1
     resources:
-        mem_mb = lambda wildcards: 24*1024 if wildcards.quantification_measure == "ppmi" else None #TODO make also dependent on the size of the dataset ("input" is also allowed as arg)
+        mem_mb = lambda wildcards: 24*1024 if wildcards.quantification_measure == "ppmi" else CLUSTER_CONF["__default__"]["mem"] #TODO make also dependent on the size of the dataset ("input" is also allowed as arg)
     run:
         autoload_context_inputs(ctx, input, wildcards)
         quant_dtm, dissim_mat, metainf = create_dissim_mat_base(ctx.obj["pp_descriptions"], ctx.get_config("quantification_measure"), verbose=ctx.get_config("verbose"))
@@ -239,7 +274,7 @@ rule create_doc_cand_matrix:
         generated_paths["filtered_dcm"]
     threads: 1
     resources:
-        mem_mb=lambda wildcards: 24 * 1024 if wildcards.dcm_quant_measure == "ppmi" else None  #TODO make also dependent on the size of the dataset ("input" is also allowed as arg)
+        mem_mb=lambda wildcards: 24 * 1024 if wildcards.dcm_quant_measure == "ppmi" else CLUSTER_CONF["__default__"]["mem"]  #TODO make also dependent on the size of the dataset ("input" is also allowed as arg)
     run:
         autoload_context_inputs(ctx, input, wildcards)
         filtered_dcm = create_filtered_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], min_term_count=ctx.get_config("candidate_min_term_count"),

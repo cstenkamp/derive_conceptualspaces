@@ -9,7 +9,8 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 
 class Dataset(BaseDataset):
     configs = dict(
-        raw_descriptions_file = "raw_descriptions.csv"
+        raw_descriptions_file = "raw_descriptions.csv",
+        candidate_min_term_count = 25, #TODO see the notes in config/derrac2015.yml!
     )
     additionals = ["ddc_code", "type", "veranstaltungsnummer"]
 

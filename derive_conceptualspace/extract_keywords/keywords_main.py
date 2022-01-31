@@ -86,7 +86,7 @@ def extract_candidateterms_quantific(descriptions, max_ngram, quantific, verbose
     min_val = get_setting("QUANTEXTRACT_MINVAL"); min_val_percentile = get_setting("QUANTEXTRACT_MINVAL_PERC")
     min_per_doc = get_setting("QUANTEXTRACT_MINPERDOC"); forcetake_percentile = get_setting("QUANTEXTRACT_FORCETAKE_PERC")
     assert not (min_val and min_val_percentile)
-    print("Loading Doc-Term-Matrix...")
+    print(f"Loading Doc-Term-Matrix with min-term-count {get_setting('CANDIDATE_MIN_TERM_COUNT')}")
     dtm = descriptions.generate_DocTermMatrix(min_df=get_setting("CANDIDATE_MIN_TERM_COUNT"), max_ngram=max_ngram)
     #Now I'm filtering here, I originally didn't want to do that but it makes the processing incredibly much faster
     if quantific == "tfidf":

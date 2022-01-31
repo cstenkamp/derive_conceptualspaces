@@ -40,6 +40,7 @@ class CustomContext(ObjectWrapper):
         self.used_configs = {}
         self.forbidden_configs = []
         self._initialized = False
+        self._given_warnings = []
         if hasattr(orig_ctx, "post_init"):
             type(orig_ctx).post_init(self)
 
@@ -106,16 +107,23 @@ class CustomContext(ObjectWrapper):
     def set_config(self, key, val, source): #this is only a suggestion, it will only be finally set once it's accessed!
         key, val = standardize_config(key, val)
         if key in self.used_configs and val != self.used_configs[key]:
-            raise ValueError(fmt(f"You're trying to overwrite config {key} with *r*{val}*r*, but it was already used with value *b*{self.used_configs[key]}*b*!"))
+            raise ValueError(fmt(f"{source} is trying to overwrite config {key} with *r*{val}*r*, but it was already used with value *b*{self.used_configs[key]}*b*!"))
         self.toset_configs.append([key, val, source])
         existing_configs = list(zip(*[i for i in self.toset_configs if i[0] == key and i[2] not in ["defaults", "smk_args"]]))
         if existing_configs and len(set(existing_configs[1])) > 1 and existing_configs[0][0] not in settings.MAY_DIFFER_IN_DEPENDENCIES:
+            #TODO this has become a mess. I originally only wanted this warning for dependency, but then expanded it for force and now it's BS. Overhaul this!!
             ordered_args = sorted(list(zip(*existing_configs[::-1][:2])), key=lambda x:CONF_PRIORITY.index(x[0]))
             ordered_args = {v:k for k,v in list({v: k for k, v in ordered_args[::-1]}.items())[::-1]}
             if "dependency" in ordered_args and ordered_args["dependency"] != ordered_args.get("force", ordered_args["dependency"]):
                 raise ValueError(f"A Dependency requires {existing_configs[0][0]} to be {dict(ordered_args)['dependency']} but your other config demands {[v for k,v in ordered_args.items() if k!='dependency'][0]}")
+            if "dataset_class" in ordered_args and bool([k for k, v in ordered_args.items() if v != ordered_args["dataset_class"]]): #if something of higher prio overwrites dataset_class
+                raise ValueError(f"dataset_class requires {existing_configs[0][0]} to be {dict(ordered_args)['dataset_class']} but it will be overwritten by {[k for k, v in ordered_args.items() if v != ordered_args['dataset_class']]}")
             ordered_args = list(ordered_args.items())
-            print(f"{ordered_args[1][0]} demanded config {existing_configs[0][0]} to be *r*{ordered_args[1][1]}*r*, but {ordered_args[0][0]} overwrites it to *b*{ordered_args[0][1]}*b*")
+            warning = f"{ordered_args[1][0]} demanded config {existing_configs[0][0]} to be *r*{ordered_args[1][1]}*r*, but {ordered_args[0][0]} overwrites it to *b*{ordered_args[0][1]}*b*"
+            if warning not in self._given_warnings:
+                self._given_warnings.append(warning)
+                print(warning)
+
 
     def pre_actualcommand_ops(self):
         self.print_important_settings()

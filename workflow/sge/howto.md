@@ -24,4 +24,17 @@
   qconf -sq all.q  #parameters for the `all` group-queue (inc. walltime)
   qstat -j <jobid> #why your job isn't scheduled
   qconf -sc        #everything resource etc you can demand
+  qstat -r         #full jobnames for qstat
   ```
+  
+
+* TODO for grid:
+  * make it easier to edit the command to be executed (snakemake default, by_config, ...), what config-file to be selected and what MA_ENV_FILE to be used
+  * make functions that I know will take >90 minutes interruptible 
+  * fix multiprocessing for grid
+  * remove all absolute (or relative to $HOME) dirs, write instructions on what env-vars to set in the bashrc (`CODEPATH` and `DATAPATH` should be enough), make every path relative from there, and be able to run the exact same code from my machine and from the grid
+  * Make good telegrambot-functionalities such that I always know what's what without having to look into logfiles
+  * The grid may allocate the correct `mem`, but the log of the actual snakemake-rules on the individual nodes still say `resources: mem_mb=1000, disk_mb=1000` for rules where I didn't explicitly set it (seems like I have to explicitly create mem_mb from the mem, see https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html#standard-resources)
+  * Is it possible that if the smk_runner dies and restarts because of walltime, it will execute still running jobs again?! that would suck!!
+    * hotfix for this would be to fix the sge-status.py file, then it doesn't die maybe?
+    * die #retries werden auch ignoriert wenn der smk_runner stirbt..

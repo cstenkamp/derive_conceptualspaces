@@ -250,6 +250,8 @@ class JsonPersister():
             #     self.loaded_objects[k]["used_in"].extend(v["used_in"])  #jot down that #TODO do I need this?!
         for k, v in file.get("used_influentials", {}).items():
             self.ctx.set_config(k, v, "dependency") #if a dependency used a value, that's maximum priority (and fail if already used)
+        for cnf in file.get("forbidden_config", []):
+            self.ctx.forbid_config(cnf)
 
         # for k, v in file.get("loaded_files", {}).items():
         #     if k not in self.loaded_objects: self.loaded_objects[k] = v
@@ -352,15 +354,20 @@ class JsonPersister():
         # assert all(self.ctx.obj[v] == k for v, k in self.loaded_relevant_params.items()) #TODO overhaul 16.01.2022: add back?!
         os.makedirs(join(self.out_dir, subdir), exist_ok=True)
         runtime = int((datetime.now()-self.ctx._init_time).total_seconds()) #restore as string: str(timedelta(seconds=runtime))
-        if self.ctx.forbidden_configs:
-            raise NotImplementedError("TODO: forbidden configs need to stay forbidden!")
         obj = {"loaded_files": loaded_files, "used_influentials": used_influentials,
                "basename": basename, "obj_info": get_all_info(), "created_plots": self.created_plots,
                "used_config": (self.ctx.used_configs, self.ctx.toset_configs), "metainf": metainf, "runtime": runtime,
+               "forbidden_configs": self.ctx.forbidden_configs,
                "object": kwargs} #object should be last!!
         name = json_dump(obj, join(self.out_dir, subdir, filename+ext), forbid_overwrite=not force_overwrite)
         new_influentials = {k: v for k, v in used_influentials.items() if k not in self.loaded_influentials}
-        print(f"Saved under {name}. \nNew Influential Config: {new_influentials}. \nSaved Meta-Inf: {metainf}.")
+        print((f"Saved under {name}. \n"
+               f"  Took {timedelta(seconds=runtime)}. \n"
+               + ((f"  New Influential Config: {new_influentials}. \n") if new_influentials else "")
+               + ((f"  Saved Meta-Inf: {metainf}. \n") if metainf else "")
+               + ((f"  New forbidden Config: {', '.join(self.ctx.forbidden_configs)}. \n") if self.ctx.forbidden_configs else "")
+              ).strip())
+        #TODO telegram-send this string as well if telegram-functionality enabled
         return name
 
     def add_plot(self, title, data):

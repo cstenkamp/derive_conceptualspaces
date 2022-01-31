@@ -1,4 +1,5 @@
 import urllib, requests
+from datetime import timedelta
 from functools import wraps
 import os, traceback, time
 
@@ -37,7 +38,7 @@ def telegram_notify(only_terminal=True, only_on_fail=True, log_start=False):
             else:
                 if not only_on_fail:
                     te = time.time()
-                    send_message(f"Function {fn.__name__} ran through and is done after {te-ts:.2f}s",  os.environ["TELEGRAM_MY_CHAT_ID"])
+                    send_message(f"Function {fn.__name__} ran through and is done after {timedelta(seconds=(te-ts))}",  os.environ["TELEGRAM_MY_CHAT_ID"])
                 return res
         return wrapped if catch_exceptions else fn
     return actual_decorator
