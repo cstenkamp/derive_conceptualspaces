@@ -7,6 +7,7 @@ export DATAPATH="/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp
 export PATH="$HOME/miniconda/bin:$PATH"
 export RUNNERFILE="$HOME/derive_conceptualspaces/workflow/sge/run_snakemake.sge"
 export RUN_NR=${RUN_NR:-1}
+export CUSTOM_ACCTFILE = "$HOME/custom_acctfile.yml"
 
 # set runtime from the yaml
 source $HOME/derive_conceptualspaces/workflow/sge/ikw_grid/parse_yml.sh

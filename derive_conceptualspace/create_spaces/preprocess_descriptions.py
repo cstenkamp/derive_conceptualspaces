@@ -70,6 +70,7 @@ class PPComponents():
 ########################################################################################################################
 
 def preprocess_descriptions_full(raw_descriptions, dataset_class, pp_components, for_language, translate_policy, languages, translations=None):
+    raise Exception()
     max_ngram = get_setting("MAX_NGRAM") if get_setting("NGRAMS_IN_EMBEDDING") else 1
     pp_components = PPComponents.from_str(pp_components)
     descriptions = dataset_class.preprocess_raw_file(raw_descriptions, pp_components)

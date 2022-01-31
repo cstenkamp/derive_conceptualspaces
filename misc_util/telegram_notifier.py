@@ -2,7 +2,7 @@ import urllib, requests
 from datetime import timedelta
 from functools import wraps
 import os, traceback, time
-
+import socket
 
 
 def send_message(text, chat_id, file=None, filename="", reply_markup=None, parse_markdown=False):
@@ -26,11 +26,11 @@ def telegram_notify(only_terminal=True, only_on_fail=True, log_start=False):
             try:
                 ts = time.time()
                 if log_start:
-                    send_message(f"Function {fn.__name__} started!",  os.environ["TELEGRAM_MY_CHAT_ID"])
+                    send_message(f"Function {fn.__name__} started on {socket.gethostname()}!",  os.environ["TELEGRAM_MY_CHAT_ID"])
                 res = fn(*args, **kwargs)
             except Exception as e:
                 te = time.time()
-                send_message(f"Function {fn.__name__} failed after {te-ts:.2f}s",  os.environ["TELEGRAM_MY_CHAT_ID"])
+                send_message(f"Function {fn.__name__} on {socket.gethostname()} failed after {timedelta(seconds=round(te-ts))}",  os.environ["TELEGRAM_MY_CHAT_ID"])
                 error_args = "\n".join(e.args)
                 send_message(f"Exception: {e.__repr__()} \n Args: {error_args}",  os.environ["TELEGRAM_MY_CHAT_ID"])
                 send_message(f"Traceback: \n {traceback.format_exc()}",  os.environ["TELEGRAM_MY_CHAT_ID"])
@@ -38,7 +38,7 @@ def telegram_notify(only_terminal=True, only_on_fail=True, log_start=False):
             else:
                 if not only_on_fail:
                     te = time.time()
-                    send_message(f"Function {fn.__name__} ran through and is done after {timedelta(seconds=(te-ts))}",  os.environ["TELEGRAM_MY_CHAT_ID"])
+                    send_message(f"Function {fn.__name__} on {socket.gethostname()} is done after {timedelta(seconds=round(te-ts))}",  os.environ["TELEGRAM_MY_CHAT_ID"])
                 return res
         return wrapped if catch_exceptions else fn
     return actual_decorator

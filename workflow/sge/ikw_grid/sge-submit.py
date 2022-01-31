@@ -5,6 +5,8 @@ import re
 import math
 import argparse
 import subprocess
+from os.path import join, dirname
+import yaml
 
 # use warnings.warn() rather than print() to output info in this script
 # because snakemake expects the jobid to be the only output
@@ -228,17 +230,27 @@ def submit_job(jobscript, qsub_settings):
     flatten = lambda l: [item for sublist in l for item in sublist]
     batch_options = flatten([sge_option_string(k,v).split() for k, v in qsub_settings["options"].items()])
     batch_resources = flatten([sge_resource_string(k, v).split() for k, v in qsub_settings["resources"].items()])
+    #I'll provide everything I know as env-vars to the script
+    options_as_envvars = flatten([["-v", f"SGE_SMK_{k}={v}"] for k, v in list(qsub_settings["options"].items())+list(qsub_settings["resources"].items()) if bool(v) or v == False])
+    options_as_envvars += ["-v", f"SGE_SMK_rulename={job_properties['rule']}", "-v", f"SGE_SMK_jobid={job_properties['jobid']}"]
     if qsub_settings["resources"].get("h_rt"):
         wall_secs = sum(60**(2-i[0])*int(i[1]) for i in enumerate(qsub_settings["resources"]["h_rt"].split(":")))
         batch_options += ["-v", f"WALL_SECS={wall_secs}"]
     try:
         # -terse means only the jobid is returned rather than the normal 'Your job...' string
-        warnings.warn(f'Will submit the following: `{" ".join(["qsub", "-terse"] + batch_options + batch_resources + [jobscript])}`')
-        jobid = subprocess.check_output(["qsub", "-terse"] + batch_options + batch_resources + [jobscript]).decode().rstrip()
+        warnings.warn(f'Will submit the following: `{" ".join(["qsub", "-terse"] + batch_options + options_as_envvars + batch_resources + [jobscript])}`')
+        jobid = subprocess.check_output(["qsub", "-terse"] + batch_options + options_as_envvars + batch_resources + [jobscript]).decode().rstrip()
     except subprocess.CalledProcessError as e:
         raise e
     except Exception as e:
         raise e
+    #replacement for the accounting-file
+    with open(os.environ["CUSTOM_ACCTFILE"], "r") as rfile:
+        custom_acct = yaml.load(rfile, Loader=yaml.SafeLoader)
+    custom_acct[jobid] = {"envvars": {i.split("=")[0][len("SGE_SMK_"):]:i.split("=")[1] for i in options_as_envvars if i != "-v"},
+                          "batch_options": batch_options, "batch_resources": batch_resources}
+    with open(os.environ["CUSTOM_ACCTFILE"], "w") as wfile:
+        yaml.dump(custom_acct, wfile)
     return jobid
 
 qsub_settings = { "options" : {}, "resources" : {}}

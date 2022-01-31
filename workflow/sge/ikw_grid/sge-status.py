@@ -5,6 +5,10 @@ import shlex
 import sys
 import time
 import logging
+import warnings
+from os.path import dirname, join
+import yaml
+import os
 
 logger = logging.getLogger("__name__")
 logger.setLevel(40)
@@ -41,6 +45,12 @@ for i in range(STATUS_ATTEMPTS):
     except KeyError as e:
         # `qacct` doesn't work on the IKW-grid. I asked Marc, he said "Es wird kein accounting file auf den Knoten geschrieben. Nur auf dem Master und darauf hast du keinen Zugriff"
         job_status = "success"
+        with open(join(dirname(sys.argv[0]), "cluster.yaml"), "r") as rfile:
+            config = yaml.load(rfile,Loader=yaml.SafeLoader)
+        errorfile = config["__default__"]["error"] #TODO this is only the default, it maybe elsewhere!
+        datapath = os.environ["DATAPATH"] #set in the run_snakemake.sge file ($PWD and $MA_BASE_DIR are the same)
+
+        #I have `jobid`
 
         # if the job has finished it won't appear in qstat and we should check qacct
         # this will also provide the exit status (0 on success, 128 + exit_status on fail)
