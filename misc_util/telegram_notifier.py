@@ -30,10 +30,9 @@ def telegram_notify(only_terminal=True, only_on_fail=True, log_start=False):
                 res = fn(*args, **kwargs)
             except Exception as e:
                 te = time.time()
-                send_message(f"Function {fn.__name__} on {socket.gethostname()} failed after {timedelta(seconds=round(te-ts))}",  os.environ["TELEGRAM_MY_CHAT_ID"])
                 error_args = "\n".join(e.args)
-                send_message(f"Exception: {e.__repr__()} \n Args: {error_args}",  os.environ["TELEGRAM_MY_CHAT_ID"])
-                send_message(f"Traceback: \n {traceback.format_exc()}",  os.environ["TELEGRAM_MY_CHAT_ID"])
+                message = f"Function {fn.__name__} on {socket.gethostname()} failed after {timedelta(seconds=round(te-ts))}. \n\n Exception: {e.__repr__()} \n Args: {error_args} \n\n Traceback: \n {traceback.format_exc()}"
+                send_message(message, os.environ["TELEGRAM_MY_CHAT_ID"])
                 raise e
             else:
                 if not only_on_fail:

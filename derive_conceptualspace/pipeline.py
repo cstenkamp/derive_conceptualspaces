@@ -2,6 +2,7 @@ import hashlib
 import os
 import random
 from datetime import datetime
+from os.path import join, dirname, abspath, isfile
 
 import click
 import numpy as np
@@ -171,7 +172,8 @@ class CustomContext(ObjectWrapper):
 
     def read_configfile(self):
         if self.get_config("conf_file"):
-            with open(self.get_config("conf_file"), "r") as rfile:
+            fname = abspath(join(dirname(settings.__file__), "..", self.get_config("conf_file"))) if not isfile(self.get_config("conf_file")) and isfile(abspath(join(dirname(settings.__file__), "..", self.get_config("conf_file")))) else self.get_config("conf_file")
+            with open(fname, "r") as rfile:
                 config = yaml.load(rfile, Loader=yaml.SafeLoader)
             for k, v in config.items():
                 if isinstance(v, list): #IDEA: wenn v eine liste ist und wenn ein cmd-arg bzw env-var einen wert hat der damit consistent ist, nimm das arg

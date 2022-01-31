@@ -32,7 +32,7 @@ for k, v in {k[4:]: v[0] for k,v in dict(locals()).items() if isinstance(v, list
 
 #DEBUG-Settings
 DEFAULT_DEBUG = False
-DEFAULT_DEBUG_N_ITEMS = 100
+DEFAULT_DEBUG_N_ITEMS = 200
 DEFAULT_RANDOM_SEED = 1
 DEFAULT_SEED_ONLY_IN_DEBUG = True
 DEFAULT_VERBOSE = True

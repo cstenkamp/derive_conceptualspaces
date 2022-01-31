@@ -10,6 +10,7 @@ from os.path import dirname, join
 import yaml
 import os
 
+
 logger = logging.getLogger("__name__")
 logger.setLevel(40)
 
@@ -43,41 +44,50 @@ for i in range(STATUS_ATTEMPTS):
         logger.error("qstat process error")
         logger.error(e)
     except KeyError as e:
-        # `qacct` doesn't work on the IKW-grid. I asked Marc, he said "Es wird kein accounting file auf den Knoten geschrieben. Nur auf dem Master und darauf hast du keinen Zugriff"
-        job_status = "success"
-        with open(join(dirname(sys.argv[0]), "cluster.yaml"), "r") as rfile:
-            config = yaml.load(rfile,Loader=yaml.SafeLoader)
-        errorfile = config["__default__"]["error"] #TODO this is only the default, it maybe elsewhere!
-        datapath = os.environ["DATAPATH"] #set in the run_snakemake.sge file ($PWD and $MA_BASE_DIR are the same)
-
-        #I have `jobid`
-
-        # if the job has finished it won't appear in qstat and we should check qacct
-        # this will also provide the exit status (0 on success, 128 + exit_status on fail)
-        # Try getting job with scontrol instead in case sacct is misconfigured
-        # try:
-        #     qacct_res = sp.check_output(shlex.split(f"qacct -j {jobid}"))
-        #
-        #     exit_code = int(re.search("exit_status  ([0-9]+)", qacct_res.decode()).group(1))
-        #
-        #     if exit_code == 0:
-        #         job_status = "success"
-        #         break
-        #
-        #     if exit_code != 0:
-        #         job_status = "failed"
-        #         break
-        #
-        # except sp.CalledProcessError as e:
-        #     logger.warning("qacct process error")
-        #     logger.warning(e)
-        #     if i >= STATUS_ATTEMPTS - 1:
-        #         job_status = "failed"
-        #         break
-        #     else:
-        #         # qacct can be quite slow to update on large servers
-        #         time.sleep(5)
-        pass
+        if os.path.isfile("/var/lib/gridengine/ikwgrid/common/accounting"):
+            # if the job has finished it won't appear in qstat and we should check qacct
+            # this will also provide the exit status (0 on success, 128 + exit_status on fail)
+            # Try getting job with scontrol instead in case sacct is misconfigured
+            try:
+                qacct_res = sp.check_output(shlex.split(f"qacct -j {jobid}"))
+                exit_code = int(re.search("exit_status  ([0-9]+)", qacct_res.decode()).group(1))
+                if exit_code == 0:
+                    job_status = "success"
+                    break
+                if exit_code != 0:
+                    job_status = "failed"
+                    break
+            except sp.CalledProcessError as e:
+                logger.warning("qacct process error")
+                logger.warning(e)
+                if i >= STATUS_ATTEMPTS - 1:
+                    job_status = "failed"
+                    break
+                else:
+                    # qacct can be quite slow to update on large servers
+                    time.sleep(5)
+        else: # `qacct` doesn't work on the IKW-grid. I asked Marc, he said "Es wird kein accounting file auf den Knoten geschrieben. Nur auf dem Master und darauf hast du keinen Zugriff"
+            job_status = "success"
+            if os.path.isfile(os.environ["CUSTOM_ACCTFILE"]):
+                with open(os.environ["CUSTOM_ACCTFILE"], "r") as rfile:
+                    custom_acct = yaml.load(rfile, Loader=yaml.SafeLoader)
+                job_info = custom_acct[str(jobid)]
+                error_file = job_info["envvars"]["e"].format(rulename=job_info["job_properties"]["rule"], jobid=job_info["job_properties"]["jobid"])
+                error_file = os.path.join(os.environ["DATAPATH"], error_file) #set in the run_snakemake.sge file ($PWD and $MA_BASE_DIR are the same)
+                with open(error_file, "r") as rfile:
+                    txt = rfile.readlines()
+                txt = [i.strip() for i in txt if i.strip()]
+                startlines = [lnum for lnum, line in enumerate(txt) if line == "Building DAG of jobs..."]
+                if startlines:
+                    txt = txt[max(startlines):] #take only the last try into account
+                if "Exiting because a job execution failed. Look above for error message" in txt:
+                    print(f"Job {jobid} failed because of an error! Errorfile: {error_file}", file=sys.stderr)
+                    job_status = "failed"
+                    break
+                elif any("Job killed after exceeding memory limits" in i for i in txt):
+                    print(f"Job {jobid} failed because it reached the memory limit! Errorfile: {error_file}", file=sys.stderr)
+                    job_status = "failed"
+                    break
 
 print(job_status)
 

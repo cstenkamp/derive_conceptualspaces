@@ -5,8 +5,8 @@ import re
 import math
 import argparse
 import subprocess
-from os.path import join, dirname
 import yaml
+import sys
 
 # use warnings.warn() rather than print() to output info in this script
 # because snakemake expects the jobid to be the only output
@@ -238,19 +238,23 @@ def submit_job(jobscript, qsub_settings):
         batch_options += ["-v", f"WALL_SECS={wall_secs}"]
     try:
         # -terse means only the jobid is returned rather than the normal 'Your job...' string
-        warnings.warn(f'Will submit the following: `{" ".join(["qsub", "-terse"] + batch_options + options_as_envvars + batch_resources + [jobscript])}`')
+        print(f'Will submit the following: `{" ".join(["qsub", "-terse"] + batch_options + options_as_envvars + batch_resources + [jobscript])}`', file=sys.stderr)
         jobid = subprocess.check_output(["qsub", "-terse"] + batch_options + options_as_envvars + batch_resources + [jobscript]).decode().rstrip()
     except subprocess.CalledProcessError as e:
         raise e
     except Exception as e:
         raise e
     #replacement for the accounting-file
-    with open(os.environ["CUSTOM_ACCTFILE"], "r") as rfile:
-        custom_acct = yaml.load(rfile, Loader=yaml.SafeLoader)
-    custom_acct[jobid] = {"envvars": {i.split("=")[0][len("SGE_SMK_"):]:i.split("=")[1] for i in options_as_envvars if i != "-v"},
-                          "batch_options": batch_options, "batch_resources": batch_resources}
-    with open(os.environ["CUSTOM_ACCTFILE"], "w") as wfile:
-        yaml.dump(custom_acct, wfile)
+    if "CUSTOM_ACCTFILE" in os.environ:
+        if os.path.isfile(os.environ["CUSTOM_ACCTFILE"]):
+            with open(os.environ["CUSTOM_ACCTFILE"], "r") as rfile:
+                custom_acct = yaml.load(rfile, Loader=yaml.SafeLoader)
+        else:
+            custom_acct = {}
+        custom_acct[jobid] = {"envvars": {i.split("=")[0][len("SGE_SMK_"):]:i.split("=")[1] for i in options_as_envvars if i != "-v"},
+                              "batch_options": " ".join(batch_options), "batch_resources": " ".join(batch_resources), "job_properties": job_properties}
+        with open(os.environ["CUSTOM_ACCTFILE"], "w") as wfile:
+            yaml.dump(custom_acct, wfile)
     return jobid
 
 qsub_settings = { "options" : {}, "resources" : {}}

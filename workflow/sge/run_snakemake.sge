@@ -2,38 +2,55 @@
 #$ -N smk_runner
 #$ -l mem=200M
 #$ -l h_rt=01:29:00
+# You have to manually set the walltime here to the same value than what's in the cluster.yaml!
 
+###################### Env-vars you need to set ######################
 export DATAPATH="/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data"
-export PATH="$HOME/miniconda/bin:$PATH"
-export RUNNERFILE="$HOME/derive_conceptualspaces/workflow/sge/run_snakemake.sge"
-export RUN_NR=${RUN_NR:-1}
-export CUSTOM_ACCTFILE = "$HOME/custom_acctfile.yml"
+export CODEPATH="$HOME/derive_conceptualspaces"
+export CONDAPATH="$HOME/miniconda/bin"
+export CUSTOM_ACCTFILE=$HOME/custom_acctfile.yml
+export MA_ENV_FILE="$CODEPATH/config/placetypes.env"
 
-# set runtime from the yaml
-source $HOME/derive_conceptualspaces/workflow/sge/ikw_grid/parse_yml.sh
+###################### stuff you don't need to care about ######################
+# set runtime from the yaml in the $CODEPATH
+source $CODEPATH/workflow/sge/ikw_grid/parse_yml.sh
 eval $(parse_yaml $HOME/derive_conceptualspaces/workflow/sge/ikw_grid/cluster.yaml | grep __default___h_rt)
 export WALLTIME=$__default___h_rt
 export WALL_SECS=$(echo $WALLTIME | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }' )
 
-source $HOME/miniconda/bin/activate derive_conceptualspaces
+# set other env-vars
+export PATH="$CONDAPATH:$PATH"
+export RUNNERFILE="$CODEPATH/workflow/sge/run_snakemake.sge"
+export RUN_NR=${RUN_NR:-1}
+export PYTHONPATH="$CODEPATH:$PYTHONPATH"
 
-cd $HOME/derive_conceptualspaces
-export PYTHONPATH="$HOME/derive_conceptualspaces:$PYTHONPATH"
-export MA_ENV_FILE="$HOME/derive_conceptualspaces/config/siddata.env"
+# activate env etc
+source $CONDAPATH/activate derive_conceptualspaces
+cd $CODEPATH
+echo "This is run nr $RUN_NR"
+sleep 5 # give any previous instance time to die
 
-echo "This is  run nr $RUN_NR"
-
-sleep 5 # give the other snakemake instance time to die
-
-
+###################### actual runner stuff ######################
 # snakemake --directory $DATAPATH by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --unlock
-snakemake --directory $DATAPATH -p test_rule --unlock
-timeout -k $WALL_SECS $(( $WALL_SECS-10 )) snakemake --directory $DATAPATH -p test_rule --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid
-# timeout -k $WALL_SECS $(( $WALL_SECS-10 )) snakemake --directory $DATAPATH -p by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid
+# timeout -k 10 $(( $WALL_SECS-10 )) snakemake --directory $DATAPATH -p by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid
 
-if [ $? != 0 ] ; then # if the timeout killed the program
+snakemake --directory $DATAPATH -p default --unlock
+timeout -k 10 $(( $WALL_SECS-10 )) snakemake --directory $DATAPATH -p default --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid --keep-going
+
+###################### closing stuff ######################
+# restarting if not finished
+retval=$?
+echo "Main process ended. Return-value is $retval"
+if [ $retval -eq 124 ] || [ $retval -eq 137 ] ; then # if the timeout killed the program
   if (( $RUN_NR < 5 )); then # TODO calculate this from the walltime maybe?
     echo "COMMAND TO RUN: qsub -v RUN_NR=$((RUN_NR+1)) $RUNNERFILE"
     qsub -v RUN_NR=$((RUN_NR+1)) $RUNNERFILE
+    exit 0
   fi
 fi
+
+# sending a message IF you are finished
+if [[ -z "${TELEGRAM_BOT_TOKEN}" ]] ; then
+    (export $(cat $MA_ENV_FILE | xargs) && python $CODEPATH/misc_util/telegram_notifier.py "snakemake on $(hostname) ended")
+fi
+echo "snakemake on $(hostname) ended"

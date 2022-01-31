@@ -21,7 +21,7 @@
 * Useful commands:
   ```
   qhost -F         #all information about all hosts (short version: just `qhost`)
-  qconf -sq all.q  #parameters for the `all` group-queue (inc. walltime)
+  qconf -sq ai.q   #parameters for the `ai` group-queue (inc. walltime)
   qstat -j <jobid> #why your job isn't scheduled
   qconf -sc        #everything resource etc you can demand
   qstat -r         #full jobnames for qstat
