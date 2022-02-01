@@ -14,7 +14,7 @@ __default__:
   output: logs/sge/snakejob.{rulename}.{jobid}.log
   error: logs/sge/snakejob.{rulename}.{jobid}.log
   mem: 7 #the ikw grid requires the `-l mem` argument (and this cookiecutter requires it to be the GB-amount as int)
-  h_rt: "01:29:00"
+  h_rt: "01:29:30"
 
 nonrequestables:
   - "tmpdir" #the ikw grid doesn't allow to request a tmpdir

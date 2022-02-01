@@ -114,7 +114,7 @@ class CustomContext(ObjectWrapper):
         if existing_configs and len(set(existing_configs[1])) > 1 and existing_configs[0][0] not in settings.MAY_DIFFER_IN_DEPENDENCIES:
             #TODO this has become a mess. I originally only wanted this warning for dependency, but then expanded it for force and now it's BS. Overhaul this!!
             ordered_args = sorted(list(zip(*existing_configs[::-1][:2])), key=lambda x:CONF_PRIORITY.index(x[0]))
-            ordered_args = {v:k for k,v in list({v: k for k, v in ordered_args[::-1]}.items())[::-1]}
+            ordered_args = dict(sorted({v:k for k,v in list({v: k for k, v in ordered_args[::-1]}.items())}.items(), key=lambda x:CONF_PRIORITY.index(x[0]))) # per value only keep the highest-priority-thing that demanded it
             if "dependency" in ordered_args and ordered_args["dependency"] != ordered_args.get("force", ordered_args["dependency"]):
                 raise ValueError(f"A Dependency requires {existing_configs[0][0]} to be {dict(ordered_args)['dependency']} but your other config demands {[v for k,v in ordered_args.items() if k!='dependency'][0]}")
             if "dataset_class" in ordered_args and bool([k for k, v in ordered_args.items() if v != ordered_args["dataset_class"]]): #if something of higher prio overwrites dataset_class

@@ -10,7 +10,8 @@ export DATAPATH="/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp
 export CODEPATH="$HOME/derive_conceptualspaces"
 export CONDAPATH="$HOME/miniconda/bin"
 export CUSTOM_ACCTFILE=$HOME/custom_acctfile.yml
-export MA_SELECT_ENV_FILE="$CODEPATH/config/_select_env_grid.env"
+export CONFIGDIR="$CODEPATH/config"
+export MA_SELECT_ENV_FILE="$CONFIGDIR/_select_env_grid.env"
 
 ###################### stuff you don't need to care about ######################
 # set runtime from the yaml in the $CODEPATH
@@ -35,11 +36,8 @@ echo "This is run nr $RUN_NR"
 sleep 5 # give any previous instance time to die
 
 ###################### actual runner stuff ######################
-# snakemake --directory $DATAPATH by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --unlock
-# timeout -k 10 $(( $WALL_SECS-10 )) snakemake --directory $DATAPATH -p by_config --configfile $HOME/derive_conceptualspaces/config/derrac2015_edited.yml --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid
-
-snakemake --directory $DATAPATH -p default --unlock
-timeout -k 10 $(( $WALL_SECS-10 )) snakemake --directory $DATAPATH -p default --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid --keep-going
+snakemake --directory $DATAPATH $SNAKEMAKE_ARGS --unlock
+timeout -k 30 $(( $WALL_SECS-60 )) snakemake --directory $DATAPATH -p $SNAKEMAKE_ARGS --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid
 
 ###################### closing stuff ######################
 # restarting if not finished
@@ -47,8 +45,8 @@ retval=$?
 echo "Main process ended. Return-value is $retval"
 if [ $retval -eq 124 ] || [ $retval -eq 137 ] ; then # if the timeout killed the program
   if (( $RUN_NR < 5 )); then # TODO calculate this from the walltime maybe?
-    echo "COMMAND TO RUN: qsub -v RUN_NR=$((RUN_NR+1)) $RUNNERFILE"
-    qsub -v RUN_NR=$((RUN_NR+1)) $RUNNERFILE
+    echo "COMMAND TO RUN: qsub -v RUN_NR=$((RUN_NR+1)) -v SNAKEMAKE_ARGS=$SNAKEMAKE_ARGS $RUNNERFILE"
+    qsub -v RUN_NR=$((RUN_NR+1)) -v SNAKEMAKE_ARGS=$SNAKEMAKE_ARGS $RUNNERFILE
     exit 0
   fi
 fi

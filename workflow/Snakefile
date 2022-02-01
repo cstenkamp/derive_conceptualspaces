@@ -65,17 +65,12 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 LAST_RULE = "create_candidate_svm"
 NONDEFAULT_RULES = ["all", "default", "all_for", "by_config"]
 
-WORKFLOW_DIR = os.path.abspath(os.path.join(os.path.dirname(settings.__file__), "..", "workflow"))
-CLUSTERCONF_FILE = os.path.join(WORKFLOW_DIR, "sge", "ikw_grid", "cluster.yaml")
 
 ########################################################################################################################
 ########################################################################################################################
 ########### the file `raw_descriptions.csv` is the absolute basis, that one I need to get and cannot create. ###########
 ########################################################################################################################
 ########################################################################################################################
-
-with open(CLUSTERCONF_FILE, "r") as rfile:
-    CLUSTER_CONF = yaml.load(rfile,Loader=yaml.SafeLoader)
 
 def initialize_snakemake():
     if int(os.getenv(f"{ENV_PREFIX}_SNAKEMAKE_TELEGRAM", 0)):
@@ -221,7 +216,7 @@ rule create_dissim_mat:
         generated_paths["dissim_mat"]
     threads: 1
     resources:
-        mem_mb = lambda wildcards: 24*1024 if wildcards.quantification_measure == "ppmi" else CLUSTER_CONF["__default__"]["mem"] #TODO make also dependent on the size of the dataset ("input" is also allowed as arg)
+        mem_mb = lambda wildcards: 24*1024 if wildcards.quantification_measure == "ppmi" else 7*1024 #TODO make also dependent on the size of the dataset ("input" is also allowed as arg)
     run:
         autoload_context_inputs(ctx, input, wildcards)
         quant_dtm, dissim_mat, metainf = create_dissim_mat_base(ctx.obj["pp_descriptions"], ctx.get_config("quantification_measure"), verbose=ctx.get_config("verbose"))
@@ -275,7 +270,7 @@ rule create_doc_cand_matrix:
         generated_paths["filtered_dcm"]
     threads: 1
     resources:
-        mem_mb=lambda wildcards: 24 * 1024 if wildcards.dcm_quant_measure == "ppmi" else CLUSTER_CONF["__default__"]["mem"]  #TODO make also dependent on the size of the dataset ("input" is also allowed as arg)
+        mem_mb=lambda wildcards: 24 * 1024 if wildcards.dcm_quant_measure == "ppmi" else 2*1024  #TODO make also dependent on the size of the dataset ("input" is also allowed as arg)
     run:
         autoload_context_inputs(ctx, input, wildcards)
         filtered_dcm = create_filtered_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], min_term_count=ctx.get_config("candidate_min_term_count"),

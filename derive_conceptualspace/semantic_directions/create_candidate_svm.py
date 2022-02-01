@@ -21,6 +21,7 @@ vec_cos = lambda v1, v2: np.arccos(np.clip(np.dot(norm(v1), norm(v2)), -1.0, 1.0
 
 def create_candidate_svms(dcm, embedding, descriptions, verbose):
     decision_planes = {}
+    metrics = {}
     compareto_ranking = get_setting("classifier_compareto_ranking")
     if dcm.quant_name != compareto_ranking and dcm.quant_name == "count":
         dcm = dcm.apply_quant(compareto_ranking)
@@ -28,7 +29,7 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose):
         # Ensure that regardless of quant_measure `np.array(quants, dtype=bool)` are correct binary classification labels
         raise NotImplementedError()
     terms = dcm.all_terms.values()
-    quants_s = [dcm.term_quants(term) for term in terms]
+    quants_s = [dcm.term_quants(term) for term in tqdm(terms, desc="Counting Terms")]
     if get_setting("N_CPUS") == 1:
         for term, quants in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs", total=len(terms)):
             cand_mets, decision_plane, term = create_candidate_svm(embedding.embedding_, term, quants, quant_name=dcm.quant_name)
@@ -41,7 +42,6 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose):
         for cand_mets, decision_plane, term in res:
             metrics[term] = cand_mets
             decision_planes[term] = decision_plane
-
     if verbose:
         df = pd.DataFrame(metrics).T
         df.columns = df.columns.str.replace("kappa", "k").str.replace("rank2rank", "r2r").str.replace("bin2bin", "b2b").str.replace("f_one", "f1").str.replace("digitized", "dig")
