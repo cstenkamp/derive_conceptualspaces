@@ -37,8 +37,9 @@ def extract_candidateterms(pp_descriptions, extraction_method, max_ngram, verbos
         candidateterms, metainf = extract_candidateterms_quantific(pp_descriptions, max_ngram, quantific="ppmi", verbose=verbose)
     else:
         raise NotImplementedError()
-    print("Terms I found: ", ", ".join([f"{k+1}-grams: {v}" for k, v in sorted(Counter([i.count(" ") for i in flatten(candidateterms)]).items(), key=lambda x:x[0])]), "| sum:", len(flatten(candidateterms)))
-    metainf["n_candidateterms"] = len(flatten(candidateterms))
+    flattened = set(flatten(candidateterms))
+    print("Terms I found: ", ", ".join([f"{k+1}-grams: {v}" for k, v in sorted(Counter([i.count(" ") for i in flattened]).items(), key=lambda x:x[0])]), "| sum:", len(flattened))
+    metainf["n_candidateterms"] = len(flattened)
     return candidateterms, metainf
 
 def extract_candidateterms_keybert_nopp(pp_descriptions, faster_keybert=False, verbose=False):
@@ -109,6 +110,8 @@ def extract_candidateterms_quantific(descriptions, max_ngram, quantific, verbose
                      set(j[0] for j in i if j[1] >= forcetake_val)]
                  for i in quant]
     all_candidates = [set([k[0] for k in i[0][:min_per_doc]])|set([j[0] for j in i[0] if j[1] >= min_val][:i[1]])|i[2] for i in candidates]
+    if len(set(flatten(all_candidates))) == len(dtm.all_terms):
+        metainf["all_terms_are_candidates"] = True
     return [[dtm.all_terms[j] for j in i] for i in all_candidates], metainf
 
 

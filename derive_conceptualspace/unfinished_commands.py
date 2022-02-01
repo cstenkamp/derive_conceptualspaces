@@ -101,8 +101,7 @@ def merge_streams(s1, s2, for_):
         res = []
         for i in val.split("\n"):
             try:
-                res.append([datetime.strptime(i[:len(datetime.now().strftime(format))], format),
-                            i[len(datetime.now().strftime(format)) + 1:]])
+                res.append([datetime.strptime(i[:len(datetime.now().strftime(format))], format), (i[len(datetime.now().strftime(format))+1:] if i[len(datetime.now().strftime(format))] == " " else i[len(datetime.now().strftime(format))+0:])])
             except ValueError:
                 res[-1][1] += "\n" + i
         return res

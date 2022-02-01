@@ -1,7 +1,8 @@
 #!/bin/bash
 #$ -N smk_runner
 #$ -l mem=200M
-#$ -l h_rt=01:29:00
+#$ -l h_rt=29:59:00
+
 # You have to manually set the walltime here to the same value than what's in the cluster.yaml!
 
 ###################### Env-vars you need to set ######################
@@ -9,7 +10,7 @@ export DATAPATH="/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp
 export CODEPATH="$HOME/derive_conceptualspaces"
 export CONDAPATH="$HOME/miniconda/bin"
 export CUSTOM_ACCTFILE=$HOME/custom_acctfile.yml
-export MA_ENV_FILE="$CODEPATH/config/placetypes.env"
+export MA_SELECT_ENV_FILE="$CODEPATH/config/_select_env_grid.env"
 
 ###################### stuff you don't need to care about ######################
 # set runtime from the yaml in the $CODEPATH
@@ -23,6 +24,9 @@ export PATH="$CONDAPATH:$PATH"
 export RUNNERFILE="$CODEPATH/workflow/sge/run_snakemake.sge"
 export RUN_NR=${RUN_NR:-1}
 export PYTHONPATH="$CODEPATH:$PYTHONPATH"
+
+# get the actual env-file and whatever else is in the select_env.env
+export $(cat $MA_SELECT_ENV_FILE | xargs)
 
 # activate env etc
 source $CONDAPATH/activate derive_conceptualspaces

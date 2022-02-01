@@ -175,6 +175,9 @@ class CustomContext(ObjectWrapper):
             fname = abspath(join(dirname(settings.__file__), "..", self.get_config("conf_file"))) if not isfile(self.get_config("conf_file")) and isfile(abspath(join(dirname(settings.__file__), "..", self.get_config("conf_file")))) else self.get_config("conf_file")
             with open(fname, "r") as rfile:
                 config = yaml.load(rfile, Loader=yaml.SafeLoader)
+            if config.get("__perdataset__", {}).get(self.get_config("dataset"), {}):
+                config.update(config.get("__perdataset__", {}).get(self.get_config("dataset"), {}))
+            del config["__perdataset__"]
             for k, v in config.items():
                 if isinstance(v, list): #IDEA: wenn v eine liste ist und wenn ein cmd-arg bzw env-var einen wert hat der damit consistent ist, nimm das arg
                     overwriters = [i[1:] for i in self.toset_configs if i[0]==standardize_config_name(k) and CONF_PRIORITY.index(i[2]) < CONF_PRIORITY.index("conf_file")]

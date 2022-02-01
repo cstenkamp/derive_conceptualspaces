@@ -22,6 +22,7 @@ from string import Formatter
 import sys
 from pathlib import Path
 import yaml
+import socket
 
 from snakemake import rules
 from snakemake.io import expand, touch
@@ -57,7 +58,7 @@ from derive_conceptualspace.settings import (
     FORBIDDEN_COMBIS, IS_INTERACTIVE,
 )
 from misc_util.pretty_print import pretty_print as print, print_multicol
-from misc_util.telegram_notifier import telegram_notify
+from misc_util.telegram_notifier import telegram_notify, send_message
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
@@ -291,7 +292,8 @@ rule create_candidate_svm:
         generated_paths["clusters"]
     threads: 4
     resources:
-        mem_mb=16*1024
+        mem_mb=16*1024,
+        h_rt="10:00:00", #TODO this is eyeballed!
     run:
         autoload_context_inputs(ctx, input, wildcards, silents=["pp_descriptions"])
         decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"))
@@ -326,17 +328,29 @@ def input_all_for(wildcards, rule_name=None):
             print_multicol(inputs)
         return inputs
 
+def notify_done():
+    if int(os.getenv(f"{ENV_PREFIX}_SNAKEMAKE_TELEGRAM",0)):
+        if "TELEGRAM_MY_CHAT_ID" in os.environ and "TELEGRAM_BOT_TOKEN" in os.environ:
+            send_message(f"Snakemake on {socket.gethostname()} finished.",os.environ["TELEGRAM_MY_CHAT_ID"])
+
 rule all:
     input:
         partial(input_all_for, rule_name=LAST_RULE)
+    run:
+        notify_done()
+
 
 rule all_for:
     input:
         input_all_for
+    run:
+        notify_done()
 
 rule default:
     input:
         expand_output(rule_by_name(LAST_RULE).output)
+    run:
+        notify_done()
 
 
 def set_envvars_generate_input_from_config(cnf):
@@ -347,6 +361,11 @@ def set_envvars_generate_input_from_config(cnf):
     be equal for all combinations."""
     if os.getenv(f"{ENV_PREFIX}_SMK_NONDEFAULTRULE") != "by_config":
         return ["Not_An_Input"]
+    if "__perdataset__" in cnf.keys():
+        # if config.get("__perdataset__",{}).get(self.get_config("dataset"),{}):
+        #     config.update(config.get("__perdataset__",{}).get(self.get_config("dataset"),{}))
+        # del config["__perdataset__"]
+        raise NotImplementedError()
     lkeys, lvals = zip(*[(k,v) for k,v in cnf.items() if isinstance(v, list)])
     othervals = {k: v for k,v in cnf.items() if k not in lkeys}
     configs_in_filename = flatten([[i[1] for i in Formatter().parse(out) if i[1]] for out in rule_by_name(LAST_RULE).output])
@@ -364,3 +383,5 @@ def set_envvars_generate_input_from_config(cnf):
 rule by_config:
     input:
         set_envvars_generate_input_from_config(config)
+    run:
+        notify_done()

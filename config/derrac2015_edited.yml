@@ -4,8 +4,7 @@
 # Cand-Filter:   binary linear SVM with pos/neg-count-ratio as instance cost, then select all for which kappa(svm_rank, count(t,e)) >= 0.1
 # Cand-Merging:  Custom
 
-language:                     de
-pp_components:                mfatcsldp
+#pp_components:                mfatcsldp
 translate_policy:             onlyorig
 quantification_measure:       ppmi
 dissim_measure:               norm_ang_dist
@@ -21,7 +20,10 @@ classifier_compareto_ranking: [count, ppmi]
 classifier_succmetric:        kappa_rank2rank_onlypos_min
 prim_lambda:                  0.5
 sec_lambda:                   0.1
-
+__perdataset__:
+  placetypes:
+    quantextract_forcetake_perc: 0 #in the placetypes-dataset, ALL words are candidates (21.8k)
+    extraction_method: "tfidf" #the forcetake means the same in ppmi & tfidf, and tfidf is quicker
 
 #TODO alles ab cand-filter fehlt noch...
 
