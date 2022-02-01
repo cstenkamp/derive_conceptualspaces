@@ -361,11 +361,9 @@ def set_envvars_generate_input_from_config(cnf):
     be equal for all combinations."""
     if os.getenv(f"{ENV_PREFIX}_SMK_NONDEFAULTRULE") != "by_config":
         return ["Not_An_Input"]
-    if "__perdataset__" in cnf.keys():
-        # if config.get("__perdataset__",{}).get(self.get_config("dataset"),{}):
-        #     config.update(config.get("__perdataset__",{}).get(self.get_config("dataset"),{}))
-        # del config["__perdataset__"]
-        raise NotImplementedError()
+    if config.get("__perdataset__",{}).get(ctx.get_config("dataset"),{}):
+        config.update(config.get("__perdataset__",{}).get(ctx.get_config("dataset"),{}))
+        del config["__perdataset__"]
     lkeys, lvals = zip(*[(k,v) for k,v in cnf.items() if isinstance(v, list)])
     othervals = {k: v for k,v in cnf.items() if k not in lkeys}
     configs_in_filename = flatten([[i[1] for i in Formatter().parse(out) if i[1]] for out in rule_by_name(LAST_RULE).output])
