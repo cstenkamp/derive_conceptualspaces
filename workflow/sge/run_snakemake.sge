@@ -1,7 +1,7 @@
 #!/bin/bash
 #$ -N smk_runner
 #$ -l mem=200M
-#$ -l h_rt=29:59:00
+#$ -l h_rt=01:29:30
 
 # You have to manually set the walltime here to the same value than what's in the cluster.yaml!
 

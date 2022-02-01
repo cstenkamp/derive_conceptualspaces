@@ -293,7 +293,7 @@ rule create_candidate_svm:
     threads: 4
     resources:
         mem_mb=16*1024,
-        h_rt="10:00:00", #TODO this is eyeballed!
+        h_rt="01:29:30", #TODO actually its longer!!
     run:
         autoload_context_inputs(ctx, input, wildcards, silents=["pp_descriptions"])
         decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"))
