@@ -20,7 +20,6 @@ vec_cos = lambda v1, v2: np.arccos(np.clip(np.dot(norm(v1), norm(v2)), -1.0, 1.0
 
 
 def create_candidate_svms(dcm, embedding, descriptions, verbose):
-    metrics = {}
     decision_planes = {}
     compareto_ranking = get_setting("classifier_compareto_ranking")
     if dcm.quant_name != compareto_ranking and dcm.quant_name == "count":

@@ -294,6 +294,7 @@ rule create_candidate_svm:
     resources:
         mem_mb=16*1024,
         h_rt="01:29:30", #TODO actually its longer!!
+        pe="4-16"
     run:
         autoload_context_inputs(ctx, input, wildcards, silents=["pp_descriptions"])
         decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"))
@@ -329,9 +330,9 @@ def input_all_for(wildcards, rule_name=None):
         return inputs
 
 def notify_done():
-    if int(os.getenv(f"{ENV_PREFIX}_SNAKEMAKE_TELEGRAM",0)):
+    if int(os.getenv(f"{ENV_PREFIX}_SNAKEMAKE_TELEGRAM", "0")):
         if "TELEGRAM_MY_CHAT_ID" in os.environ and "TELEGRAM_BOT_TOKEN" in os.environ:
-            send_message(f"Snakemake on {socket.gethostname()} finished.",os.environ["TELEGRAM_MY_CHAT_ID"])
+            send_message(f"Snakemake on {socket.gethostname()} finished.", os.environ["TELEGRAM_MY_CHAT_ID"])
 
 rule all:
     input:

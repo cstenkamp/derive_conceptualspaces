@@ -181,8 +181,8 @@ class CustomContext(ObjectWrapper):
             for k, v in config.items():
                 if isinstance(v, list): #IDEA: wenn v eine liste ist und wenn ein cmd-arg bzw env-var einen wert hat der damit consistent ist, nimm das arg
                     overwriters = [i[1:] for i in self.toset_configs if i[0]==standardize_config_name(k) and CONF_PRIORITY.index(i[2]) < CONF_PRIORITY.index("conf_file")]
-                    if overwriters:
-                        assert len(overwriters) == 1 and overwriters[0][0] in v, "TODO: do this"
+                    if overwriters and len(set([i[0] for i in overwriters])) > 1:
+                        # assert len(overwriters) == 1 and overwriters[0][0] in v, "TODO: do this"
                         self.set_config(k, overwriters[0][0], "conf_file")
                     else:
                         self.set_config(k, v[0], "conf_file")

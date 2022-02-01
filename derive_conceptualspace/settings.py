@@ -40,8 +40,8 @@ IS_INTERACTIVE = "PYCHARM_HOSTED" in os.environ
 DEFAULT_N_CPUS = max(psutil.cpu_count(logical=False), psutil.cpu_count(logical=True)-2)
 if os.getenv("NSLOTS"):
     print("This machine has been given NSLOTS and it is", os.getenv("NSLOTS"))
-#TODO on the grid there is $NSLOTS (see https://doc.ikw.uni-osnabrueck.de/content/grid-computing) - use that as well!
-#"To ensure that your job is scheduled on a host you are advised not to have request more  than $NCPU -1 parallel environments."
+    os.environ[ENV_PREFIX+"_N_CPUS"] = os.environ["NSLOTS"]
+    #"To ensure that your job is scheduled on a host you are advised not to have request more  than $NCPU -1 parallel environments."
 
 #Settings that influence the algorithm
 DEFAULT_LANGUAGE = "de"
