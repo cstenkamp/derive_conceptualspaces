@@ -12,6 +12,7 @@ import pandas as pd
 
 from derive_conceptualspace.settings import get_setting, IS_INTERACTIVE
 from derive_conceptualspace.util.base_changer import NDPlane, ThreeDPlane
+from derive_conceptualspace.util.threadworker import WorkerPool
 from derive_conceptualspace.util.threedfigure import ThreeDFigure
 from misc_util.pretty_print import pretty_print as print
 
@@ -29,14 +30,16 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose):
         # Ensure that regardless of quant_measure `np.array(quants, dtype=bool)` are correct binary classification labels
         raise NotImplementedError()
     terms = dcm.all_terms.values()
-    quants_s = [dcm.term_quants(term) for term in tqdm(terms, desc="Counting Terms")]
     if get_setting("N_CPUS") == 1:
+        quants_s = [dcm.term_quants(term) for term in tqdm(terms, desc="Counting Terms")]
         for term, quants in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs", total=len(terms)):
             cand_mets, decision_plane, term = create_candidate_svm(embedding.embedding_, term, quants, quant_name=dcm.quant_name)
             metrics[term] = cand_mets
             decision_planes[term] = decision_plane
     else:
-        print(f"Running Multithreaded with {get_setting('N_CPUS')} threads.")
+        print(f"Starting Multiprocessed with {get_setting('N_CPUS')} CPUs")
+        with WorkerPool(get_setting("N_CPUS"), dcm, pgbar="Counting Terms") as pool:
+            quants_s = pool.work(list(terms), lambda dcm, term: dcm.term_quants(term))
         with tqdm(total=len(quants_s), desc="Creating Candidate SVMs") as pgbar, ThreadPool(get_setting("N_CPUS")) as p:
             res = p.starmap(create_candidate_svm, zip(repeat(embedding.embedding_), terms, quants_s, repeat(False), repeat(None), repeat(dcm.quant_name), repeat(pgbar)))
         for cand_mets, decision_plane, term in res:

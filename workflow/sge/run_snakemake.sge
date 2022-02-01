@@ -33,6 +33,7 @@ export $(cat $MA_SELECT_ENV_FILE | xargs)
 source $CONDAPATH/activate derive_conceptualspaces
 cd $CODEPATH
 echo "This is run nr $RUN_NR"
+echo "Snakemake-Args: $SNAKEMAKE_ARGS"
 sleep 5 # give any previous instance time to die
 
 ###################### actual runner stuff ######################

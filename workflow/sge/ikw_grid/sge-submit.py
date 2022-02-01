@@ -236,12 +236,12 @@ def submit_job(jobscript, qsub_settings):
     batch_options = flatten([sge_option_string(k,v).split() for k, v in qsub_settings["options"].items()])
     batch_resources = flatten([sge_resource_string(k, v).split() for k, v in qsub_settings["resources"].items()])
     #I'll provide everything I know as env-vars to the script
-    options_as_envvars = flatten([["-v", f"SGE_SMK_{k}={v}"] for k, v in list(qsub_settings["options"].items())+list(qsub_settings["resources"].items()) if bool(v) or v == False])
+    options_as_envvars = flatten([["-v", f"SGE_SMK_{k}={str(v).replace(' ','_')}"] for k, v in list(qsub_settings["options"].items())+list(qsub_settings["resources"].items()) if bool(v) or v == False])
     options_as_envvars += ["-v", f"SGE_SMK_rulename={job_properties['rule']}", "-v", f"SGE_SMK_jobid={job_properties['jobid']}"]
     if int(job_properties.get("threads", 1)) > 1:
         if not "pe" in qsub_settings["resources"]: # if, in a rule, you specify "threads" but not "resources/pe", it will set the pe from the threads.
             batch_resources.extend(["-pe", "default", str(job_properties['threads'])])
-            options_as_envvars += ["-v", f"SGE_SMK_pe_threads={job_properties['threads']}"]
+            options_as_envvars += ["-v", f"SGE_SMK_pe_threads={job_properties['threads'].replace(' ', '_')}"]
         #else you could check if it the threads fall between qsub_settings["resources"]["pe"][len("default "):] and warn accordingly but whatever
     if qsub_settings["resources"].get("h_rt"):
         wall_secs = sum(60**(2-i[0])*int(i[1]) for i in enumerate(qsub_settings["resources"]["h_rt"].split(":")))
