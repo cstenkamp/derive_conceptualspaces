@@ -8,5 +8,5 @@ source $CONDAPATH/activate derive_conceptualspaces
 
 cd $CODEPATH
 
-(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH MA_LANGUAGE=en snakemake --directory $DATAPATH --cores 1 -p by_config --configfile ./config/derrac2015_edited.yml --unlock)
-(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH MA_LANGUAGE=en snakemake --directory $DATAPATH --cores 1 -p by_config --configfile ./config/derrac2015_edited.yml --keep-going)
+(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH MA_LANGUAGE=en snakemake --directory $DATAPATH --cores 1 -p $* --unlock)
+(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH MA_LANGUAGE=en snakemake --directory $DATAPATH --cores 1 -p $* --keep-going)

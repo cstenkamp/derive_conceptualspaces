@@ -232,7 +232,7 @@ rule create_embedding:
     threads: 3
     run:
         autoload_context_inputs(ctx, input, wildcards, silents=["pp_descriptions"])
-        embedding = create_embedding_base(ctx.obj["dissim_mat"], ctx.get_config("embed_dimensions"), ctx.get_config("embed_algo"), verbose=ctx.get_config("verbose"))
+        embedding = create_embedding_base(ctx.obj["dissim_mat"], ctx.get_config("embed_dimensions"), ctx.get_config("embed_algo"), verbose=ctx.get_config("verbose"), pp_descriptions=ctx.obj["pp_descriptions"])
         ctx.p.save("embedding.json", embedding=embedding)
 
 

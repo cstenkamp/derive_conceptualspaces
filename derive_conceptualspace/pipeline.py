@@ -120,10 +120,9 @@ class CustomContext(ObjectWrapper):
             # if "dataset_class" in ordered_args and bool([k for k, v in ordered_args.items() if v != ordered_args["dataset_class"]]): #if something of higher prio overwrites dataset_class
             #     raise ValueError(f"dataset_class requires {existing_configs[0][0]} to be {dict(ordered_args)['dataset_class']} but it will be overwritten by {[k for k, v in ordered_args.items() if v != ordered_args['dataset_class']]}")
             ordered_args = list(ordered_args.items())
-            warning = f"{ordered_args[1][0]} demanded config {existing_configs[0][0]} to be *r*{ordered_args[1][1]}*r*, but {ordered_args[0][0]} overwrites it to *b*{ordered_args[0][1]}*b*"
-            if warning not in self._given_warnings:
-                self._given_warnings.append(warning)
-                print(warning)
+            if f"{existing_configs[0][0]} from {ordered_args[1][1]} to {ordered_args[0][1]}" not in self._given_warnings:
+                self._given_warnings.append(f"{existing_configs[0][0]} from {ordered_args[1][1]} to {ordered_args[0][1]}")
+                print(f"{ordered_args[1][0]} demanded config {existing_configs[0][0]} to be *r*{ordered_args[1][1]}*r*, but {ordered_args[0][0]} overwrites it to *b*{ordered_args[0][1]}*b*")
 
 
     def pre_actualcommand_ops(self):

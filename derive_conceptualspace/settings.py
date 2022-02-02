@@ -40,7 +40,7 @@ IS_INTERACTIVE = "PYCHARM_HOSTED" in os.environ
 DEFAULT_N_CPUS = max(psutil.cpu_count(logical=False), psutil.cpu_count(logical=True)-2)
 if os.getenv("NSLOTS"):
     print("This machine has been given NSLOTS and it is", os.getenv("NSLOTS"))
-    os.environ[ENV_PREFIX+"_N_CPUS"] = os.environ["NSLOTS"]
+    os.environ[ENV_PREFIX+"_N_CPUS"] = str(max(int(os.environ["NSLOTS"])-1, 1))
     #"To ensure that your job is scheduled on a host you are advised not to have request more  than $NCPU -1 parallel environments."
 
 #Settings that influence the algorithm
