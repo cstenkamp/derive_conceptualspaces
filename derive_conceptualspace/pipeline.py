@@ -101,7 +101,7 @@ class CustomContext(ObjectWrapper):
     def forbid_config(self, confkey, check_unused=True):
         if check_unused:
             assert confkey not in self.used_configs
-        print(f"The config {confkey} is now forbidden!")
+        print(f"The config *r*{confkey}*r* is now forbidden!")
         self.forbidden_configs.append(confkey)
 
 

@@ -210,13 +210,16 @@ def pmi(doc_term_matrix, positive=False, verbose=False, descriptions=None):
     arr = arr/total_words                 #now arr is p_{et}
     words_per_doc = arr.sum(axis=0)       #p_{e*}
     ges_occurs_per_term = arr.sum(axis=1) #p_{*t}
-    prod = scipy.sparse.csr.csr_matrix(np.outer(ges_occurs_per_term, words_per_doc))
+    prod = ges_occurs_per_term*words_per_doc #I'd like to scipy.sparse.csr.csr_matrix(...), but that conversion kills my RAM completely..
     res = arr/prod
+    del arr; del prod; gc.collect()
     res = np.log1p(res)  # DESC15 say it's just the log, but if we take the log all the values 0<val<1 are negative and [i for i in res[doc_term_matrix.reverse_term_dict["building"]].tolist()[0] if i > 0] becomes a much smaller number
     if positive:
         res[res < 0] = 0.0
     quantifications  = csr_to_list(res.T)
+    del res; gc.collect()
     if verbose:
+        print("The counting that'll come now will take long and is only there because you're verbose")
         print_quantification(doc_term_matrix, quantifications, descriptions)
     return quantifications
 

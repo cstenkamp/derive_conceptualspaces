@@ -23,9 +23,11 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 
 def create_dissim_mat(descriptions: DescriptionList, quantification_measure, verbose=False):
     #Options here: get_setting("NGRAMS_IN_EMBEDDING"), get_setting("DISSIM_MAT_ONLY_PARTNERED")
+    if get_setting("DEBUG"):
+        descriptions._descriptions = descriptions._descriptions[:100]
     dtm = descriptions.generate_DocTermMatrix(min_df=2 if get_setting("DISSIM_MAT_ONLY_PARTNERED") else 1)
     assert any(" " in i for i in dtm.all_terms.values()) == get_setting("NGRAMS_IN_EMBEDDING")
-    quantification = dtm.apply_quant(quantification_measure)
+    quantification = dtm.apply_quant(quantification_measure, descriptions=descriptions, verbose=verbose)
     # das ist jetzt \textbf{v}_e with all e's as rows
     #cannot use ppmis directly, because a) too sparse, and b) we need a geometric representation with euclidiean props (betweeness, parallism,..)
     assert all(len(set((lst := [i[0] for i in dtm]))) == len(lst) for dtm in quantification.dtm)
