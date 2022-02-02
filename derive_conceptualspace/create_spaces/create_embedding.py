@@ -38,6 +38,14 @@ def create_dissimilarity_matrix(arr, dissim_measure):
         dist_func = "cosine"
     tmp = []
     N_CHUNKS = 200
+    ########## new ###########
+    # from derive_conceptualspace.util.threadworker import WorkerPool
+    # print(f"Running with {get_setting('N_CPUS')-2} Processes")
+    # with WorkerPool(get_setting("N_CPUS")-2, arr, pgbar="Creating dissimilarity matrix") as pool:
+    #     res = pool.work(list(np.array_split(arr, N_CHUNKS))[:20], lambda arr, chunk: cdist(arr, chunk, dist_func))
+    # print()
+    ########## /new ###########
+
     for chunk in tqdm(np.array_split(arr, N_CHUNKS), desc="Creating dissimilarity matrix"):
         tmp.append(cdist(arr, chunk, dist_func))
     assert np.allclose(np.hstack(tmp), np.hstack(tmp).T), "The matrix must be symmetric!"

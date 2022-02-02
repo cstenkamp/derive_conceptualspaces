@@ -20,10 +20,10 @@ classifier_compareto_ranking: [count, ppmi]
 classifier_succmetric:        kappa_rank2rank_onlypos_min
 prim_lambda:                  0.5
 sec_lambda:                   0.1
-#__perdataset__: #TODO #PRECOMMIT #FIXPRECOMMIT add back!
-#  placetypes:
-#    quantextract_forcetake_perc: 0 #in the placetypes-dataset, ALL words are candidates (21.8k)
-#    extraction_method: "tfidf" #the forcetake means the same in ppmi & tfidf, and tfidf is quicker
+__perdataset__:
+  placetypes:
+    quantextract_forcetake_perc: 0 #in the placetypes-dataset, ALL words are candidates (21.8k)
+    extraction_method: "tfidf" #the forcetake means the same in ppmi & tfidf, and tfidf is quicker
 
 #TODO alles ab cand-filter fehlt noch...
 
