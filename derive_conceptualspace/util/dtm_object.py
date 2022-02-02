@@ -1,5 +1,7 @@
 import warnings
 from collections import Counter
+from itertools import repeat
+from multiprocessing.pool import ThreadPool
 
 from plotly.serializers import np
 from scipy.sparse import csr_matrix
@@ -9,6 +11,7 @@ from tqdm import tqdm
 from derive_conceptualspace.settings import get_setting
 from derive_conceptualspace.util.jsonloadstore import Struct
 from derive_conceptualspace.util.mpl_tools import show_hist
+from derive_conceptualspace.util.threadworker import WorkerPool
 
 from misc_util.pretty_print import pretty_print as print
 
@@ -152,7 +155,15 @@ class DocTermMatrix():
             assert not isinstance(dtm, DocTermMatrix)
         if use_n_docs_count:
             occurences = [set(i[0] for i in doc) for doc in dtm]
-            term_counts = {term: sum([term in i for i in occurences]) for term in tqdm(all_terms.keys(), desc="Counting Terms")}
+            if False: # get_setting('N_CPUS') > 1:
+                print(f"Running with {get_setting('N_CPUS')*2} Threads")
+                def fn(term, occurences, pgbar):
+                    pgbar.update(1)
+                    return sum([term in i for i in occurences])
+                with tqdm(total=len(all_terms), desc="Counting Terms") as pgbar, ThreadPool(get_setting("N_CPUS")*2) as p:
+                    res = p.starmap(fn, zip(list(all_terms.keys()), repeat(occurences), repeat(pgbar)))
+            else:
+                term_counts = {term: sum([term in i for i in occurences]) for term in tqdm(all_terms.keys(), desc="Counting Terms")}
         else:
             flat_terms = [flatten([[i[0]] * i[1] for i in doc]) for doc in dtm]
             term_counts = Counter(flatten(flat_terms))

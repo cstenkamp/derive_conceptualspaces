@@ -1,6 +1,7 @@
 import logging
 import math
 from os.path import basename
+import os
 
 import numpy as np
 import scipy.sparse.csr
@@ -8,8 +9,10 @@ from scipy.spatial.distance import squareform, cdist
 from sklearn.manifold import MDS, TSNE, Isomap
 from tqdm import tqdm
 
+from derive_conceptualspace.util.threadworker import WorkerPool
 from derive_conceptualspace.settings import get_setting
 from misc_util.pretty_print import pretty_print as print
+import psutil
 
 logger = logging.getLogger(basename(__file__))
 
@@ -38,16 +41,16 @@ def create_dissimilarity_matrix(arr, dissim_measure):
         dist_func = "cosine"
     tmp = []
     N_CHUNKS = 200
-    ########## new ###########
-    # from derive_conceptualspace.util.threadworker import WorkerPool
-    # print(f"Running with {get_setting('N_CPUS')-2} Processes")
-    # with WorkerPool(get_setting("N_CPUS")-2, arr, pgbar="Creating dissimilarity matrix") as pool:
-    #     res = pool.work(list(np.array_split(arr, N_CHUNKS))[:20], lambda arr, chunk: cdist(arr, chunk, dist_func))
-    # print()
-    ########## /new ###########
-
-    for chunk in tqdm(np.array_split(arr, N_CHUNKS), desc="Creating dissimilarity matrix"):
-        tmp.append(cdist(arr, chunk, dist_func))
+    n_procs = min(get_setting("N_CPUS"), round(psutil.virtual_memory().total/1024/1024/1024/10))
+    if "SGE_SMK_mem" in os.environ and os.environ["SGE_SMK_mem"].endswith("G"):
+        n_procs = min(n_procs, round(int(os.environ["SGE_SMK_mem"][:-1])/10))   # max. 1 thread per 10GB RAM
+    if n_procs > 1:
+        print(f"Running with {n_procs} Processes")
+        with WorkerPool(n_procs, arr, pgbar="Creating dissimilarity matrix") as pool:
+            tmp = pool.work(list(np.array_split(arr, N_CHUNKS))[:4], lambda arr, chunk: cdist(arr, chunk, dist_func))
+    else:
+        for chunk in tqdm(np.array_split(arr, N_CHUNKS), desc="Creating dissimilarity matrix"):
+            tmp.append(cdist(arr, chunk, dist_func))
     assert np.allclose(np.hstack(tmp), np.hstack(tmp).T), "The matrix must be symmetric!"
     res = np.hstack(tmp)
     if dissim_measure == "norm_ang_dist":
