@@ -1,6 +1,7 @@
 from collections import Counter
 from os.path import join, basename
 import logging
+import random
 
 from tqdm import tqdm
 from gensim import corpora
@@ -128,11 +129,15 @@ def create_doc_cand_matrix(postprocessed_candidates, descriptions, verbose=False
     assert len(postprocessed_candidates) == len(descriptions)
     assert all(cand in desc for ndesc, desc in enumerate(descriptions._descriptions) for cand in postprocessed_candidates[ndesc])
     all_phrases = list(set(flatten(postprocessed_candidates)))
+    if get_setting("DEBUG"):
+        all_phrases = all_phrases[:500]
     # if I used gensim for this, it would be `dictionary,doc_term_matrix = corpora.Dictionary(descriptions), [dictionary.doc2bow(doc) for doc in descriptions]`
-    dictionary = corpora.Dictionary([all_phrases])
+    # dictionary = corpora.Dictionary([all_phrases])
     dtm = [sorted([(nphrase, desc.count_phrase(phrase)) for nphrase, phrase in enumerate(all_phrases) if phrase in desc], key=lambda x:x[0]) for ndesc, desc in enumerate(tqdm(descriptions._descriptions, desc="Creating Doc-Cand-Matrix"))]
     #TODO statt dem ^ kann ich wieder SkLearn nehmen
+    assert all([n for n,i in enumerate(descriptions._descriptions) if term in i] == [n for n, i in enumerate(dtm) if all_phrases.index(term) in [j[0] for j in i]] for term in random.sample(all_phrases, 5))
     doc_term_matrix = DocTermMatrix(dtm=dtm, all_terms=all_phrases, verbose=verbose, quant_name="count")
+    assert all(len([i for i in descriptions._descriptions if term in i]) == len([i for i in doc_term_matrix.term_quants(term) if i > 0]) for term in random.sample(all_phrases, 5))
     #TODO why do I even need to filter this uhm err
     if verbose:
         print("The 25 terms that are most often detected as candidate terms (incl. their #detections):",
@@ -147,5 +152,6 @@ def filter_keyphrases(doc_cand_matrix, descriptions, min_term_count, dcm_quant_m
     assert all(i[1] > 0 for doc in doc_cand_matrix.dtm for i in doc)
     filtered_dcm = DocTermMatrix.filter(doc_cand_matrix, min_count=min_term_count, use_n_docs_count=use_n_docs_count, verbose=verbose, descriptions=descriptions)
     #TODO: drop those documents without any keyphrase?!
+    assert all([n for n, i in enumerate(descriptions._descriptions) if term in i] == [n for n, i in enumerate(filtered_dcm.term_quants(term)) if i > 0] for term in random.sample(list(filtered_dcm.all_terms.values()), 5))
     filtered_dcm = filtered_dcm.apply_quant(dcm_quant_measure)
     return filtered_dcm

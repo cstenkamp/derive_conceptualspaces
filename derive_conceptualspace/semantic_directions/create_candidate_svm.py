@@ -2,6 +2,7 @@ from itertools import repeat
 from multiprocessing.pool import ThreadPool
 import warnings
 from textwrap import shorten
+import random
 
 from tqdm import tqdm
 import sklearn.svm
@@ -25,12 +26,19 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose):
     metrics = {}
     compareto_ranking = get_setting("classifier_compareto_ranking")
     if dcm.quant_name != compareto_ranking and dcm.quant_name == "count":
-        dcm = dcm.apply_quant(compareto_ranking)
+        dcm = dcm.apply_quant(compareto_ranking, descriptions=descriptions, verbose=verbose)
     elif dcm.quant_name != compareto_ranking:
         # Ensure that regardless of quant_measure `np.array(quants, dtype=bool)` are correct binary classification labels
         raise NotImplementedError()
-    terms = dcm.all_terms.values()
-    if get_setting("N_CPUS") == 1:
+    terms = list(dcm.all_terms.values())
+    if get_setting("DEBUG"):
+        # terms = terms[:get_setting("DEBUG_N_ITEMS")]
+        assert all(i in terms for i in ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze'])
+        terms = ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze']
+        assert len([i for i in descriptions._descriptions if 'nature' in i]) == len([i for i in dcm.term_quants('nature') if i > 0])
+        #TODO #PRECOMMIT #FIXPRECOMMIT remove me!
+    assert all(len([i for i in descriptions._descriptions if term in i]) == len([i for i in dcm.term_quants(term) if i > 0]) for term in random.sample(terms, 5))
+    if get_setting("N_CPUS") == 1 or get_setting("DEBUG"):
         quants_s = [dcm.term_quants(term) for term in tqdm(terms, desc="Counting Terms")]
         for term, quants in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs", total=len(terms)):
             cand_mets, decision_plane, term = create_candidate_svm(embedding.embedding_, term, quants, quant_name=dcm.quant_name)

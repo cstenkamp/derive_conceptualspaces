@@ -66,7 +66,7 @@ class Description():
 
     @property
     def orig_textlang(self):
-        if hasattr(self, "_orig_textlang"):
+        if hasattr(self, "_orig_textlang") and self._orig_textlang is not None:
             return self._orig_textlang
         return self.lang
 
@@ -80,13 +80,16 @@ class Description():
             return self.text
         return self._origlang_text
 
+    def repr(self):
+        if self.text is None:
+            return f"Description({self.orig_textlang}: {self.title})"
+        return f"Description({self.orig_textlang}: '{(('*b*'+self.title+'*b*. ') if self._add_title else '')} {(('*g*'+self.subtitle+'*g*. ') if self._add_subtitle and self.subtitle else '')}{textwrap.shorten(self.text, 70)}')"
+
     def __str__(self):
-        return (f"Description({self.orig_textlang}: '{((self.title+'. ') if self._add_title else '')}"
-                f"{((self.subtitle+'. ') if self._add_subtitle and self.subtitle else '')}{textwrap.shorten(self.text, 70)}')")
+        return self.repr().replace("*b*", "").replace("*g*", "")
 
     def __repr__(self):
-        return fmt(f"Description({self.orig_textlang}: '{(('*b*'+self.title+'*b*. ') if self._add_title else '')}"
-                   f"{(('*g*'+self.subtitle+'*g*. ') if self._add_subtitle and self.subtitle else '')}{textwrap.shorten(self.text, 70)}')")
+        return fmt(self.repr())
 
 
     def process(self, procresult, procname):

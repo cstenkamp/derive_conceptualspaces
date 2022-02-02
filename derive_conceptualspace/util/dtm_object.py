@@ -183,8 +183,8 @@ class DocTermMatrix():
             return len(self.term_existinds(use_index=False).get(keyword, [])) / (self.n_docs if rel else 1)
         return len(self.term_existinds(use_index=False)[keyword]) / (self.n_docs if rel else 1)
 
-    def apply_quant(self, quant_name):
-        return DocTermMatrix(dtm=apply_quant(quant_name, self), all_terms=self.all_terms, quant_name=quant_name)
+    def apply_quant(self, quant_name, **kwargs):
+        return DocTermMatrix(dtm=apply_quant(quant_name, self, **kwargs), all_terms=self.all_terms, quant_name=quant_name)
 
 
     def term_quants(self, term): #returns a list of the quantification (count or whatever it is) for the term
@@ -207,11 +207,15 @@ def apply_quant(quant, dtm, verbose=False, descriptions=None):
         quantification = [[[j[0],min(j[1],1)] for j in i] for i in dtm.dtm]
     else:
         raise NotImplementedError()
+    assert len(dtm.dtm) == len(quantification)
+    assert all(len(i) == len(j) for i, j in zip(dtm.dtm, quantification))
     return quantification
 
 
 
 def csr_to_list(csr, vocab=None):
+    if not isinstance(csr, csr_matrix):
+        csr = csr_matrix(csr)
     aslist = [list(sorted(zip((tmp := csr.getrow(nrow).tocoo()).col, tmp.data), key=lambda x:x[0])) for nrow in range(csr.shape[0])]
     if not vocab:
         return aslist
@@ -225,5 +229,6 @@ def dtm_dissimmat_loader(quant_dtm, dissim_mat):
 def dtm_loader(doc_term_matrix):
     dtm = DocTermMatrix.fromstruct(doc_term_matrix[1][1])
     if get_setting("DEBUG"):
-        assert len(dtm.dtm) <= get_setting("DEBUG_N_ITEMS")
+        if len(dtm.dtm) > get_setting("DEBUG_N_ITEMS"):
+            warnings.warn("len(dtm) > DEBUG_N_ITEMS!!")
     return dtm

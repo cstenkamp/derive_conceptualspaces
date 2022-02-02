@@ -47,7 +47,7 @@ echo "Main process ended. Return-value is $retval"
 if [ $retval -eq 124 ] || [ $retval -eq 137 ] ; then # if the timeout killed the program
   if (( $RUN_NR < 5 )); then # TODO calculate this from the walltime maybe?
     echo "COMMAND TO RUN: qsub -v RUN_NR=$((RUN_NR+1)) -v SNAKEMAKE_ARGS=$SNAKEMAKE_ARGS $RUNNERFILE"
-    qsub -v RUN_NR=$((RUN_NR+1)) -v SNAKEMAKE_ARGS=$SNAKEMAKE_ARGS $RUNNERFILE
+    qsub -v RUN_NR=$((RUN_NR+1)) -v SNAKEMAKE_ARGS="$SNAKEMAKE_ARGS" $RUNNERFILE
     exit 0
   fi
 fi

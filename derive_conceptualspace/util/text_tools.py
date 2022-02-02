@@ -11,9 +11,11 @@ import unidecode
 from HanTa import HanoverTagger as ht
 from nltk.corpus import stopwords as nlstopwords
 from tqdm import tqdm
+import scipy.sparse.csr
 
 from derive_conceptualspace.settings import get_setting
 from derive_conceptualspace.util.desc_object import DescriptionList
+from derive_conceptualspace.util.dtm_object import csr_to_list
 from derive_conceptualspace.util.nltk_util import NLTK_LAN_TRANSLATOR, wntag
 from derive_conceptualspace.util.np_tools import np_divide, np_log
 from derive_conceptualspace.util.tokenizers import tokenize_text
@@ -200,33 +202,51 @@ def remove_punctuation_all(descriptions):
 ########################################################################################################################
 ########################################################################################################################
 
-
-def pmi(doc_term_matrix, positive=False, verbose=False, mds_obj=None, descriptions=None):
-    """
-    calculation of ppmi/pmi ([DESC15] 3.4 first lines)
-    see https://stackoverflow.com/a/58725695/5122790
-    see https://www.overleaf.com/project/609bbdd6a07c203c38a07ab4
-    """
+def pmi(doc_term_matrix, positive=False, verbose=False, descriptions=None):
+    # PMI as defined by DESC15
     logger.info("Calculating PMIs...")
     arr = doc_term_matrix.as_csr()
-    #see doc_term_matrix.as_csr().toarray() - spalten pro doc und zeilen pro term
-    words_per_doc = arr.sum(axis=0)       #old name: col_totals
-    total_words = words_per_doc.sum()     #old name: total
-    ges_occurs_per_term = arr.sum(axis=1) #old name: row_totals
-    expected = np.outer(ges_occurs_per_term, words_per_doc)
-    expected = np_divide(expected, total_words)  #TODO maybe I can convert this to a csr to save RAM?
-    quantifications = np_divide(arr, expected)
-    del expected
-    gc.collect()
-    # Silence distracting warnings about log(0):
-    with np.errstate(divide='ignore'):
-        quantifications = np_log(quantifications)
+    total_words = arr.sum()
+    arr = arr/total_words                 #now arr is p_{et}
+    words_per_doc = arr.sum(axis=0)       #p_{e*}
+    ges_occurs_per_term = arr.sum(axis=1) #p_{*t}
+    prod = scipy.sparse.csr.csr_matrix(np.outer(ges_occurs_per_term, words_per_doc))
+    res = arr/prod
+    res = np.log1p(res)  # DESC15 say it's just the log, but if we take the log all the values 0<val<1 are negative and [i for i in res[doc_term_matrix.reverse_term_dict["building"]].tolist()[0] if i > 0] becomes a much smaller number
     if positive:
-        quantifications[quantifications < 0] = 0.0
-    quantifications  = [[[i,elem] for i, elem in enumerate(quantifications[:,i]) if elem != 0] for i in tqdm(range(quantifications.shape[1]), desc="Last PPMI Step")]
+        res[res < 0] = 0.0
+    quantifications  = csr_to_list(res.T)
     if verbose:
         print_quantification(doc_term_matrix, quantifications, descriptions)
     return quantifications
+
+# def pmi(doc_term_matrix, positive=False, verbose=False, mds_obj=None, descriptions=None):
+#     """
+#     calculation of ppmi/pmi ([DESC15] 3.4 first lines)
+#     see https://stackoverflow.com/a/58725695/5122790
+#     see https://www.overleaf.com/project/609bbdd6a07c203c38a07ab4
+#     """
+#     logger.info("Calculating PMIs...")
+#     arr = doc_term_matrix.as_csr()
+#     #see doc_term_matrix.as_csr().toarray() - spalten pro doc und zeilen pro term
+#     #[i for i in arr[doc_term_matrix.reverse_term_dict["building"], :].toarray()[0] if i > 0]
+#     words_per_doc = arr.sum(axis=0)       #old name: col_totals
+#     total_words = words_per_doc.sum()     #old name: total
+#     ges_occurs_per_term = arr.sum(axis=1) #old name: row_totals
+#     #assert np.array(ges_occurs_per_term.squeeze().tolist()).squeeze()[doc_term_matrix.reverse_term_dict["building"]] == np.array(ges_occurs_per_term.squeeze().tolist()).squeeze()[doc_term_matrix.reverse_term_dict["building"]]
+#     expected = np.outer(ges_occurs_per_term, words_per_doc)
+#     expected = np_divide(expected, total_words)  #TODO maybe I can convert this to a csr to save RAM?
+#     quantifications = np_divide(arr, expected)
+#     del expected
+#     gc.collect()
+#     # with np.errstate(divide='ignore'): # Silence distracting warnings about log(0)
+#     quantifications = np_log(quantifications)
+#     if positive:
+#         quantifications[quantifications < 0] = 0.0
+#     quantifications  = [[[i,elem] for i, elem in enumerate(quantifications[:,i]) if elem != 0] for i in tqdm(range(quantifications.shape[1]), desc="Last PPMI Step")]
+#     if verbose:
+#         print_quantification(doc_term_matrix, quantifications, descriptions)
+#     return quantifications
 
 ppmi = partial(pmi, positive=True)
 

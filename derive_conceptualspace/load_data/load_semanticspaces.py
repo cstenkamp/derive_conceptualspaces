@@ -40,9 +40,7 @@ def get_raw_places_dataset():
 
 
 def main():
-    get_raw_places_dataset()
-    return
-    data_base, data_set, n_dims = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/", "movies", 20
+    data_base, data_set, n_dims = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/", "places", 20
     canditerms, cluster_directions, mds_class_dict = get_all(data_base, data_set, n_dims)
     three_dims = list(cluster_directions.keys())[:3]
     entities = {k: (v[1], np.array([v[2][k2] for k2 in three_dims])) for k, v in mds_class_dict.items()}

@@ -226,14 +226,17 @@ class JsonPersister():
         candidates = [join(path, name)[len(self.in_dir):] for path, subdirs, files in os.walk(join(self.in_dir, subdir)) for name in files if name.startswith(save_basename)]
         for cand in candidates: #ich muss nicht reverse-matchen, ich kann die required confs nehmen, anwenden und schauen ob's gleich ist!
             demanded_confs = self.dirname_vars(cand.count(os.sep))
-            dirstruct, _, _, nonapplied_args = self.get_subdir({standardize_config_name(i): self.ctx.get_config(i) for i in demanded_confs})
+            dirstruct = self.get_subdir({standardize_config_name(i): self.ctx.get_config(i) for i in demanded_confs})[0]
             if dirname(cand) == dirstruct:
                 correct_cands.append(cand)
+            if self.ctx.get_config("DEBUG"): #if NOW debug=True, you may still load stuff for which debug=False
+                if dirname(cand) == self.get_subdir({**{standardize_config_name(i): self.ctx.get_config(i) for i in demanded_confs}, "DEBUG": False})[0]:
+                    correct_cands.append(cand)
         if not correct_cands:
             if candidates: #otherwise dirstruct is not defined
                 print(f"You may need the file *b*{join(dirstruct, save_basename+'.json')}*b*")
                 #command is then `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR filepath)`
-            raise FileNotFoundError(f"There is no candidate for {save_basename} with the current config!")
+            raise FileNotFoundError(f"There is no candidate for {save_basename} with the current config. You may need the file *b*{join(dirstruct, save_basename+'.json')}*b*")
         assert len(correct_cands) == 1
         return correct_cands[0]
 
@@ -245,11 +248,13 @@ class JsonPersister():
             else:
                 self.loaded_objects[k] = v  #add those ones as dependency here
             for k2, v2 in v.get("metadata", {}).get("used_influentials", {}).items():
-                self.ctx.set_config(k2, v2, "dependency")
+                if not (self.ctx.has_config(k2) and k2 in settings.MAY_DIFFER_IN_DEPENDENCIES):
+                    self.ctx.set_config(k2, v2, "dependency")
             # elif file["basename"] in v["used_in"]: #and if they are already a dependency (either here or in THAT file)
             #     self.loaded_objects[k]["used_in"].extend(v["used_in"])  #jot down that #TODO do I need this?!
         for k, v in file.get("used_influentials", {}).items():
-            self.ctx.set_config(k, v, "dependency") #if a dependency used a value, that's maximum priority (and fail if already used)
+            if not (self.ctx.has_config(k) and k in settings.MAY_DIFFER_IN_DEPENDENCIES):
+                self.ctx.set_config(k, v, "dependency") #if a dependency used a value, that's maximum priority (and fail if already used)
         for cnf in file.get("forbidden_config", []):
             self.ctx.forbid_config(cnf)
 
@@ -285,6 +290,8 @@ class JsonPersister():
                     raise ValueError(f"config {k2} is supposed to be {self.ctx.get_config(k2, silent=True, silence_defaultwarning=True)} but dependency {k} requires it to be {v2}")
                     #TODO instead of the valuerror, print (and optionally directly perform) the commands to create it with these configs instead
             if file["basename"] in v["used_in"] and k in self.loaded_objects:  #ensure that the info of all currently loaded files corresponds to all of those the file used
+                if self.loaded_objects[k]["path"] != v["path"]:
+                    warnings.warn(f"A different {k} was used for file {file['basename']}!")
                 assert self.loaded_objects[k]["metadata"] == v["metadata"]
         for k, v in file.get("used_influentials", {}).items():
             if k not in settings.MAY_DIFFER_IN_DEPENDENCIES:

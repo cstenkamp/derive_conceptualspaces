@@ -58,7 +58,7 @@ class CustomContext(ObjectWrapper):
     def set_debug(self):
         if self.get_config("DEBUG"):
             self.set_config("CANDIDATE_MIN_TERM_COUNT", 1, "force")
-            print(f"Debug is active! #Items for Debug: {self.get_config('DEBUG_N_ITEMS')}")
+            print(f"Debug is active! #Items for Debug: {self.get_config('DEBUG_N_ITEMS', silent=True)}")
             if self.get_config("RANDOM_SEED", silence_defaultwarning=True):
                 print(f"Using a random seed: {self.get_config('RANDOM_SEED')}")
                 random.seed(self.get_config("RANDOM_SEED"))
@@ -117,8 +117,8 @@ class CustomContext(ObjectWrapper):
             ordered_args = dict(sorted({v:k for k,v in list({v: k for k, v in ordered_args[::-1]}.items())}.items(), key=lambda x:CONF_PRIORITY.index(x[0]))) # per value only keep the highest-priority-thing that demanded it
             if "dependency" in ordered_args and ordered_args["dependency"] != ordered_args.get("force", ordered_args["dependency"]):
                 raise ValueError(f"A Dependency requires {existing_configs[0][0]} to be {dict(ordered_args)['dependency']} but your other config demands {[v for k,v in ordered_args.items() if k!='dependency'][0]}")
-            if "dataset_class" in ordered_args and bool([k for k, v in ordered_args.items() if v != ordered_args["dataset_class"]]): #if something of higher prio overwrites dataset_class
-                raise ValueError(f"dataset_class requires {existing_configs[0][0]} to be {dict(ordered_args)['dataset_class']} but it will be overwritten by {[k for k, v in ordered_args.items() if v != ordered_args['dataset_class']]}")
+            # if "dataset_class" in ordered_args and bool([k for k, v in ordered_args.items() if v != ordered_args["dataset_class"]]): #if something of higher prio overwrites dataset_class
+            #     raise ValueError(f"dataset_class requires {existing_configs[0][0]} to be {dict(ordered_args)['dataset_class']} but it will be overwritten by {[k for k, v in ordered_args.items() if v != ordered_args['dataset_class']]}")
             ordered_args = list(ordered_args.items())
             warning = f"{ordered_args[1][0]} demanded config {existing_configs[0][0]} to be *r*{ordered_args[1][1]}*r*, but {ordered_args[0][0]} overwrites it to *b*{ordered_args[0][1]}*b*"
             if warning not in self._given_warnings:
