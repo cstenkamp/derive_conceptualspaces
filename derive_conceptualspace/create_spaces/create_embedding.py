@@ -19,9 +19,10 @@ logger = logging.getLogger(basename(__file__))
 
 norm_ang_diff = lambda v1, v2: 2/math.pi * np.arccos(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
 cos_to_normangdiff = lambda cosine: 2/math.pi*(np.arccos(-cosine+1))
+# https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.cosine.html -> it's 2/math.pi*(np.arccos(-cosine+1)
+
 # https://stackoverflow.com/questions/35758612/most-efficient-way-to-construct-similarity-matrix
 # https://www.kaggle.com/cpmpml/ultra-fast-distance-matrix-computation/notebook
-# https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.cosine.html -> it's 2/math.pi*(np.arccos(-cosine+1)
 # it WOULD be squareform(np.apply_along_axis(cos_to_normangdiff, 0, pdist(arr, metric="cosine"))), but this way we don't have a progressbar
 
 def create_dissimilarity_matrix(arr, dissim_measure):
@@ -35,6 +36,9 @@ def create_dissimilarity_matrix(arr, dissim_measure):
         arr = arr.toarray().T
     assert arr.shape[0] < arr.shape[1], "I cannot believe your Doc-Term-Matrix has less distinct words then documents."
     assert arr.max(axis=1).min() > 0, "If one of the vectors is zero the calculation will fail!"
+    return _create_dissim_mat(arr, dissim_measure)
+
+def _create_dissim_mat(arr, dissim_measure, force_singlethread=False, n_chunks=200):
     # return squareform(np.apply_along_axis(cos_to_normangdiff, 0, pdist(arr, metric="cosine")))
     # assert np.allclose(np.hstack([cdist(arr, arr[i*10:(i+1)*10], "cosine") for i in range(10)]), squareform(tmp))
     if dissim_measure in ["cosine", "norm_ang_dist"]:
@@ -42,25 +46,30 @@ def create_dissimilarity_matrix(arr, dissim_measure):
     else:
         dist_func = dissim_measure
     tmp = []
-    N_CHUNKS = 200
-    n_procs = get_ncpu(ram_per_core=10)   # max. 1 thread per 10GB RAM
-    if n_procs > 1:
-        print(f"Running with {n_procs} Processes")
-        with WorkerPool(n_procs, arr, pgbar="Creating dissimilarity matrix") as pool:
-            tmp = pool.work(list(np.array_split(arr, N_CHUNKS)), lambda arr, chunk: cdist(arr, chunk, dist_func))
+    if not force_singlethread and get_ncpu(ram_per_core=10) > 1: # max. 1 thread per 10GB RAM
+        print(f"Running with {get_ncpu(ram_per_core=10)} Processes")
+        with WorkerPool(get_ncpu(ram_per_core=10), arr, pgbar="Creating dissimilarity matrix") as pool:
+            tmp = pool.work(list(np.array_split(arr, n_chunks)), lambda arr, chunk: cdist(arr, chunk, dist_func))
     else:
-        for chunk in tqdm(np.array_split(arr, N_CHUNKS), desc="Creating dissimilarity matrix"):
+        for chunk in tqdm(np.array_split(arr, n_chunks), desc="Creating dissimilarity matrix"):
             tmp.append(cdist(arr, chunk, dist_func))
     assert np.allclose(np.hstack(tmp), np.hstack(tmp).T), "The matrix must be symmetric!"
     res = np.hstack(tmp)
     if dissim_measure == "norm_ang_dist":
         flat = squareform(np.hstack(tmp), checks=False) #dunno why this one fails though np.hstack(tmp) == np.hstack(tmp).T
         res = squareform(np.apply_along_axis(cos_to_normangdiff, 0, flat))
+    assert np.allclose(np.diagonal(res), 0, atol=1e-10) or np.allclose(np.diagonal(res), 1, atol=1e-10), "Diagonal must be 1 or 0!"
+    assert np.allclose(res, res.T), "The matrix must be symmetric!"
     return res
 
 
 def create_embedding(dissim_mat, embed_dimensions, embed_algo, verbose=False, pp_descriptions=None):
-    dissim_mat = (dissim_mat[0], (1 - dissim_mat[1])-np.eye(dissim_mat[1].shape[0])) #motherfucker I calculated similarity and need Dissimilarity
+    dtm, dissim_mat = dissim_mat
+    is_dissim = np.allclose(np.diagonal(dissim_mat), 0, atol=1e-10)
+    if not is_dissim:
+        assert np.allclose(np.diagonal(dissim_mat), 1, atol=1e-10)
+        assert dissim_mat.min() >= 0 and dissim_mat.max() <= 1
+        dissim_mat = 1-dissim_mat
     if embed_algo == "mds":
         embed = create_mds(dissim_mat, embed_dimensions)
     elif embed_algo == "tsne":
@@ -70,34 +79,32 @@ def create_embedding(dissim_mat, embed_dimensions, embed_algo, verbose=False, pp
     else:
         raise NotImplementedError(f"Algorithm {embed_algo} is not implemented!")
     if verbose and pp_descriptions is not None:
-        from scipy.spatial.distance import squareform, pdist
-        new_dissim = squareform(pdist(embed.embedding_))
-        show_close_descriptions(new_dissim, pp_descriptions, num=10, title="Embedding")
+        new_dissim = _create_dissim_mat(embed.embedding_, "norm_ang_dist")
+        is_dissim = np.allclose(np.diagonal(new_dissim), 0, atol=1e-10)
+        show_close_descriptions(new_dissim, pp_descriptions, is_dissim, num=10, title="Embedding-Distances")
     return embed
 
 
 def create_mds(dissim_mat, embed_dimensions):
-    dtm, dissim_mat = dissim_mat
-    dissim_mat = dissim_mat*1000
     #TODO - isn't isomap better suited than MDS? https://scikit-learn.org/stable/modules/manifold.html#multidimensional-scaling
     # !! [DESC15] say they compared it and it's worse ([15] of [DESC15])!!!
     n_inits = math.ceil((max(get_ncpu()*2, 10))/get_ncpu())*get_ncpu() # minimally 10, maximally ncpu*2, but in any case a multiple of ncpu
+    max_iter = 5000 if not get_setting("DEBUG") else 100
+    print(f"Running MDS {n_inits} times with {get_ncpu(ignore_debug=True)} jobs for max {max_iter} iterations.")
     embedding = MDS(n_components=embed_dimensions, dissimilarity="precomputed",
                     metric=False, #TODO with metric=True it always breaks after the second step if  n_components>>2
-                    n_jobs=get_ncpu(), verbose=1 if get_setting("VERBOSE") else 0, n_init=n_inits, max_iter=3000, eps=1e-7)
+                    n_jobs=get_ncpu(ignore_debug=True), verbose=1 if get_setting("VERBOSE") else 0, n_init=n_inits, max_iter=max_iter, eps=1e-7)
     mds = embedding.fit(dissim_mat)
     return mds
 
 
 def create_tsne(dissim_mat, embed_dimensions):
-    dtm, dissim_mat = dissim_mat
     embedding = TSNE(n_components=embed_dimensions, random_state=get_setting("RANDOM_SEED"), metric="precomputed")
     tsne = embedding.fit(dissim_mat)
     return tsne
 
 
 def create_isomap(dissim_mat, embed_dimensions):
-    dtm, dissim_mat = dissim_mat
     embedding = Isomap(n_neighbors=min(5, dissim_mat.shape[0]-1), n_components=embed_dimensions, metric="precomputed")
     isomap = embedding.fit(dissim_mat)
     return isomap
@@ -106,7 +113,7 @@ def create_isomap(dissim_mat, embed_dimensions):
 
 
 
-def show_close_descriptions(dissim_mat, descriptions, num=10, title="Dissim-Mat"):
+def show_close_descriptions(dissim_mat, descriptions, is_dissim, num=10, title="Dissim-Mat"):
     # closest_entries = list(zip(*np.where(dissim_mat==min(dissim_mat[dissim_mat>0]))))
     # closest_entries = set(tuple(sorted(i)) for i in closest_entries)
     # print(f"Closest Nonequal Descriptions: \n", "\n".join(["*b*"+("*b* & *b*".join([descriptions._descriptions[i].title for i in j]))+"*b*" for j in closest_entries]))

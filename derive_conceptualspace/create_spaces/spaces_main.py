@@ -33,8 +33,9 @@ def create_dissim_mat(descriptions: DescriptionList, quantification_measure, ver
     #cannot use ppmis directly, because a) too sparse, and b) we need a geometric representation with euclidiean props (betweeness, parallism,..)
     assert all(len(set((lst := [i[0] for i in dtm]))) == len(lst) for dtm in quantification.dtm)
     dissim_mat = create_dissimilarity_matrix(quantification.as_csr(), dissim_measure=get_setting("dissim_measure"))
+    is_dissim = np.allclose(np.diagonal(dissim_mat), 0, atol=1e-10)
     if verbose:
-        show_close_descriptions(dissim_mat, descriptions)
-    return quantification, dissim_mat, {"ngrams_in_embedding": get_setting("NGRAMS_IN_EMBEDDING")}
+        show_close_descriptions(dissim_mat, descriptions, is_dissim=is_dissim)
+    return quantification, dissim_mat, {"ngrams_in_embedding": get_setting("NGRAMS_IN_EMBEDDING"), "is_dissim": is_dissim}
 
 

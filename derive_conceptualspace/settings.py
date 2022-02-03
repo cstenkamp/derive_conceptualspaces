@@ -122,8 +122,10 @@ def forbid_setting(name, **kwargs):
     raise Exception("Unexpected!")
 
 
-def get_ncpu(ram_per_core=None):
+def get_ncpu(ram_per_core=None, ignore_debug=False):
     import psutil
+    if not ignore_debug and get_setting("DEBUG"):
+        return 1
     ncpus = get_setting("N_CPUS")
     if os.getenv("NSLOTS"):
         print("This machine has been given NSLOTS and it is", os.getenv("NSLOTS"))

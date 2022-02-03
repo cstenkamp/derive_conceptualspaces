@@ -8,7 +8,7 @@ pandas==1.3.5
 nltk==3.6.2
 HanTa==0.2.0 #Lemmatizer for german
 tqdm==4.60.0
-scikit-learn==1.0
+scikit-learn==1.0.2
 seaborn==0.11.1
 ipyparams==0.2.1
 langdetect==1.0.9
