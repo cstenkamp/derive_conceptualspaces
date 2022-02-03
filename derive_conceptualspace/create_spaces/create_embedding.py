@@ -30,7 +30,7 @@ def create_dissimilarity_matrix(arr, dissim_measure):
     ppmi(e,t) for all entity-term-combinations. Output is the normalized angular difference between
     all entities ei,ej --> an len(e)*len(e) matrix. This is needed as input for the MDS.
     See [DESC15] section 3.4."""
-    assert dissim_measure in ["cosine", "norm_ang_dist"]
+    assert dissim_measure in ["cosine", "norm_ang_dist", "euclidian"]
     if isinstance(arr, scipy.sparse.csr.csr_matrix):
         arr = arr.toarray().T
     assert arr.shape[0] < arr.shape[1], "I cannot believe your Doc-Term-Matrix has less distinct words then documents."
@@ -39,6 +39,8 @@ def create_dissimilarity_matrix(arr, dissim_measure):
     # assert np.allclose(np.hstack([cdist(arr, arr[i*10:(i+1)*10], "cosine") for i in range(10)]), squareform(tmp))
     if dissim_measure in ["cosine", "norm_ang_dist"]:
         dist_func = "cosine"
+    else:
+        dist_func = dissim_measure
     tmp = []
     N_CHUNKS = 200
     n_procs = min(get_setting("N_CPUS"), round(psutil.virtual_memory().total/1024/1024/1024/10))
@@ -60,6 +62,7 @@ def create_dissimilarity_matrix(arr, dissim_measure):
 
 
 def create_embedding(dissim_mat, embed_dimensions, embed_algo, verbose=False, pp_descriptions=None):
+    dissim_mat = (dissim_mat[0], 1 - dissim_mat[1]) #motherfucker I calculated similarity and need Dissimilarity
     if embed_algo == "mds":
         embed = create_mds(dissim_mat, embed_dimensions)
     elif embed_algo == "tsne":
@@ -69,8 +72,10 @@ def create_embedding(dissim_mat, embed_dimensions, embed_algo, verbose=False, pp
     else:
         raise NotImplementedError(f"Algorithm {embed_algo} is not implemented!")
     if verbose and pp_descriptions is not None:
-        min_vals = sorted(squareform(embed.dissimilarity_matrix_))[:10]
-        min_indices = np.where(np.isin(embed.dissimilarity_matrix_, min_vals))
+        from scipy.spatial.distance import squareform, pdist
+        new_dissim = squareform(pdist(embed.embedding_))
+        min_vals = sorted(squareform(new_dissim))[:10]
+        min_indices = np.where(np.isin(new_dissim, min_vals))
         min_indices = [(i,j) for i,j in zip(*min_indices) if i!=j]
         min_indices = list({j: None for j in [tuple(sorted(i)) for i in min_indices]}.keys()) #remove duplicates ("aircraft cabin and airplane cabin" and "airplane cabin and aircraft cabin")
         print("Closest 10 Descriptions in Embedding:")
@@ -81,7 +86,7 @@ def create_embedding(dissim_mat, embed_dimensions, embed_algo, verbose=False, pp
 
 def create_mds(dissim_mat, embed_dimensions):
     dtm, dissim_mat = dissim_mat
-        #TODO - isn't isomap better suited than MDS? https://scikit-learn.org/stable/modules/manifold.html#multidimensional-scaling
+    #TODO - isn't isomap better suited than MDS? https://scikit-learn.org/stable/modules/manifold.html#multidimensional-scaling
     # !! [DESC15] say they compared it and it's worse ([15] of [DESC15])!!!
     embedding = MDS(n_components=embed_dimensions, random_state=get_setting("RANDOM_SEED"), dissimilarity="precomputed")
     mds = embedding.fit(dissim_mat)
