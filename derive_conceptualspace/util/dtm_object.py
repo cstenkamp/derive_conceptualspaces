@@ -155,12 +155,12 @@ class DocTermMatrix():
             assert not isinstance(dtm, DocTermMatrix)
         if use_n_docs_count:
             occurences = [set(i[0] for i in doc) for doc in dtm]
-            if False: # get_setting('N_CPUS') > 1:
-                print(f"Running with {get_setting('N_CPUS')*2} Threads")
+            if False: # get_ncpu() > 1:
+                print(f"Running with {get_ncpu()*2} Threads")
                 def fn(term, occurences, pgbar):
                     pgbar.update(1)
                     return sum([term in i for i in occurences])
-                with tqdm(total=len(all_terms), desc="Counting Terms") as pgbar, ThreadPool(get_setting("N_CPUS")*2) as p:
+                with tqdm(total=len(all_terms), desc="Counting Terms") as pgbar, ThreadPool(get_ncpu()*2) as p:
                     res = p.starmap(fn, zip(list(all_terms.keys()), repeat(occurences), repeat(pgbar)))
             else:
                 term_counts = {term: sum([term in i for i in occurences]) for term in tqdm(all_terms.keys(), desc="Counting Terms")}

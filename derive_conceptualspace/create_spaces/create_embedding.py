@@ -10,7 +10,7 @@ from sklearn.manifold import MDS, TSNE, Isomap
 from tqdm import tqdm
 
 from derive_conceptualspace.util.threadworker import WorkerPool
-from derive_conceptualspace.settings import get_setting
+from derive_conceptualspace.settings import get_setting, get_ncpu
 from misc_util.pretty_print import pretty_print as print
 import psutil
 
@@ -43,9 +43,7 @@ def create_dissimilarity_matrix(arr, dissim_measure):
         dist_func = dissim_measure
     tmp = []
     N_CHUNKS = 200
-    n_procs = min(get_setting("N_CPUS"), round(psutil.virtual_memory().total/1024/1024/1024/10))
-    if "SGE_SMK_mem" in os.environ and os.environ["SGE_SMK_mem"].endswith("G"):
-        n_procs = min(n_procs, round(int(os.environ["SGE_SMK_mem"][:-1])/10))   # max. 1 thread per 10GB RAM
+    n_procs = get_ncpu(ram_per_core=10)   # max. 1 thread per 10GB RAM
     if n_procs > 1:
         print(f"Running with {n_procs} Processes")
         with WorkerPool(n_procs, arr, pgbar="Creating dissimilarity matrix") as pool:
@@ -62,7 +60,7 @@ def create_dissimilarity_matrix(arr, dissim_measure):
 
 
 def create_embedding(dissim_mat, embed_dimensions, embed_algo, verbose=False, pp_descriptions=None):
-    dissim_mat = (dissim_mat[0], 1 - dissim_mat[1]) #motherfucker I calculated similarity and need Dissimilarity
+    dissim_mat = (dissim_mat[0], (1 - dissim_mat[1])-np.eye(dissim_mat[1].shape[0])) #motherfucker I calculated similarity and need Dissimilarity
     if embed_algo == "mds":
         embed = create_mds(dissim_mat, embed_dimensions)
     elif embed_algo == "tsne":
@@ -74,21 +72,19 @@ def create_embedding(dissim_mat, embed_dimensions, embed_algo, verbose=False, pp
     if verbose and pp_descriptions is not None:
         from scipy.spatial.distance import squareform, pdist
         new_dissim = squareform(pdist(embed.embedding_))
-        min_vals = sorted(squareform(new_dissim))[:10]
-        min_indices = np.where(np.isin(new_dissim, min_vals))
-        min_indices = [(i,j) for i,j in zip(*min_indices) if i!=j]
-        min_indices = list({j: None for j in [tuple(sorted(i)) for i in min_indices]}.keys()) #remove duplicates ("aircraft cabin and airplane cabin" and "airplane cabin and aircraft cabin")
-        print("Closest 10 Descriptions in Embedding:")
-        for first, second in min_indices[:10]:
-            print(f"  *b*{pp_descriptions._descriptions[first].title}*b* and *b*{pp_descriptions._descriptions[second].title}*b*")
+        show_close_descriptions(new_dissim, pp_descriptions, num=10, title="Embedding")
     return embed
 
 
 def create_mds(dissim_mat, embed_dimensions):
     dtm, dissim_mat = dissim_mat
+    dissim_mat = dissim_mat*1000
     #TODO - isn't isomap better suited than MDS? https://scikit-learn.org/stable/modules/manifold.html#multidimensional-scaling
     # !! [DESC15] say they compared it and it's worse ([15] of [DESC15])!!!
-    embedding = MDS(n_components=embed_dimensions, random_state=get_setting("RANDOM_SEED"), dissimilarity="precomputed")
+    n_inits = math.ceil((max(get_ncpu()*2, 10))/get_ncpu())*get_ncpu() # minimally 10, maximally ncpu*2, but in any case a multiple of ncpu
+    embedding = MDS(n_components=embed_dimensions, dissimilarity="precomputed",
+                    metric=False, #TODO with metric=True it always breaks after the second step if  n_components>>2
+                    n_jobs=get_ncpu(), verbose=1 if get_setting("VERBOSE") else 0, n_init=n_inits, max_iter=3000, eps=1e-7)
     mds = embedding.fit(dissim_mat)
     return mds
 
@@ -105,3 +101,19 @@ def create_isomap(dissim_mat, embed_dimensions):
     embedding = Isomap(n_neighbors=min(5, dissim_mat.shape[0]-1), n_components=embed_dimensions, metric="precomputed")
     isomap = embedding.fit(dissim_mat)
     return isomap
+
+
+
+
+
+def show_close_descriptions(dissim_mat, descriptions, num=10, title="Dissim-Mat"):
+    # closest_entries = list(zip(*np.where(dissim_mat==min(dissim_mat[dissim_mat>0]))))
+    # closest_entries = set(tuple(sorted(i)) for i in closest_entries)
+    # print(f"Closest Nonequal Descriptions: \n", "\n".join(["*b*"+("*b* & *b*".join([descriptions._descriptions[i].title for i in j]))+"*b*" for j in closest_entries]))
+    min_vals = sorted(squareform(dissim_mat))[:num]
+    min_indices = np.where(np.isin(dissim_mat, min_vals))
+    min_indices = [(i,j) for i,j in zip(*min_indices) if i!=j]
+    min_indices = list({j: None for j in [tuple(sorted(i)) for i in min_indices]}.keys()) #remove duplicates ("aircraft cabin and airplane cabin" and "airplane cabin and aircraft cabin")
+    print(f"Closest {num} Descriptions in {title}:")
+    for first, second in min_indices[:num]:
+        print(f"  *b*{descriptions._descriptions[first].title}*b* and *b*{descriptions._descriptions[second].title}*b*")

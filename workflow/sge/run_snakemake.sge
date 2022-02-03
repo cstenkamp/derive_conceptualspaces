@@ -5,13 +5,29 @@
 
 # You have to manually set the walltime here to the same value than what's in the cluster.yaml!
 
-###################### Env-vars you need to set ######################
-export DATAPATH="/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data"
-export CODEPATH="$HOME/derive_conceptualspaces"
-export CONDAPATH="$HOME/miniconda/bin"
-export CUSTOM_ACCTFILE=$HOME/custom_acctfile.yml
-export CONFIGDIR="$CODEPATH/config"
-export MA_SELECT_ENV_FILE="$CONFIGDIR/_select_env_grid.env"
+###################### Env-vars you need ######################
+
+if [[ -z "${MA_BASE_DIR}" ]]; then
+  echo "You need the env-var MA_BASE_DIR, pointing to the root of your data!";
+  exit 1;
+fi
+if [[ -z "${MA_CODEPATH}" ]]; then
+  echo "You need the env-var MA_CODEPATH, pointing to the root of the code!";
+  exit 1;
+fi
+if [[ -z "${MA_CONDAPATH}" ]]; then
+  export MA_CONDAPATH=$HOME/miniconda
+fi
+if [[ -z "${MA_CUSTOM_ACCTFILE}" ]]; then
+  export MA_CUSTOM_ACCTFILE=$HOME/custom_acctfile.yml
+fi
+if [[ -z "${MA_CONFIGDIR}" ]]; then
+  export MA_CONFIGDIR=$MA_CODEPATH/config
+fi
+
+echo "Joah, alles gut soweit"
+
+exit 1
 
 ###################### stuff you don't need to care about ######################
 # set runtime from the yaml in the $CODEPATH
@@ -37,8 +53,8 @@ echo "Snakemake-Args: $SNAKEMAKE_ARGS"
 sleep 5 # give any previous instance time to die
 
 ###################### actual runner stuff ######################
-snakemake --directory $DATAPATH $SNAKEMAKE_ARGS --unlock
-timeout -k 30 $(( $WALL_SECS-60 )) snakemake --directory $DATAPATH -p $SNAKEMAKE_ARGS --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid
+snakemake --directory $MA_BASE_DIR $SNAKEMAKE_ARGS --unlock
+timeout -k 30 $(( $WALL_SECS-60 )) snakemake --directory $MA_BASE_DIR -p $SNAKEMAKE_ARGS --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid
 
 ###################### closing stuff ######################
 # restarting if not finished

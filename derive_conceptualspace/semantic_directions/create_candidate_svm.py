@@ -11,7 +11,7 @@ from sklearn.metrics import confusion_matrix, cohen_kappa_score
 from scipy.stats import rankdata
 import pandas as pd
 
-from derive_conceptualspace.settings import get_setting, IS_INTERACTIVE
+from derive_conceptualspace.settings import get_setting, IS_INTERACTIVE, get_ncpu
 from derive_conceptualspace.util.base_changer import NDPlane, ThreeDPlane
 from derive_conceptualspace.util.threadworker import WorkerPool
 from derive_conceptualspace.util.threedfigure import ThreeDFigure
@@ -38,17 +38,17 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose):
         assert len([i for i in descriptions._descriptions if 'nature' in i]) == len([i for i in dcm.term_quants('nature') if i > 0])
         #TODO #PRECOMMIT #FIXPRECOMMIT remove me!
     assert all(len([i for i in descriptions._descriptions if term in i]) == len([i for i in dcm.term_quants(term) if i > 0]) for term in random.sample(terms, 5))
-    if get_setting("N_CPUS") == 1 or get_setting("DEBUG"):
+    if get_ncpu() == 1 or get_setting("DEBUG"):
         quants_s = [dcm.term_quants(term) for term in tqdm(terms, desc="Counting Terms")]
         for term, quants in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs", total=len(terms)):
             cand_mets, decision_plane, term = create_candidate_svm(embedding.embedding_, term, quants, quant_name=dcm.quant_name)
             metrics[term] = cand_mets
             decision_planes[term] = decision_plane
     else:
-        print(f"Starting Multiprocessed with {get_setting('N_CPUS')} CPUs")
-        with WorkerPool(get_setting("N_CPUS"), dcm, pgbar="Counting Terms") as pool:
+        print(f"Starting Multiprocessed with {get_ncpu()} CPUs")
+        with WorkerPool(get_ncpu(), dcm, pgbar="Counting Terms") as pool:
             quants_s = pool.work(list(terms), lambda dcm, term: dcm.term_quants(term))
-        with tqdm(total=len(quants_s), desc="Creating Candidate SVMs") as pgbar, ThreadPool(get_setting("N_CPUS")) as p:
+        with tqdm(total=len(quants_s), desc="Creating Candidate SVMs") as pgbar, ThreadPool(get_ncpu()) as p:
             res = p.starmap(create_candidate_svm, zip(repeat(embedding.embedding_), terms, quants_s, repeat(False), repeat(None), repeat(dcm.quant_name), repeat(pgbar)))
         for cand_mets, decision_plane, term in res:
             metrics[term] = cand_mets

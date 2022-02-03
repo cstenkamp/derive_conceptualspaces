@@ -4,7 +4,7 @@ import logging
 import numpy as np
 from scipy.spatial.distance import squareform
 
-from .create_embedding import create_dissimilarity_matrix
+from .create_embedding import create_dissimilarity_matrix, show_close_descriptions
 
 from derive_conceptualspace.settings import get_setting
 from derive_conceptualspace.util.text_tools import tf_idf, ppmi
@@ -34,20 +34,7 @@ def create_dissim_mat(descriptions: DescriptionList, quantification_measure, ver
     assert all(len(set((lst := [i[0] for i in dtm]))) == len(lst) for dtm in quantification.dtm)
     dissim_mat = create_dissimilarity_matrix(quantification.as_csr(), dissim_measure=get_setting("dissim_measure"))
     if verbose:
-        closest_entries = list(zip(*np.where(dissim_mat==min(dissim_mat[dissim_mat>0]))))
-        closest_entries = set(tuple(sorted(i)) for i in closest_entries)
-        print(f"Closest Nonequal Descriptions: \n", "\n".join(["*b*"+("*b* & *b*".join([descriptions._descriptions[i].title for i in j]))+"*b*" for j in closest_entries]))
-
-        min_vals = sorted(squareform(dissim_mat))[:10]
-        min_indices = np.where(np.isin(dissim_mat, min_vals))
-        min_indices = [(i,j) for i,j in zip(*min_indices) if i!=j]
-        min_indices = list({j: None for j in [tuple(sorted(i)) for i in min_indices]}.keys()) #remove duplicates ("aircraft cabin and airplane cabin" and "airplane cabin and aircraft cabin")
-        print("Closest 10 Descriptions in Dissim-Mat:")
-        for first, second in min_indices[:10]:
-            print(f"  *b*{descriptions._descriptions[first].title}*b* and *b*{descriptions._descriptions[second].title}*b*")
-
+        show_close_descriptions(dissim_mat, descriptions)
     return quantification, dissim_mat, {"ngrams_in_embedding": get_setting("NGRAMS_IN_EMBEDDING")}
-
-
 
 

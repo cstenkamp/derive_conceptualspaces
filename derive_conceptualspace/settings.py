@@ -38,10 +38,7 @@ DEFAULT_SEED_ONLY_IN_DEBUG = True
 DEFAULT_VERBOSE = True
 IS_INTERACTIVE = "PYCHARM_HOSTED" in os.environ
 DEFAULT_N_CPUS = max(psutil.cpu_count(logical=False), psutil.cpu_count(logical=True)-2)
-if os.getenv("NSLOTS"):
-    print("This machine has been given NSLOTS and it is", os.getenv("NSLOTS"))
-    os.environ[ENV_PREFIX+"_N_CPUS"] = str(max(int(os.environ["NSLOTS"])-1, 1))
-    #"To ensure that your job is scheduled on a host you are advised not to have request more  than $NCPU -1 parallel environments."
+
 
 #Settings that influence the algorithm
 DEFAULT_LANGUAGE = "de"
@@ -123,6 +120,24 @@ def forbid_setting(name, **kwargs):
     if hasattr(sys.stdout, "ctx"):
         return sys.stdout.ctx.forbid_config(name, **kwargs)
     raise Exception("Unexpected!")
+
+
+def get_ncpu(ram_per_core=None):
+    import psutil
+    ncpus = get_setting("N_CPUS")
+    if os.getenv("NSLOTS"):
+        print("This machine has been given NSLOTS and it is", os.getenv("NSLOTS"))
+        ncpus = max(int(os.environ["NSLOTS"]) - 1, 1)
+        # "To ensure that your job is scheduled on a host you are advised not to have request more  than $NCPU -1 parallel environments."
+    if "GOTO_NUM_THREADS" in os.environ:  # see https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html#threads
+        print(f"Snakemake restricts the #Threads to {os.environ['GOTO_NUM_THREADS']}")
+        ncpus = min(ncpus, int(os.environ["GOTO_NUM_THREADS"]))
+    if ram_per_core:
+        ncpus = min(ncpus, round(psutil.virtual_memory().total / 1024 / 1024 / 1024 / ram_per_core))
+        if "SGE_SMK_mem" in os.environ and os.environ["SGE_SMK_mem"].endswith("G"):
+            ncpus = min(ncpus, round(int(os.environ["SGE_SMK_mem"][:-1]) / ram_per_core)) # max. 1 thread per XGB RAM
+    return ncpus
+
 
 ########################################################################################################################
 
