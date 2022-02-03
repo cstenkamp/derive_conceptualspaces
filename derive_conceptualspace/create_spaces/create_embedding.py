@@ -1,5 +1,6 @@
 import logging
 import math
+import warnings
 from os.path import basename
 import os
 
@@ -79,22 +80,29 @@ def create_embedding(dissim_mat, embed_dimensions, embed_algo, verbose=False, pp
     else:
         raise NotImplementedError(f"Algorithm {embed_algo} is not implemented!")
     if verbose and pp_descriptions is not None:
-        new_dissim = _create_dissim_mat(embed.embedding_, "norm_ang_dist")
+        new_dissim = _create_dissim_mat(embed.embedding_, get_setting("DISSIM_MEASURE"))
         is_dissim = np.allclose(np.diagonal(new_dissim), 0, atol=1e-10)
-        show_close_descriptions(new_dissim, pp_descriptions, is_dissim, num=10, title="Embedding-Distances")
+        show_close_descriptions(new_dissim, pp_descriptions, is_dissim, num=10, title=f"Embedding-Distances ({get_setting('DISSIM_MEASURE')})")
     return embed
 
 
-def create_mds(dissim_mat, embed_dimensions):
+def create_mds(dissim_mat, embed_dimensions, metric=True, init_from_isomap=True):
     #TODO - isn't isomap better suited than MDS? https://scikit-learn.org/stable/modules/manifold.html#multidimensional-scaling
     # !! [DESC15] say they compared it and it's worse ([15] of [DESC15])!!!
-    n_inits = math.ceil((max(get_ncpu()*2, 10))/get_ncpu())*get_ncpu() # minimally 10, maximally ncpu*2, but in any case a multiple of ncpu
-    max_iter = 5000 if not get_setting("DEBUG") else 100
-    print(f"Running MDS {n_inits} times with {get_ncpu(ignore_debug=True)} jobs for max {max_iter} iterations.")
-    embedding = MDS(n_components=embed_dimensions, dissimilarity="precomputed",
-                    metric=False, #TODO with metric=True it always breaks after the second step if  n_components>>2
-                    n_jobs=get_ncpu(ignore_debug=True), verbose=1 if get_setting("VERBOSE") else 0, n_init=n_inits, max_iter=max_iter, eps=1e-7)
-    mds = embedding.fit(dissim_mat)
+    max_iter = 10000 if not get_setting("DEBUG") else 100
+    if not init_from_isomap:
+        warnings.warn("Motherfucker is broken!! Have to init from something, don't fucking ask why!")
+        n_inits = math.ceil((max(get_ncpu()*2, (10 if not get_setting("DEBUG") else 3)))/get_ncpu())*get_ncpu() # minimally 10, maximally ncpu*2, but in any case a multiple of ncpu
+        print(f"Running {'non-' if not metric else ''}metric MDS {n_inits} times with {get_ncpu(ignore_debug=True)} jobs for max {max_iter} iterations.")
+        embedding = MDS(n_components=embed_dimensions, dissimilarity="precomputed",
+                        metric=metric, #TODO with metric=True it always breaks after the second step if  n_components>>2 (well, mit metric=False auch^^)
+                        n_jobs=get_ncpu(ignore_debug=True), verbose=1 if get_setting("VERBOSE") else 0, n_init=n_inits, max_iter=max_iter)
+        mds = embedding.fit(dissim_mat)
+    else:
+        print(f"Running {'non-' if not metric else ''}metric MDS with {get_ncpu(ignore_debug=True)} jobs for max {max_iter} iterations, initialized from Isomap-Embeddings")
+        embedding = MDS(n_components=embed_dimensions, dissimilarity="precomputed", metric=metric,
+                        n_jobs=get_ncpu(ignore_debug=True), verbose=1 if get_setting("VERBOSE") else 0, n_init=1, max_iter=max_iter)
+        mds = embedding.fit(dissim_mat, init=create_isomap(dissim_mat, embed_dimensions).embedding_)
     return mds
 
 
@@ -105,7 +113,9 @@ def create_tsne(dissim_mat, embed_dimensions):
 
 
 def create_isomap(dissim_mat, embed_dimensions):
-    embedding = Isomap(n_neighbors=min(5, dissim_mat.shape[0]-1), n_components=embed_dimensions, metric="precomputed")
+    n_neighbors=min(5, dissim_mat.shape[0]-1)
+    print(f"Running Isomap with {get_ncpu(ignore_debug=True)} jobs for max {n_neighbors} neighbors.")
+    embedding = Isomap(n_jobs=get_ncpu(ignore_debug=True), n_neighbors=n_neighbors, n_components=embed_dimensions, metric="precomputed")
     isomap = embedding.fit(dissim_mat)
     return isomap
 

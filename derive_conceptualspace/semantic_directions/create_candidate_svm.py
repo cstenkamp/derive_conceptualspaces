@@ -38,7 +38,7 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose):
         assert len([i for i in descriptions._descriptions if 'nature' in i]) == len([i for i in dcm.term_quants('nature') if i > 0])
         #TODO #PRECOMMIT #FIXPRECOMMIT remove me!
     assert all(len([i for i in descriptions._descriptions if term in i]) == len([i for i in dcm.term_quants(term) if i > 0]) for term in random.sample(terms, 5))
-    if get_ncpu() == 1 or get_setting("DEBUG"):
+    if get_ncpu() == 1:
         quants_s = [dcm.term_quants(term) for term in tqdm(terms, desc="Counting Terms")]
         for term, quants in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs", total=len(terms)):
             cand_mets, decision_plane, term = create_candidate_svm(embedding.embedding_, term, quants, quant_name=dcm.quant_name)
@@ -53,6 +53,8 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose):
         for cand_mets, decision_plane, term in res:
             metrics[term] = cand_mets
             decision_planes[term] = decision_plane
+    if (didnt_converge := len([1 for i in metrics.values() if not i["did_converge"]])):
+        warnings.warn(f"{didnt_converge} of the {len(metrics)} SVMs did not converge!", sklearn.exceptions.ConvergenceWarning)
     if verbose:
         df = pd.DataFrame(metrics).T
         df.columns = df.columns.str.replace("kappa", "k").str.replace("rank2rank", "r2r").str.replace("bin2bin", "b2b").str.replace("f_one", "f1").str.replace("digitized", "dig")
@@ -118,13 +120,20 @@ def create_candidate_svm(embedding, term, quants, plot_svm=False, descriptions=N
     # see https://stackoverflow.com/q/33843981/5122790, https://stackoverflow.com/q/35076586/5122790
     # svm = sklearn.svm.SVC(kernel="linear", class_weight="balanced")  #slow as fuck
     # svm = sklearn.svm.LinearSVC(dual=False, class_weight="balanced") #squared-hinge instead of hinge (but fastest!)
-    svm = sklearn.svm.LinearSVC(class_weight="balanced", loss="hinge", max_iter=8000)
-    svm.fit(embedding, bin_labels)
+    svm = sklearn.svm.LinearSVC(class_weight="balanced", loss="hinge", max_iter=20000)
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        svm.fit(embedding, bin_labels)
+        no_converge = False
+        if w:
+            assert len(w) == 1
+            assert issubclass(w[0].category, sklearn.exceptions.ConvergenceWarning)
+            no_converge = True
     svm_results = svm.decision_function(embedding)
     tn, fp, fn, tp = confusion_matrix(bin_labels, [i > 0 for i in svm_results]).ravel()
     precision = tp / (tp + fp); recall = tp / (tp + fn); accuracy = (tp + tn) / len(quants)
     f_one = 2*(precision*recall)/(precision+recall)
-    res = {"accuracy": accuracy, "precision": precision, "recall": recall, "f_one": f_one}
+    res = {"accuracy": accuracy, "precision": precision, "recall": recall, "f_one": f_one, "did_converge": not no_converge}
     # print(f"accuracy: {accuracy:.2f} | precision: {precision:.2f} | recall: {recall:.2f}")
     #now, in [DESC15:4.2.1], they compare the "ranking induced by \vec{v_t} with the number of times the term occurs in the entity's documents" with Cohen's Kappa.
 
