@@ -237,7 +237,7 @@ class JsonPersister():
                 print(f"You may need the file *b*{join(dirstruct, save_basename+'.json')}*b*")
                 #command is then `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR filepath)`
             raise FileNotFoundError(f"There is no candidate for {save_basename} with the current config. You may need the file *b*{join(dirstruct, save_basename+'.json')}*b*")
-        assert len(correct_cands) == 1
+        assert len(correct_cands) == 1, f"Multiple file candidates: {correct_cands}"
         return correct_cands[0]
 
 
@@ -292,7 +292,11 @@ class JsonPersister():
             if file["basename"] in v["used_in"] and k in self.loaded_objects:  #ensure that the info of all currently loaded files corresponds to all of those the file used
                 if self.loaded_objects[k]["path"] != v["path"]:
                     warnings.warn(f"A different {k} was used for file {file['basename']}!")
-                assert self.loaded_objects[k]["metadata"] == v["metadata"]
+                if self.loaded_objects[k]["metadata"] != v["metadata"]:
+                    warnings.warn(f"There is different Metadata for {k} and for {file['basename']}")
+                    diff_keys = {i for i in self.loaded_objects[k]["metadata"].keys() if self.loaded_objects[k]["metadata"][i] != v["metadata"][i]}
+                    if "used_config" in diff_keys:
+                        assert {k: v for k, v in self.loaded_objects[k]["metadata"]["used_config"][0].items() if k not in ["BASE_DIR"]} == {k: v for k, v in v["metadata"]["used_config"][0].items() if k not in ["BASE_DIR"]}
         for k, v in file.get("used_influentials", {}).items():
             if k not in settings.MAY_DIFFER_IN_DEPENDENCIES:
                 assert self.ctx.get_config(k, silent=True, silence_defaultwarning=True, default_false=True) == standardize_config_val(k, v)  #check that all current influential settings are consistent with what the file had

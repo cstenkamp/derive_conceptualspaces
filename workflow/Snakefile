@@ -17,6 +17,7 @@ SGE-Grid (IKW) `snakemake -p by_config --configfile $HOME/derive_conceptualspace
 
 import itertools
 import os
+from builtins import all
 from functools import partial
 from string import Formatter
 import sys
@@ -294,7 +295,7 @@ rule create_candidate_svm:
         autoload_context_inputs(ctx, input, wildcards, silents=["pp_descriptions"])
         decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"))
         ctx.p.save("clusters.json", decision_planes=decision_planes, metrics=metrics) # metainf={"prim_lambda": params.prim_lambda, "sec_lambda": params.sec_lambda})
-        print("Clusters saved - Snakemake still active?! #TODO")
+
 
 ########################################################################################################################
 ########################################################################################################################
@@ -364,7 +365,8 @@ def set_envvars_generate_input_from_config(cnf):
     lkeys, lvals = zip(*[(k,v) for k,v in cnf.items() if isinstance(v, list)])
     othervals = {k: v for k,v in cnf.items() if k not in lkeys}
     configs_in_filename = flatten([[i[1] for i in Formatter().parse(out) if i[1]] for out in rule_by_name(LAST_RULE).output])
-    assert all(i in configs_in_filename for i in lkeys), "You can only have multiple values for configs that are reflected in the filename"
+    if not all(i in configs_in_filename for i in lkeys):
+        raise ValueError(f"You can only have multiple values for configs that are reflected in the filename, and these are not: {', '.join(i for i in lkeys if i not in configs_in_filename)}")
     for k, v in othervals.items():
         if k not in configs_in_filename:
             os.environ[ENV_PREFIX+"_CONF_FORCE_"+standardize_config_name(k)] = str(v)

@@ -47,7 +47,7 @@ def create_dissimilarity_matrix(arr, dissim_measure):
     if n_procs > 1:
         print(f"Running with {n_procs} Processes")
         with WorkerPool(n_procs, arr, pgbar="Creating dissimilarity matrix") as pool:
-            tmp = pool.work(list(np.array_split(arr, N_CHUNKS))[:4], lambda arr, chunk: cdist(arr, chunk, dist_func))
+            tmp = pool.work(list(np.array_split(arr, N_CHUNKS)), lambda arr, chunk: cdist(arr, chunk, dist_func))
     else:
         for chunk in tqdm(np.array_split(arr, N_CHUNKS), desc="Creating dissimilarity matrix"):
             tmp.append(cdist(arr, chunk, dist_func))
@@ -72,6 +72,7 @@ def create_embedding(dissim_mat, embed_dimensions, embed_algo, verbose=False, pp
         min_vals = sorted(squareform(embed.dissimilarity_matrix_))[:10]
         min_indices = np.where(np.isin(embed.dissimilarity_matrix_, min_vals))
         min_indices = [(i,j) for i,j in zip(*min_indices) if i!=j]
+        min_indices = list({j: None for j in [tuple(sorted(i)) for i in min_indices]}.keys()) #remove duplicates ("aircraft cabin and airplane cabin" and "airplane cabin and aircraft cabin")
         print("Closest 10 Descriptions in Embedding:")
         for first, second in min_indices[:10]:
             print(f"  *b*{pp_descriptions._descriptions[first].title}*b* and *b*{pp_descriptions._descriptions[second].title}*b*")

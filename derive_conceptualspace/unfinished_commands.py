@@ -15,6 +15,7 @@ from sklearn.decomposition import TruncatedSVD
 from scipy.spatial.distance import cosine, cdist
 
 from derive_conceptualspace.settings import get_setting
+from derive_conceptualspace.util.misc_architecture import merge_streams
 from misc_util.logutils import CustomIO
 from misc_util.pretty_print import pretty_print as print
 from derive_conceptualspace.util.mpl_tools import actually_plot
@@ -41,6 +42,7 @@ def show_data_info(ctx):
     print("Directories:\n ", "\n  ".join(f"{k.rjust(max(len(i) for i in data_dirs))}: {v}" for k, v in data_dirs.items()))
     dependencies = {k: set([i for i in v["used_in"] if i != "this"]) for k, v in ctx.obj["json_persister"].loaded_objects.items()}
     # figuring out when a new param was first necessary
+    #TODO params that may differ in dependencies are not correctly handled yet - if DEBUG=True ONLY when showing info, it will show it already at pp_descriptions
     param_intro = {k: i.get("metadata", {}).get("used_influentials", {}) for k,i in ctx.obj["json_persister"].loaded_objects.items()}
     newparam = {}
     for key, val in {k: list(v.keys()) for k, v in param_intro.items() if v}.items():
@@ -91,24 +93,6 @@ def show_data_info(ctx):
             print(f"  Showing plot **{key}**")
             actually_plot(json.loads(val))
 
-
-def merge_streams(s1, s2, for_):
-    format = sys.stdout.date_format if isinstance(sys.stdout, CustomIO) else CustomIO.DEFAULT_DATE_FORMAT
-    if not s1 and not s2:
-        return ""
-
-    def make_list(val):
-        res = []
-        for i in val.split("\n"):
-            try:
-                res.append([datetime.strptime(i[:len(datetime.now().strftime(format))], format), (i[len(datetime.now().strftime(format))+1:] if i[len(datetime.now().strftime(format))] == " " else i[len(datetime.now().strftime(format))+0:])])
-            except ValueError:
-                res[-1][1] += "\n" + i
-        return res
-
-    s1 = make_list(s1) if s1 else []
-    s2 = make_list(s2) if s2 else []
-    return "\n".join([i[1] for i in sorted(s1 + s2, key=lambda x: x[0])])
 
 
 ########################################################################################################################

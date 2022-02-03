@@ -23,9 +23,10 @@ from derive_conceptualspace.util.desc_object import DescriptionList
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
 from derive_conceptualspace.util.jsonloadstore import JsonPersister
 from derive_conceptualspace.create_spaces.preprocess_descriptions import PPComponents
+from derive_conceptualspace.util.misc_architecture import merge_streams
 from misc_util.logutils import CustomIO
 from misc_util.object_wrapper import ObjectWrapper
-from misc_util.pretty_print import pretty_print as print, fmt, TRANSLATOR
+from misc_util.pretty_print import pretty_print as print, fmt, TRANSLATOR, isnotebook, color
 
 
 ########################################################################################################################
@@ -193,6 +194,19 @@ class CustomContext(ObjectWrapper):
         if not tmp.get("DEBUG") and "DEBUG_N_ITEMS" in tmp:
             del tmp["DEBUG_N_ITEMS"]
         return tmp
+
+    def display_output(self, objname):
+        txt = merge_streams(self.p.loaded_objects[objname]["metadata"]["obj_info"]["stdout"], self.p.loaded_objects[objname]["metadata"]["obj_info"]["stderr"], objname)
+        if isnotebook():
+            txt = txt.replace("\n", "<br>")
+        for k, v in TRANSLATOR.items():
+            if k != "end":
+                txt = txt.replace(v, k)
+        while color.END in txt: # rather than replacing with end, you should replace with whatever replacement comes before this
+            sign_before = max({i: txt[:txt.find(color.END)].rfind(i) for i in set(TRANSLATOR.keys())-{"end"}}.items(), key=lambda x:x[1])[0]
+            txt = txt.replace(color.END, sign_before, 1)
+        return txt
+
 
 
 ########################################################################################################################

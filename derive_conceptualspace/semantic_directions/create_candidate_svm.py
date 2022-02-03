@@ -62,9 +62,14 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose):
                 print(str(df.sort_values(by=metricname, ascending=False)[:10]).replace(metricname, f"*r*{metricname}*r*"))
         if embedding.embedding_.shape[1] == 3 and IS_INTERACTIVE:
             best_elem = max(metrics.items(), key=lambda x:x[1]["f_one"])
-            create_candidate_svm(embedding, best_elem[0], dcm, plot_svm=True, descriptions=descriptions)
-            while (another := input("Another one to display: ").strip()) != "" and another not in dcm.term_existinds(use_index=False):
-                create_candidate_svm(embedding, another, dcm, plot_svm=True, descriptions=descriptions)
+            create_candidate_svm(embedding.embedding_, best_elem[0], dcm.term_quants(best_elem[0]), quant_name=dcm.quant_name, plot_svm=True, descriptions=descriptions)
+            while (another := input("Another one to display: ").strip()) != "":
+                if "," in another:
+                    highlight = [i.strip() for i in another.split(",")[1:]]
+                    another = another.split(",")[0].strip()
+                else:
+                    highlight = []
+                create_candidate_svm(embedding.embedding_, another, dcm.term_quants(another), quant_name=dcm.quant_name, plot_svm=True, descriptions=descriptions, highlight=highlight)
     # clusters, cluster_directions = select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda)
     return decision_planes, metrics
 
@@ -107,7 +112,7 @@ def select_salient_terms(metrics, decision_planes, prim_lambda, sec_lambda, metr
     # TODO maybe have a smart weighting function that takes into account the kappa-score of the term and/or the closeness to the original clustercenter
     return clusters, cluster_directions
 
-def create_candidate_svm(embedding, term, quants, plot_svm=False, descriptions=None, quant_name=None, pgbar=None):
+def create_candidate_svm(embedding, term, quants, plot_svm=False, descriptions=None, quant_name=None, pgbar=None, **kwargs):
     bin_labels = np.array(quants, dtype=bool) # Ensure that regardless of quant_measure this is correct binary classification labels
     # (tmp := len(quants)/(2*np.bincount(bin_labels)))[0]/tmp[1] is roughly equal to bin_labels.mean() so balancing is good
     # see https://stackoverflow.com/q/33843981/5122790, https://stackoverflow.com/q/35076586/5122790
@@ -147,22 +152,29 @@ def create_candidate_svm(embedding, term, quants, plot_svm=False, descriptions=N
         #one ^ has as histogram-bins what it would be for ALL data, two only for the nonzero-ones
         res["kappa_digitized_onlypos_2"] = cohen_kappa_score(np.digitize(q2, np.histogram_bin_edges(q2)[1:]), np.digitize(d2, np.histogram_bin_edges(d2)[1:]))
     if plot_svm and descriptions is not None:
-        display_svm(embedding, np.array(bin_labels, dtype=int), svm, term=term, descriptions=descriptions, name=f"{term}: accuracy: {accuracy:.2f} | precision: {precision:.2f} | recall: {recall:.2f} | kappa: {kappa:.4f}")
+        display_svm(embedding, np.array(bin_labels, dtype=int), svm, term=term, descriptions=descriptions, name=term+" "+(", ".join(f"{k}: {round(v, 3)}" for k, v in res.items())), **kwargs)
     if pgbar is not None:
         pgbar.update(1)
     return res, decision_plane, term
 
 
 
-def display_svm(X, y, svm, term=None, name=None, descriptions=None):
+def display_svm(X, y, svm, term=None, name=None, descriptions=None, highlight=None):
     assert X.shape[1] == 3
     decision_plane = ThreeDPlane(svm.coef_[0], svm.intercept_[0])
     occurences = [descriptions._descriptions[i].count_phrase(term) for i in range(len(X))]
     percentile = lambda percentage: np.percentile(np.array([i for i in occurences if i]), percentage)
-    extras = [{"Name": descriptions._descriptions[i].title, "Occurences": occurences[i], "extra": {"Description": shorten(descriptions._descriptions[i].text, 200)}} for i in range(len(X))]
+    if descriptions._descriptions[0].text is not None:
+        extras = [{"Name": descriptions._descriptions[i].title, "Occurences": occurences[i], "extra": {"Description": shorten(descriptions._descriptions[i].text, 200)}} for i in range(len(X))]
+    else:
+        extras = [{"Name": descriptions._descriptions[i].title, "Occurences": occurences[i], "extra": {"BoW": ", ".join([f"{k}: {v}" for k, v in sorted(descriptions._descriptions[i].bow().items(), key=lambda x:x[1], reverse=True)[:10]])}} for i in range(len(X))]
+    highlight_inds = [n for n, i in enumerate(descriptions._descriptions) if i.title in highlight] if highlight else []
     with ThreeDFigure(name=name) as fig:
         fig.add_markers(X[np.where(np.logical_not(y))], color="blue", size=2, custom_data=[extras[i] for i in np.where(np.logical_not(y))[0]], linelen_right=50, name="negative samples")
         fig.add_markers(X[np.where(y)], color="red", size=[9 if occurences[i] > percentile(70) else 4 for i in np.where(y)[0]], custom_data=[extras[i] for i in np.where(y)[0]], linelen_right=50, name="positive samples")
+        if highlight_inds:
+            highlight_mask = np.array([i in highlight_inds for i in range(len(y))], dtype=int)
+            fig.add_markers(X[np.where(highlight_mask)], color="green", size=9, custom_data=[extras[i] for i in np.where(highlight_mask)[0]], linelen_right=50, name="highlighted")
         fig.add_surface(decision_plane, X, y, color="gray")  # decision hyperplane
         fig.add_line(X.mean(axis=0)-decision_plane.normal*2, X.mean(axis=0)+decision_plane.normal*2, width=2, name="Orthogonal")  # orthogonal of decision hyperplane through mean of points
         fig.add_markers([0, 0, 0], size=3, name="Coordinate Center")  # coordinate center
