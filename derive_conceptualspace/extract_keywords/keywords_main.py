@@ -130,7 +130,7 @@ def create_doc_cand_matrix(postprocessed_candidates, descriptions, verbose=False
     assert all(cand in desc for ndesc, desc in enumerate(descriptions._descriptions) for cand in postprocessed_candidates[ndesc])
     all_phrases = list(set(flatten(postprocessed_candidates)))
     if get_setting("DEBUG"):
-        all_phrases = all_phrases[:500]
+        all_phrases = all_phrases[:get_setting("DEBUG_N_ITEMS")]
     # if I used gensim for this, it would be `dictionary,doc_term_matrix = corpora.Dictionary(descriptions), [dictionary.doc2bow(doc) for doc in descriptions]`
     # dictionary = corpora.Dictionary([all_phrases])
     dtm = [sorted([(nphrase, desc.count_phrase(phrase)) for nphrase, phrase in enumerate(all_phrases) if phrase in desc], key=lambda x:x[0]) for ndesc, desc in enumerate(tqdm(descriptions._descriptions, desc="Creating Doc-Cand-Matrix"))]

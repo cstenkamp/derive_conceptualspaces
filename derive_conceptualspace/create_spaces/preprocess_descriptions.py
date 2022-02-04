@@ -200,7 +200,7 @@ def pp_descriptions_countvec(descriptions, pp_components, max_ngram, for_languag
     # TODO the analyze-step shouldn't find bigrams across sentences...! (resolves when sent_tokenizing)
     descriptions.proc_min_df = 1
     descriptions.proc_ngram_range = cnt.ngram_range
-    descriptions.recover_settings = dict(pp_components=str(pp_components), max_ngram=max_ngram)
+    descriptions.recover_settings = dict(pp_components=str(pp_components), max_ngram=max_ngram, language=for_language)
     return descriptions
 
 

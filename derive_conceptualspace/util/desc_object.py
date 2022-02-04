@@ -270,7 +270,7 @@ class DescriptionList():
             pp_components = PPComponents.from_str(self.recover_settings["pp_components"])
             if pp_components.use_skcountvec:
                 max_ngram = max_ngram or int(self.recover_settings["max_ngram"])
-                cnt = get_countvec(pp_components, max_ngram, min_df)
+                cnt = get_countvec(pp_components, max_ngram, self.recover_settings["language"], min_df=min_df)
                 X = cnt.fit_transform(self.unprocessed_texts)
                 aslist, all_words = csr_to_list(X, cnt.vocabulary_)
                 return DocTermMatrix(dtm=aslist, all_terms=all_words, quant_name="count")

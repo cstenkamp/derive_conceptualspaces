@@ -88,6 +88,8 @@ def create_embedding(dissim_mat, embed_dimensions, embed_algo, verbose=False, pp
 def create_mds(dissim_mat, embed_dimensions, metric=True, init_from_isomap=True):
     #TODO - isn't isomap better suited than MDS? https://scikit-learn.org/stable/modules/manifold.html#multidimensional-scaling
     # !! [DESC15] say they compared it and it's worse ([15] of [DESC15])!!!
+    if get_setting("DATASET") == "siddata2022" and get_setting("DEBUG"):
+        init_from_isomap = False #TODO hier klappt nämlich Isomap nicht lol
     max_iter = 10000 if not get_setting("DEBUG") else 100
     if not init_from_isomap:
         warnings.warn("Motherfucker is broken!! Have to init from something, don't fucking ask why!")
@@ -111,10 +113,10 @@ def create_tsne(dissim_mat, embed_dimensions):
     return tsne
 
 
-def create_isomap(dissim_mat, embed_dimensions):
+def create_isomap(dissim_mat, embed_dimensions, **kwargs):
     n_neighbors=min(5, dissim_mat.shape[0]-1)
     print(f"Running Isomap with {get_ncpu(ignore_debug=True)} jobs for max {n_neighbors} neighbors.")
-    embedding = Isomap(n_jobs=get_ncpu(ignore_debug=True), n_neighbors=n_neighbors, n_components=embed_dimensions, metric="precomputed")
+    embedding = Isomap(n_jobs=get_ncpu(ignore_debug=True), n_neighbors=n_neighbors, n_components=embed_dimensions, metric="precomputed", **kwargs)
     isomap = embedding.fit(dissim_mat)
     return isomap
 

@@ -1,12 +1,13 @@
 """
-Run default:   `(export $(cat $MA_SELECT_ENV_FILE | xargs) && snakemake --cores 1 -p default)`
+Run default:   `snakemake --cores 1 -p default`
 specific file: `snakemake --cores 1 -p --directory $MA_DATA_DIR siddata/debug_True/fautcsdp_translate_minwords100/embedding_ppmi/dissim_mat.json`
-ALL Combis:    `ma_cont snakemake --cores 1 -p all --keep-going`
-ALL for 1 rule `(export $(cat $MA_SELECT_ENV_FILE | xargs) && snakemake --cores 1 -p all_for --config for_rule=create_embedding)`
-from config:   `(export $(cat $MA_SELECT_ENV_FILE | xargs) && snakemake --cores 1 -p  by_config --configfile ./config/derrac2015.yml --keep-going)`
+ALL Combis:    `snakemake --cores 1 -p all --keep-going`
+ALL for 1 rule `snakemake --cores 1 -p all_for --config for_rule=create_embedding`
+from config:   `snakemake --cores 1 -p by_config --configfile ./config/derrac2015.yml --keep-going`
+(if you didn't install this codebase via pip, you'll have to instead run `PYTHONPATH=$(realpath .):$PYTHONPATH snakemake ...`!)
 
 Plot DAG:      `MA_DATASET=siddata snakemake --cores 1 -np --directory $MA_DATA_DIR --dag default | grep -A99999 "digraph" | dot -Tsvg > dag.svg`
-Get results:   `rsync -az --progress $MA_DATA_DIR/siddata etlpipelines:~/data/siddata --exclude .snakemake`
+Get results:   `rsync -az --progress grid:/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/placetypes $MA_DATA_DIR --exclude .snakemake`
 Docker in VM:  `ma_cont snakemake --cores 3 -p --directory /opt/data/siddata by_config --configfile /opt/derive_conceptualspaces/config/derrac2015_edited.yml`
                   where ma_cont = `docker run -it --rm --user $(id -u):$(id -g) --name derive_conceptualspaces_cont -v ~/data:/opt/data --env-file ~/derive_conceptualspaces/test_env.env derive_conceptualspaces`
                   (so there's a bug that you have to specify `--directory` which includes the dataset-name but whatever)

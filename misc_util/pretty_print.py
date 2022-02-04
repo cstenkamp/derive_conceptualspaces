@@ -25,7 +25,7 @@ TRANSLATOR = {
     "*g*": color.GREEN,
     "*y*": color.YELLOW,
     "*r*": color.RED,
-    "end": color.END,
+    "*end*": color.END,
 }
 
 JUPYTER_TRANSLATOR = {
@@ -38,7 +38,7 @@ JUPYTER_TRANSLATOR = {
     "*g*": '<span style="color: #00ff00">',
     "*y*": '<span style="color: #ffff00">',
     "*r*": '<span style="color: #ff0000">',
-    "end": '</span>',
+    "*end*": '</span>',
 }
 
 
@@ -68,7 +68,7 @@ def fmt(*args, isnotebook=False):
     to_print = " ".join(str(i) for i in args)
     for orig, rep in translator.items():
         to_print = to_print.split(orig)
-        to_print[1::2] = [rep + i + translator["end"] for i in to_print[1::2]]
+        to_print[1::2] = [rep + i + translator["*end*"] for i in to_print[1::2]]
         to_print = "".join(to_print)
     return to_print
 

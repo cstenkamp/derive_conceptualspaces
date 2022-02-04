@@ -25,7 +25,7 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 def create_dissim_mat(descriptions: DescriptionList, quantification_measure, verbose=False):
     #Options here: get_setting("NGRAMS_IN_EMBEDDING"), get_setting("DISSIM_MAT_ONLY_PARTNERED")
     if get_setting("DEBUG"):
-        descriptions._descriptions = descriptions._descriptions[:100]
+        descriptions._descriptions = descriptions._descriptions[:get_setting("DEBUG_N_ITEMS")]
     dtm = descriptions.generate_DocTermMatrix(min_df=2 if get_setting("DISSIM_MAT_ONLY_PARTNERED") else 1)
     assert any(" " in i for i in dtm.all_terms.values()) == get_setting("NGRAMS_IN_EMBEDDING")
     quantification = dtm.apply_quant(quantification_measure, descriptions=descriptions, verbose=verbose)
@@ -35,7 +35,7 @@ def create_dissim_mat(descriptions: DescriptionList, quantification_measure, ver
     dissim_mat = create_dissimilarity_matrix(quantification.as_csr(), dissim_measure=get_setting("dissim_measure"))
     is_dissim = np.allclose(np.diagonal(dissim_mat), 0, atol=1e-10)
     if verbose:
-        show_close_descriptions(dissim_mat, descriptions, is_dissim=is_dissim)
+        show_close_descriptions(dissim_mat, descriptions)
     return quantification, dissim_mat, {"ngrams_in_embedding": get_setting("NGRAMS_IN_EMBEDDING"), "is_dissim": is_dissim}
 
 
