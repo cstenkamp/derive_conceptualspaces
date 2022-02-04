@@ -1,13 +1,18 @@
 #!/bin/bash
 
-############################# interpreting `-k` commandlinearg #########################
+############################ interpreting commandlineargs ##############################
+# all other args except these are forwarded to snakemake, so you can call this with `by_config --config ...`!
 
 killold=false
+watch=false
+remove=false
 OPTIND=1
 
-while getopts 'k' opt; do
+while getopts 'kwr' opt; do
     case $opt in
-        k) killold=true ;;
+        k) killold=true ;;  # kill all other grid-jobs currently running
+        w) watch=true ;;    # after submitting, watch `qstat` continually
+        r) remove=true ;;   # remove all old logs and outputs
         *) echo 'Error in command line parsing' >&2
            exit 1
     esac
@@ -34,21 +39,36 @@ fi
 
 source $MA_CODEPATH/workflow/sge/util/parse_yml.sh
 eval $(parse_yaml $MA_GRIDCONF/cluster.yaml | grep __default___h_rt)
-export WALLTIME=$__default___h_rt
-export WALL_SECS=$(echo $WALLTIME | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }' )
+export WALLTIME=$(echo $__default___h_rt | tr -d '"')
 
 echo "Wall-Time: $WALLTIME"
 
-#########################
+###################### remove logs from previous runs if demanded ######################
 
-/bin/bash $MA_CODEPATH/workflow/sge/run_snakemake.sge
-exit 0;
+if "$remove"; then
+  rm -rf $MA_BASE_DIR/logs
+  rm -f $MA_BASE_DIR/success.file
+  rm -rf $MA_BASE_DIR/.snakemake/tmp.*
+  rm -f "$(pwd)"/smk_runner.*
+fi
 
-rm -r /net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/logs
-rm /net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/success.file
-rm -r ~/derive_conceptualspaces/.snakemake/tmp.*
-rm -r /net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/.snakemake/tmp.*
-rm ~/smk_runner.*
-#TODO set the env-vars (like $CODEPATH etc) here and not in the sge-file, and read the h_rt also already here such that I can give it as arg instead of as line in the .sge file
-qsub -v SNAKEMAKE_ARGS="$*" MA_SELECT_ENV_FILE="$MA_SELECT_ENV_FILE" $MA_CODEPATH/workflow/sge/run_snakemake.sge
-watch -n 5 qstat -r
+
+############################## finally actually run `qsub` #############################
+
+SNAKEMAKE_ARGS="$*"
+SNAKEMAKE_ARGS=${SNAKEMAKE_ARGS:-default}
+
+echo "Arguments for Snakemake: \"$SNAKEMAKE_ARGS\""
+
+if [[ -z "${MA_ENV_FILE}" ]]; then
+    echo "ENV-FILE: $MA_ENV_FILE";
+fi
+
+qsub -V -l h_rt=$WALLTIME -v WALLTIME=$WALLTIME -v SNAKEMAKE_ARGS="$SNAKEMAKE_ARGS" -v MA_SELECT_ENV_FILE="$MA_SELECT_ENV_FILE" \
+    -v MA_BASE_DIR="$MA_BASE_DIR" -v MA_CODEPATH="$MA_CODEPATH" -v MA_CONDAPATH="$MA_CONDAPATH" \
+    -v MA_CUSTOM_ACCTFILE="$MA_CUSTOM_ACCTFILE" -v MA_CONFIGDIR="$MA_CONFIGDIR" \
+    $MA_CODEPATH/workflow/sge/run_snakemake.sge
+
+if "$watch"; then
+  sleep 3; watch -n 5 qstat -r
+fi

@@ -68,12 +68,18 @@ for i in range(STATUS_ATTEMPTS):
                     time.sleep(5)
         else: # `qacct` doesn't work on the IKW-grid. I asked Marc, he said "Es wird kein accounting file auf den Knoten geschrieben. Nur auf dem Master und darauf hast du keinen Zugriff"
             job_status = "success"
-            if os.path.isfile(os.environ["CUSTOM_ACCTFILE"]):
-                with open(os.environ["CUSTOM_ACCTFILE"], "r") as rfile:
+            if os.path.isfile(os.environ["MA_CUSTOM_ACCTFILE"]):
+                with open(os.environ["MA_CUSTOM_ACCTFILE"], "r") as rfile:
                     custom_acct = yaml.load(rfile, Loader=yaml.SafeLoader)
+                if str(jobid) not in custom_acct:
+                    job_info = "failed"
+                    break
                 job_info = custom_acct[str(jobid)]
                 error_file = job_info["envvars"]["e"].format(rulename=job_info["job_properties"]["rule"], jobid=job_info["job_properties"]["jobid"])
-                error_file = os.path.join(os.environ["DATAPATH"], error_file) #set in the run_snakemake.sge file ($PWD and $MA_BASE_DIR are the same)
+                error_file = os.path.join(os.environ["MA_BASE_DIR"], error_file) #set in the run_snakemake.sge file ($PWD and $MA_BASE_DIR are the same)
+                if not os.path.isfile(error_file):
+                    job_info = "failed"
+                    break
                 with open(error_file, "r") as rfile:
                     txt = rfile.readlines()
                 txt = [i.strip() for i in txt if i.strip()]

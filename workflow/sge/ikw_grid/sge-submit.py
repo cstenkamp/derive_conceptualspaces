@@ -249,21 +249,22 @@ def submit_job(jobscript, qsub_settings):
     try:
         # -terse means only the jobid is returned rather than the normal 'Your job...' string
         print(f'Will submit the following: `{" ".join(["qsub", "-terse"] + batch_options + options_as_envvars + batch_resources + [jobscript])}`', file=sys.stderr)
+        print(f'Error-File can be found at `{os.path.join(os.getenv("MA_BASE_DIR", ""), qsub_settings["options"].get("e", "").format(rulename=job_properties["rule"], jobid=job_properties["jobid"]))}`', file=sys.stderr)
         jobid = subprocess.check_output(["qsub", "-terse"] + batch_options + options_as_envvars + batch_resources + [jobscript]).decode().rstrip()
     except subprocess.CalledProcessError as e:
         raise e
     except Exception as e:
         raise e
     #replacement for the accounting-file
-    if "CUSTOM_ACCTFILE" in os.environ:
-        if os.path.isfile(os.environ["CUSTOM_ACCTFILE"]):
-            with open(os.environ["CUSTOM_ACCTFILE"], "r") as rfile:
+    if "MA_CUSTOM_ACCTFILE" in os.environ:
+        if os.path.isfile(os.environ["MA_CUSTOM_ACCTFILE"]):
+            with open(os.environ["MA_CUSTOM_ACCTFILE"], "r") as rfile:
                 custom_acct = yaml.load(rfile, Loader=yaml.SafeLoader)
         else:
             custom_acct = {}
         custom_acct[jobid] = {"envvars": {i.split("=")[0][len("SGE_SMK_"):]:i.split("=")[1] for i in options_as_envvars if i != "-v"},
                               "batch_options": " ".join(batch_options), "batch_resources": " ".join(batch_resources), "job_properties": job_properties}
-        with open(os.environ["CUSTOM_ACCTFILE"], "w") as wfile:
+        with open(os.environ["MA_CUSTOM_ACCTFILE"], "w") as wfile:
             yaml.dump(custom_acct, wfile)
     return jobid
 

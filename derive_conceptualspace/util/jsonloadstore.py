@@ -286,7 +286,7 @@ class JsonPersister():
 
     def check_file_metas(self, file, required_metainf=None):
         with warnings.catch_warnings():
-            for warning in self.ctx.warn_filters:
+            for warning in self.ctx.warn_filters if hasattr(self, "warn_filters") else []:
                 warnings.filterwarnings("ignore", category=globals()[warning])
 
             if required_metainf is not None:

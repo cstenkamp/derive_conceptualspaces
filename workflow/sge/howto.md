@@ -43,3 +43,5 @@
 
 
 For the .env-files for the grid-conf: env-vars you didn't define yet can be used in the syntax {VAR} instead of $VAR, but only 1 nested level
+
+Sobald das envvargedöns hier richtig ist auch empfehlungen in dieses file schreiben was man in die bashrc packen kann :)

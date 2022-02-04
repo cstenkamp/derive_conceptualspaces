@@ -25,6 +25,7 @@ from pathlib import Path
 import yaml
 import socket
 
+from dotenv.main import load_dotenv
 from snakemake import rules
 from snakemake.io import expand, touch
 
@@ -48,7 +49,7 @@ from derive_conceptualspace.extract_keywords.keywords_main import (
 from derive_conceptualspace.extract_keywords.postprocess_candidates import (
     postprocess_candidateterms as postprocess_candidateterms_base,
 )
-from derive_conceptualspace.pipeline import CustomContext, SnakeContext, load_lang_translate_files
+from derive_conceptualspace.pipeline import CustomContext, SnakeContext, load_lang_translate_files, apply_dotenv_vars
 from derive_conceptualspace.semantic_directions.create_candidate_svm import (
     create_candidate_svms as create_candidate_svms_base
 )
@@ -66,7 +67,6 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 LAST_RULE = "create_candidate_svm"
 NONDEFAULT_RULES = ["all", "default", "all_for", "by_config"]
 
-
 ########################################################################################################################
 ########################################################################################################################
 ########### the file `raw_descriptions.csv` is the absolute basis, that one I need to get and cannot create. ###########
@@ -74,6 +74,9 @@ NONDEFAULT_RULES = ["all", "default", "all_for", "by_config"]
 ########################################################################################################################
 
 def initialize_snakemake():
+    if os.getenv(f"{ENV_PREFIX}_SELECT_ENV_FILE"):
+        load_dotenv(os.getenv(f"{ENV_PREFIX}_SELECT_ENV_FILE"))
+    apply_dotenv_vars()
     if int(os.getenv(f"{ENV_PREFIX}_SNAKEMAKE_TELEGRAM", 0)):
         if not os.getenv(f"{ENV_PREFIX}_SMK_INITIALIZED"):
             print("Telegaram-Notifications ON.")

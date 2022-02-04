@@ -4,7 +4,7 @@ import os
 import sys
 from datetime import datetime
 from functools import wraps
-from os.path import join, dirname, basename, abspath
+from os.path import join, dirname, basename, abspath, isfile
 
 if abspath(join(dirname(__file__), "../..")) not in sys.path:
     sys.path.append(abspath(join(dirname(__file__), "../..")))
@@ -52,7 +52,7 @@ from derive_conceptualspace.unfinished_commands import (
     show_data_info as show_data_info_base,
 )
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
-from derive_conceptualspace.pipeline import cluster_loader, CustomContext, load_lang_translate_files
+from derive_conceptualspace.pipeline import cluster_loader, CustomContext, load_lang_translate_files, apply_dotenv_vars
 
 logger = logging.getLogger(basename(__file__))
 
@@ -87,10 +87,17 @@ def click_pass_add_context(fn):
         return res
     return wrapped
 
+def load_envvfile(ctx, param, value):
+    apply_dotenv_vars()
+    if param.name == "env_file" and value:
+        if not isfile(value) and isfile(join(os.getenv(ENV_PREFIX+"_"+"CONFIGDIR", ""), value)):
+            value = join(os.getenv(ENV_PREFIX+"_"+"CONFIGDIR"), value)
+        if not isfile(value):
+            raise click.exceptions.FileError(value)
+        load_dotenv(value)
 
 @click.group()
-@click.option("--env-file", callback=lambda ctx, param, value: load_dotenv(value) if (param.name == "env_file" and value) else None,
-              default=os.environ.get(ENV_PREFIX+"_"+"ENV_FILE"), type=click.Path(exists=True), is_eager=True,
+@click.option("--env-file", callback=load_envvfile, default=os.environ.get(ENV_PREFIX+"_"+"ENV_FILE"), type=click.Path(), is_eager=True,
               help="If you want to provide environment-variables using .env-files you can provide the path to a .env-file here.")
 @click.option("--conf-file", default=None, type=click.Path(exists=True), help="You can also pass a yaml-file containing values for some of the settings")
 @click.option("--base-dir", type=click.Path(exists=True), default=None)

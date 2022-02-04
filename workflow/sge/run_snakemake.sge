@@ -1,11 +1,8 @@
 #!/bin/bash
 #$ -N smk_runner
 #$ -l mem=200M
-#$ -l h_rt=01:29:30
 
-# You have to manually set the walltime here to the same value than what's in the cluster.yaml!
-
-###################### Env-vars you need ######################
+################################### Env-vars you need ##################################
 
 if [[ -z "${MA_BASE_DIR}" ]]; then
   echo "You need the env-var MA_BASE_DIR, pointing to the root of your data!";
@@ -24,37 +21,42 @@ fi
 if [[ -z "${MA_CONFIGDIR}" ]]; then
   export MA_CONFIGDIR=$MA_CODEPATH/config
 fi
+if [[ -z "${WALLTIME}" ]]; then
+  echo "You need the env-var WALLTIME, specifying the walltime for the Sun Grid Engine!";
+  exit 1;
+fi
 
-echo "Joah, alles gut soweit"
 
-exit 1
-
-###################### stuff you don't need to care about ######################
-# set runtime from the yaml in the $CODEPATH
-source $CODEPATH/workflow/sge/util/parse_yml.sh
-eval $(parse_yaml $HOME/derive_conceptualspaces/workflow/sge/ikw_grid/cluster.yaml | grep __default___h_rt)
-export WALLTIME=$__default___h_rt
-export WALL_SECS=$(echo $WALLTIME | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }' )
-
+########################## stuff you don't need to care about ##########################
 # set other env-vars
+export WALL_SECS=$(echo $WALLTIME | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }' )
 export PATH="$CONDAPATH:$PATH"
 export RUNNERFILE="$CODEPATH/workflow/sge/run_snakemake.sge"
-export RUN_NR=${RUN_NR:-1}
 export PYTHONPATH="$CODEPATH:$PYTHONPATH"
-
-# get the actual env-file and whatever else is in the select_env.env
-export $(cat $MA_SELECT_ENV_FILE | xargs)
-
-# activate env etc
-source $CONDAPATH/activate derive_conceptualspaces
-cd $CODEPATH
+export RUN_NR=${RUN_NR:-1}
 echo "This is run nr $RUN_NR"
+
+# get the actual env-file and whatever else is in the MA_SELECT_ENV_FILE
+export $(cat $MA_SELECT_ENV_FILE | envsubst | xargs)
+export $(cat $MA_SELECT_ENV_FILE | sed 's/{\(.*\)}/\$\1/g' | envsubst | xargs)
+
+if [[ -f "$MA_ENV_FILE" ]]; then
+    echo "ENV-FILE: $MA_ENV_FILE";
+else
+   export MA_ENV_FILE=$MA_CONFIGDIR/$MA_ENV_FILE;
+   echo "ENV-FILE: $MA_ENV_FILE"
+fi
+
+# activate env etc (TODO make env-name an arg)
+source $MA_CONDAPATH/bin/activate derive_conceptualspaces
+cd $MA_CODEPATH
+
 echo "Snakemake-Args: $SNAKEMAKE_ARGS"
 sleep 5 # give any previous instance time to die
 
 ###################### actual runner stuff ######################
 snakemake --directory $MA_BASE_DIR $SNAKEMAKE_ARGS --unlock
-timeout -k 30 $(( $WALL_SECS-60 )) snakemake --directory $MA_BASE_DIR -p $SNAKEMAKE_ARGS --profile $HOME/derive_conceptualspaces/workflow/sge/ikw_grid
+timeout -k 30 $(( $WALL_SECS-60 )) snakemake --directory $MA_BASE_DIR -p $SNAKEMAKE_ARGS --profile $MA_GRIDCONF
 
 ###################### closing stuff ######################
 # restarting if not finished
@@ -63,7 +65,9 @@ echo "Main process ended. Return-value is $retval"
 if [ $retval -eq 124 ] || [ $retval -eq 137 ] ; then # if the timeout killed the program
   if (( $RUN_NR < 5 )); then # TODO calculate this from the walltime maybe?
     echo "COMMAND TO RUN: qsub -v RUN_NR=$((RUN_NR+1)) -v SNAKEMAKE_ARGS=$SNAKEMAKE_ARGS $RUNNERFILE"
-    qsub -v RUN_NR=$((RUN_NR+1)) -v SNAKEMAKE_ARGS="$SNAKEMAKE_ARGS" $RUNNERFILE
+    qsub -V -v RUN_NR=$((RUN_NR+1)) -l h_rt=$WALLTIME -v WALLTIME=$WALLTIME -v SNAKEMAKE_ARGS="$SNAKEMAKE_ARGS" -v MA_SELECT_ENV_FILE="$MA_SELECT_ENV_FILE" \
+    -v MA_BASE_DIR="$MA_BASE_DIR" -v MA_CODEPATH="$MA_CODEPATH" -v MA_CONDAPATH="$MA_CONDAPATH" \
+    -v MA_CUSTOM_ACCTFILE="$MA_CUSTOM_ACCTFILE" -v MA_CONFIGDIR="$MA_CONFIGDIR" $RUNNERFILE
     exit 0
   fi
 fi

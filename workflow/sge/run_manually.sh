@@ -1,12 +1,32 @@
-export DATAPATH="/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data"
-export CODEPATH="$HOME/derive_conceptualspaces"
-export CONDAPATH="$HOME/miniconda/bin"
-export CUSTOM_ACCTFILE=$HOME/custom_acctfile.yml
-export MA_SELECT_ENV_FILE="$CODEPATH/config/_select_env_grid.env"
+#!/bin/bash
 
-source $CONDAPATH/activate derive_conceptualspaces
+############# setting the env-vars from the select_env_file ############################
 
-cd $CODEPATH
+if [[ -z "${MA_SELECT_ENV_FILE}" ]]; then
+  echo "You need to set the env-var MA_SELECT_ENV_FILE, pointing to the main env-file!"
+  exit 1;
+fi
+export $(cat $MA_SELECT_ENV_FILE | envsubst | xargs)
+export $(cat $MA_SELECT_ENV_FILE | sed 's/{\(.*\)}/\$\1/g' | envsubst | xargs)
+#replaces {ENVVAR} with $ENVVAR - that way you can use the former as syntax in the env-file to refer variables that will only be defined in the same env-file (1 nesting only)
 
-(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH MA_LANGUAGE=en snakemake --directory $DATAPATH --cores 1 -p $* --unlock)
-(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH MA_LANGUAGE=en snakemake --directory $DATAPATH --cores 1 -p $* --keep-going)
+################################## set arguments #######################################
+
+if [[ -f "$MA_ENV_FILE" ]]; then
+    echo "ENV-FILE: $MA_ENV_FILE";
+else
+   export MA_ENV_FILE=$MA_CONFIGDIR/$MA_ENV_FILE;
+   echo "ENV-FILE: $MA_ENV_FILE"
+fi
+
+SNAKEMAKE_ARGS="$*"
+SNAKEMAKE_ARGS=${SNAKEMAKE_ARGS:-default}
+
+################################## run snakemake #######################################
+
+source $MA_CONDAPATH/bin/activate derive_conceptualspaces
+export PYTHONPATH=$MA_CONDAPATH:$PYTHONPATH
+cd $MA_CODEPATH
+
+snakemake --directory $MA_BASE_DIR --cores 1 -p "$SNAKEMAKE_ARGS" --unlock
+snakemake --directory $MA_BASE_DIR --cores 1 -p "$SNAKEMAKE_ARGS"

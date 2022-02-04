@@ -1,3 +1,4 @@
+import re
 import hashlib
 import os
 import random
@@ -32,6 +33,17 @@ from misc_util.pretty_print import pretty_print as print, fmt, TRANSLATOR, isnot
 ########################################################################################################################
 ########################################################################################################################
 ########################################################################################################################
+
+def apply_dotenv_vars():
+    curr_envvars = {k: v for k, v in os.environ.items() if k.startswith(ENV_PREFIX+"_")}
+    curr_envvars = {k: os.path.expandvars(v) for k, v in curr_envvars.items()} #replace envvars
+    curr_envvars = {k: os.path.expandvars(os.path.expandvars(re.sub(r"{([^-\s]*?)}", r"$\1", v))) for k, v in curr_envvars.items()} #replace {ENV_VAR} with $ENV_VAR and then apply them
+    if (envfile := curr_envvars.get(ENV_PREFIX+"_"+"ENV_FILE")) and not isfile(envfile) and isfile(join(curr_envvars.get(ENV_PREFIX+"_"+"CONFIGDIR", ""), envfile)):
+        curr_envvars[ENV_PREFIX+"_"+"ENV_FILE"] = join(curr_envvars.get(ENV_PREFIX+"_"+"CONFIGDIR"), envfile)
+    for k, v in curr_envvars.items():
+        os.environ[k] = v
+    print({k: v for k, v in os.environ.items() if k.startswith(ENV_PREFIX+"_")})
+
 
 class CustomContext(ObjectWrapper):
     def __init__(self, orig_ctx):
@@ -175,8 +187,9 @@ class CustomContext(ObjectWrapper):
             fname = abspath(join(dirname(settings.__file__), "..", self.get_config("conf_file"))) if not isfile(self.get_config("conf_file")) and isfile(abspath(join(dirname(settings.__file__), "..", self.get_config("conf_file")))) else self.get_config("conf_file")
             with open(fname, "r") as rfile:
                 config = yaml.load(rfile, Loader=yaml.SafeLoader)
-            if config.get("__perdataset__", {}).get(self.get_config("dataset"), {}):
-                config.update(config.get("__perdataset__", {}).get(self.get_config("dataset"), {}))
+            if config.get("__perdataset__"):
+                if config["__perdataset__"].get(self.get_config("dataset"), {}):
+                    config.update(config.get("__perdataset__", {}).get(self.get_config("dataset"), {}))
                 del config["__perdataset__"]
             for k, v in config.items():
                 if isinstance(v, list): #IDEA: wenn v eine liste ist und wenn ein cmd-arg bzw env-var einen wert hat der damit consistent ist, nimm das arg
