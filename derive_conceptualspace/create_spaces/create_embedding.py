@@ -39,7 +39,7 @@ def create_dissimilarity_matrix(arr, dissim_measure):
     assert arr.max(axis=1).min() > 0, "If one of the vectors is zero the calculation will fail!"
     return _create_dissim_mat(arr, dissim_measure)
 
-def _create_dissim_mat(arr, dissim_measure, force_singlethread=False, n_chunks=200):
+def _create_dissim_mat(arr, dissim_measure, force_singlethread=False, n_chunks=200, silent=True):
     # return squareform(np.apply_along_axis(cos_to_normangdiff, 0, pdist(arr, metric="cosine")))
     # assert np.allclose(np.hstack([cdist(arr, arr[i*10:(i+1)*10], "cosine") for i in range(10)]), squareform(tmp))
     if dissim_measure in ["cosine", "norm_ang_dist"]:
@@ -48,11 +48,12 @@ def _create_dissim_mat(arr, dissim_measure, force_singlethread=False, n_chunks=2
         dist_func = dissim_measure
     tmp = []
     if not force_singlethread and get_ncpu(ram_per_core=10) > 1: # max. 1 thread per 10GB RAM
-        print(f"Running with {get_ncpu(ram_per_core=10)} Processes")
-        with WorkerPool(get_ncpu(ram_per_core=10), arr, pgbar="Creating dissimilarity matrix") as pool:
+        if not silent: print(f"Running with {get_ncpu(ram_per_core=10)} Processes")
+        with WorkerPool(get_ncpu(ram_per_core=10), arr, pgbar="Creating dissimilarity matrix" if not silent else None) as pool:
             tmp = pool.work(list(np.array_split(arr, n_chunks)), lambda arr, chunk: cdist(arr, chunk, dist_func))
     else:
-        for chunk in tqdm(np.array_split(arr, n_chunks), desc="Creating dissimilarity matrix"):
+        iterable = np.array_split(arr, n_chunks) if silent else tqdm(np.array_split(arr, n_chunks), desc="Creating dissimilarity matrix")
+        for chunk in iterable:
             tmp.append(cdist(arr, chunk, dist_func))
     assert np.allclose(np.hstack(tmp), np.hstack(tmp).T), "The matrix must be symmetric!"
     res = np.hstack(tmp)
@@ -80,9 +81,7 @@ def create_embedding(dissim_mat, embed_dimensions, embed_algo, verbose=False, pp
     else:
         raise NotImplementedError(f"Algorithm {embed_algo} is not implemented!")
     if verbose and pp_descriptions is not None:
-        new_dissim = _create_dissim_mat(embed.embedding_, get_setting("DISSIM_MEASURE"))
-        is_dissim = np.allclose(np.diagonal(new_dissim), 0, atol=1e-10)
-        show_close_descriptions(new_dissim, pp_descriptions, is_dissim, num=10, title=f"Embedding-Distances ({get_setting('DISSIM_MEASURE')})")
+        show_close_descriptions(embed.embedding_, pp_descriptions, is_embedding=True, num=10, title=f"Embedding-Distances ({get_setting('DISSIM_MEASURE')})")
     return embed
 
 
@@ -123,10 +122,14 @@ def create_isomap(dissim_mat, embed_dimensions):
 
 
 
-def show_close_descriptions(dissim_mat, descriptions, is_dissim, num=10, title="Dissim-Mat"):
+def show_close_descriptions(dissim_mat, descriptions, is_embedding=False, num=10, title="Dissim-Mat"):
     # closest_entries = list(zip(*np.where(dissim_mat==min(dissim_mat[dissim_mat>0]))))
     # closest_entries = set(tuple(sorted(i)) for i in closest_entries)
     # print(f"Closest Nonequal Descriptions: \n", "\n".join(["*b*"+("*b* & *b*".join([descriptions._descriptions[i].title for i in j]))+"*b*" for j in closest_entries]))
+    if is_embedding:
+        dissim_mat = _create_dissim_mat(dissim_mat, get_setting("DISSIM_MEASURE"), force_singlethread=True, silent=True)
+    is_dissim = np.allclose(np.diagonal(dissim_mat), 0, atol=1e-10)
+    assert is_dissim, "TODO now it's a similarity matrix"
     min_vals = sorted(squareform(dissim_mat))[:num]
     min_indices = np.where(np.isin(dissim_mat, min_vals))
     min_indices = [(i,j) for i,j in zip(*min_indices) if i!=j]

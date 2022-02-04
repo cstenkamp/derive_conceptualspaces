@@ -31,7 +31,7 @@ exit 1
 
 ###################### stuff you don't need to care about ######################
 # set runtime from the yaml in the $CODEPATH
-source $CODEPATH/workflow/sge/ikw_grid/parse_yml.sh
+source $CODEPATH/workflow/sge/util/parse_yml.sh
 eval $(parse_yaml $HOME/derive_conceptualspaces/workflow/sge/ikw_grid/cluster.yaml | grep __default___h_rt)
 export WALLTIME=$__default___h_rt
 export WALL_SECS=$(echo $WALLTIME | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }' )

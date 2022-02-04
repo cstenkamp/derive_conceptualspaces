@@ -33,7 +33,6 @@ from misc_util.pretty_print import pretty_print as print, fmt, TRANSLATOR, isnot
 ########################################################################################################################
 ########################################################################################################################
 
-
 class CustomContext(ObjectWrapper):
     def __init__(self, orig_ctx):
         assert isinstance(orig_ctx, (click.Context, SnakeContext))
@@ -106,7 +105,7 @@ class CustomContext(ObjectWrapper):
         self.forbidden_configs.append(confkey)
 
 
-    def set_config(self, key, val, source): #this is only a suggestion, it will only be finally set once it's accessed!
+    def set_config(self, key, val, source, silent=False): #this is only a suggestion, it will only be finally set once it's accessed!
         key, val = standardize_config(key, val)
         if key in self.used_configs and val != self.used_configs[key]:
             raise ValueError(fmt(f"{source} is trying to overwrite config {key} with *r*{val}*r*, but it was already used with value *b*{self.used_configs[key]}*b*!"))
@@ -123,7 +122,8 @@ class CustomContext(ObjectWrapper):
             ordered_args = list(ordered_args.items())
             if f"{existing_configs[0][0]} from {ordered_args[1][1]} to {ordered_args[0][1]}" not in self._given_warnings:
                 self._given_warnings.append(f"{existing_configs[0][0]} from {ordered_args[1][1]} to {ordered_args[0][1]}")
-                print(f"{ordered_args[1][0]} demanded config {existing_configs[0][0]} to be *r*{ordered_args[1][1]}*r*, but {ordered_args[0][0]} overwrites it to *b*{ordered_args[0][1]}*b*")
+                if not (silent or (hasattr(self, "silent") and self.silent)):
+                    print(f"{ordered_args[1][0]} demanded config {existing_configs[0][0]} to be *r*{ordered_args[1][1]}*r*, but {ordered_args[0][0]} overwrites it to *b*{ordered_args[0][1]}*b*")
 
 
     def pre_actualcommand_ops(self):
@@ -195,8 +195,10 @@ class CustomContext(ObjectWrapper):
             del tmp["DEBUG_N_ITEMS"]
         return tmp
 
-    def display_output(self, objname):
-        txt = merge_streams(self.p.loaded_objects[objname]["metadata"]["obj_info"]["stdout"], self.p.loaded_objects[objname]["metadata"]["obj_info"]["stderr"], objname)
+    def display_output(self, objname, ignore_err=False):
+        txt = merge_streams(self.p.loaded_objects[objname]["metadata"]["obj_info"]["stdout"],
+                            self.p.loaded_objects[objname]["metadata"]["obj_info"]["stderr"] if not ignore_err else "",
+                            objname)
         if isnotebook():
             txt = txt.replace("\n", "<br>")
         for k, v in TRANSLATOR.items():
@@ -215,13 +217,16 @@ class CustomContext(ObjectWrapper):
 
 cluster_loader = lambda **di: dict(decision_planes={k: NDPlane(np.array(v[1][0]),v[1][1]) for k, v in di["decision_planes"].items()}, metrics=di["metrics"])
 
+
 class SnakeContext():
     """In the Click-CLI there is a context that gets passed, this class mocks the relevant stuff for snakemake/jupyter notebooks"""
-    def __init__(self):
+    def __init__(self, silent=False, warn_filters=None):
         self.obj = {}
+        self.silent=silent
+        self.warn_filters = warn_filters or []
 
-    def post_init(self):
-        self.set_config("base_dir", os.getcwd(), "smk_args")
+    def post_init(self: CustomContext):
+        self.set_config("base_dir", os.getcwd(), "smk_args", silent=self.silent)
 
     autoloader_di = dict(
         pp_descriptions=DescriptionList.from_json,
@@ -235,17 +240,20 @@ class SnakeContext():
     # TODO das autoloader_di ist schon ne Mischung von Code und Daten, aber wohin sonst damit?
 
     @staticmethod
-    def loader_context(load_envfile=True, config=None, load_conffile=True): #for jupyter
-        ctx = CustomContext(SnakeContext())
+    def loader_context(load_envfile=True, config=None, load_conffile=True, **kwargs): #for jupyter
+        ctx = CustomContext(SnakeContext(**kwargs))
         for k, v in (config or {}).items():
             ctx.set_config(k, v, "force")
         ctx.init_context(load_envfile=load_envfile, load_conffile=load_conffile)
-        ctx.print_important_settings()
+        if not kwargs.get("silent"):
+            ctx.print_important_settings()
         return ctx
 
-    def load(self, *whats):
+    def load(self, *whats, loaders=None):
         for what in whats:
-            self.obj[what] = self.obj["json_persister"].load(None, what, loader=self.autoloader_di.get(what, lambda **kwargs: kwargs[what]))
+            loader = (loaders or {}).get(what) or self.autoloader_di.get(what) or (lambda **kwargs: kwargs[what])
+            self.obj[what] = self.obj["json_persister"].load(None, what, loader=loader)
+        return tuple(self.obj[what] for what in whats) if len(whats) > 1 else self.obj[whats[0]]
 
 
 

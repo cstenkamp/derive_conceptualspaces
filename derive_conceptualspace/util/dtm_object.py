@@ -76,8 +76,8 @@ class DocTermMatrix():
         # else:
         #     assert False
         assert set(self.all_terms) == set(flatten([[elem[0] for elem in row] for row in self.dtm]))
-        print(f"Loaded Doc-Term-Matrix with {len(self.dtm)} documents and {len(self.all_terms)} items.")
         if verbose:
+            print(f"Loaded Doc-Term-Matrix with {len(self.dtm)} documents and {len(self.all_terms)} items.")
             self.show_info()
 
     def json_serialize(self):

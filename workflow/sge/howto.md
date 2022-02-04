@@ -40,3 +40,6 @@
   * Is it possible that if the smk_runner dies and restarts because of walltime, it will execute still running jobs again?! that would suck!!
     * hotfix for this would be to fix the sge-status.py file, then it doesn't die maybe?
     * die #retries werden auch ignoriert wenn der smk_runner stirbt..
+
+
+For the .env-files for the grid-conf: env-vars you didn't define yet can be used in the syntax {VAR} instead of $VAR, but only 1 nested level
