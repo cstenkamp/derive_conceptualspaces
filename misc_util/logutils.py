@@ -2,6 +2,9 @@ import logging
 import contextlib
 import io, sys
 from datetime import datetime
+import warnings
+from os.path import dirname, join, abspath
+from os import sep
 
 from misc_util.object_wrapper import ObjectWrapper
 
@@ -15,8 +18,8 @@ def setup_logging(loglevel=None, logfile=None):
     if logfile:
         kwargs['filename'] = logfile
     logging.basicConfig(**kwargs)
-
-
+    #https://stackoverflow.com/a/26433913/5122790
+    warnings.formatwarning = lambda message, category, filename, lineno, file=None, line=None: f"{filename.replace(abspath(join(dirname(__file__), '..'))+sep, '')}:{lineno}: {category.__name__}: {message}\n"
 
 
 #TODO make compatible with logging

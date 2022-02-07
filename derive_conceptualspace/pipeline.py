@@ -35,6 +35,8 @@ from misc_util.pretty_print import pretty_print as print, fmt, TRANSLATOR, isnot
 ########################################################################################################################
 
 def apply_dotenv_vars():
+    """I want to be able to have env-vars in env-files (like `MA_DATA_BASE = $HOME/data`), and even nested env-vars (like `OTHER_VAR = {MA_DATA_BASE}/config`, so
+    variables that refer to other variables defined im the same file. This does that."""
     curr_envvars = {k: v for k, v in os.environ.items() if k.startswith(ENV_PREFIX+"_")}
     curr_envvars = {k: os.path.expandvars(v) for k, v in curr_envvars.items()} #replace envvars
     curr_envvars = {k: os.path.expandvars(os.path.expandvars(re.sub(r"{([^-\s]*?)}", r"$\1", v))) for k, v in curr_envvars.items()} #replace {ENV_VAR} with $ENV_VAR and then apply them
@@ -42,7 +44,19 @@ def apply_dotenv_vars():
         curr_envvars[ENV_PREFIX+"_"+"ENV_FILE"] = join(curr_envvars.get(ENV_PREFIX+"_"+"CONFIGDIR"), envfile)
     for k, v in curr_envvars.items():
         os.environ[k] = v
-    print({k: v for k, v in os.environ.items() if k.startswith(ENV_PREFIX+"_")})
+
+def load_envfiles(for_dataset=None):
+    # if for_dataset is not None it will set both the env-file and the dataset-variable from it
+    # TODO the dataset may be siddata2022 for env-file siddata !
+    assert isfile(os.environ["MA_SELECT_ENV_FILE"])
+    load_dotenv(os.environ["MA_SELECT_ENV_FILE"])
+    if for_dataset is not None:
+        os.environ["MA_ENV_FILE"] = f"{for_dataset}.env"
+    apply_dotenv_vars()
+    assert isfile(os.environ["MA_ENV_FILE"])
+    if for_dataset is not None:
+        os.environ["MA_DATASET"] = for_dataset #if I define it before loading the MA_ENV_FILE it can still be overwritten by if it is in there
+    load_dotenv(os.environ["MA_ENV_FILE"])
 
 
 class CustomContext(ObjectWrapper):

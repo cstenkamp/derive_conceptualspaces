@@ -51,3 +51,11 @@ SOOO, commands:
 [for sample-env-file see sample-env-file]  
 `MA_ENV_FILE=siddata.env submit -kwr`
 `MA_ENV_FILE=siddata.env run`
+And in my `.bashrc` there is:
+```
+export SCR=/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/
+alias qdelall="~/derive_conceptualspaces/workflow/sge/util/qdel_all.py"
+alias submit="~/derive_conceptualspaces/workflow/sge/submit.sh"
+alias run="~/derive_conceptualspaces/workflow/sge/run_manually.sh"
+export MA_SELECT_ENV_FILE=/home/student/c/cstenkamp/derive_conceptualspaces/config/_select_env_grid.env
+```

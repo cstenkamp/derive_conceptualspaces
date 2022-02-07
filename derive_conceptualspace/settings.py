@@ -101,8 +101,8 @@ with set_noninfluentials(): #this context-manager adds all settings from here to
     NORMALIFY_PARAMS = ["QUANTIFICATION_MEASURE", "EXTRACTON_METHOD", "EMBED_ALGO", "DCM_QUANT_MEASURE", "CLASSIFIER_COMPARETO_RANKING"]  #for all params that are in this, eg `Tf-IdF` will become `tfidf`
     CONF_PRIORITY = ["force", "smk_wildcard", "dependency", "cmd_args", "env_vars", "smk_args", "conf_file", "dataset_class", "defaults"] #no distinction between env_file and env_var bc load_dotenv is executed eagerly and just overwrites envvars from envfile
     #note that snakemake reads the conf_file differently and sets env-vars (that however apply force) from the configurations
-    MAY_DIFFER_IN_DEPENDENCIES = ["DEBUG", "RANDOM_SEED", "CANDIDATE_MIN_TERM_COUNT"]
-    # DEFAULT_DEP_PREFERS_NONDEBUG = True #TODO do!
+    MAY_DIFFER_IN_DEPENDENCIES = ["DEBUG", "RANDOM_SEED", "CANDIDATE_MIN_TERM_COUNT", "BASE_DIR"]
+    DEFAULT_DEP_PREFERS_NONDEBUG = False #TODO #PRECOMMIT
 
 ########################################################################################################################
 ######################################## set and get settings/env-vars #################################################

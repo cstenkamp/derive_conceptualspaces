@@ -7,6 +7,7 @@ from plotly.serializers import np
 from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import TfidfTransformer
 from tqdm import tqdm
+from scipy.spatial.distance import squareform
 
 from derive_conceptualspace.settings import get_setting
 from derive_conceptualspace.util.jsonloadstore import Struct
@@ -235,7 +236,10 @@ def csr_to_list(csr, vocab=None):
 
 
 def dtm_dissimmat_loader(quant_dtm, dissim_mat):
-    return dtm_loader(quant_dtm), dissim_mat
+    quant_dm = dtm_loader(quant_dtm)
+    if dissim_mat.ndim == 1:
+        dissim_mat = squareform(dissim_mat)
+    return quant_dm, dissim_mat
 
 def dtm_loader(doc_term_matrix):
     dtm = DocTermMatrix.fromstruct(doc_term_matrix[1][1])

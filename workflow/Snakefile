@@ -8,6 +8,7 @@ from config:   `snakemake --cores 1 -p by_config --configfile ./config/derrac201
 
 Plot DAG:      `MA_DATASET=siddata snakemake --cores 1 -np --directory $MA_DATA_DIR --dag default | grep -A99999 "digraph" | dot -Tsvg > dag.svg`
 Get results:   `rsync -az --progress grid:/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/placetypes $MA_DATA_DIR --exclude .snakemake`
+Get clusters : `rsync -az --progress grid:/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/siddata2022 $MA_DATA_DIR  --include="*/" --include="clusters.json" --exclude="*"`
 Docker in VM:  `ma_cont snakemake --cores 3 -p --directory /opt/data/siddata by_config --configfile /opt/derive_conceptualspaces/config/derrac2015_edited.yml`
                   where ma_cont = `docker run -it --rm --user $(id -u):$(id -g) --name derive_conceptualspaces_cont -v ~/data:/opt/data --env-file ~/derive_conceptualspaces/test_env.env derive_conceptualspaces`
                   (so there's a bug that you have to specify `--directory` which includes the dataset-name but whatever)

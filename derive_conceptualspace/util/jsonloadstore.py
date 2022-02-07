@@ -12,11 +12,12 @@ from os.path import isfile, splitext, dirname, join
 import numpy as np
 import pandas as pd
 from sklearn.manifold import MDS, TSNE, Isomap
+from parse import parse
 
 from derive_conceptualspace import settings
 from derive_conceptualspace.settings import standardize_config_name, standardize_config_val
 from misc_util.logutils import CustomIO
-from misc_util.pretty_print import pretty_print as print
+from misc_util.pretty_print import pretty_print as print, fmt
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
@@ -231,17 +232,21 @@ class JsonPersister():
             demanded_confs = self.dirname_vars(cand.count(os.sep))
             dirstruct = self.get_subdir({standardize_config_name(i): self.ctx.get_config(i) for i in demanded_confs})[0]
             if dirname(cand) == dirstruct:
-                correct_cands.append(cand)
+                correct_cands.append((cand, parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]), dirname(cand)).named)) #2nd elem ist der Versuch die configs draus zu parsen
             if self.ctx.get_config("DEBUG"): #if NOW debug=True, you may still load stuff for which debug=False (TODO: settings.DEPENDENCIES_PREFER_NODEBUG)
                 if dirname(cand) == self.get_subdir({**{standardize_config_name(i): self.ctx.get_config(i) for i in demanded_confs}, "DEBUG": False})[0] and cand not in correct_cands:
-                    correct_cands.append(cand)
+                    correct_cands.append((cand, parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]), dirname(cand)).named))
+                    if self.ctx.get_config("DEP_PREFERS_NONDEBUG"):
+                        correct_cands = [i for i in correct_cands if i[1] != {k: v if standardize_config_name(k) != "DEBUG" else "True" for k, v in correct_cands[-1][1].items()}]
+                    elif len([i for i in correct_cands if {k:v for k,v in i[1].items() if standardize_config_name(k) != "DEBUG"}]) > 1:
+                        correct_cands = [i for i in correct_cands if i[1] != {k: v if standardize_config_name(k) != "DEBUG" else "False" for k, v in correct_cands[-1][1].items()}]
         if not correct_cands:
             if candidates: #otherwise dirstruct is not defined
                 print(f"You may need the file *b*{join(dirstruct, save_basename+'.json')}*b*")
                 #command is then `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR filepath)`
-            raise FileNotFoundError(f"There is no candidate for {save_basename} with the current config." + ("You may need the file *b*{join(dirstruct, save_basename+'.json')}*b*" if candidates else ""))
+            raise FileNotFoundError(fmt(f"There is no candidate for {save_basename} with the current config." + (f"You may need the file *b*{join(dirstruct, save_basename+'.json')}*b*" if candidates else "")))
         assert len(correct_cands) == 1, f"Multiple file candidates: {correct_cands}"
-        return correct_cands[0]
+        return correct_cands[0][0]
 
 
     def add_file_metas(self, file): #TODO overhaul 16.01.2022
@@ -286,7 +291,7 @@ class JsonPersister():
 
     def check_file_metas(self, file, required_metainf=None):
         with warnings.catch_warnings():
-            for warning in self.ctx.warn_filters if hasattr(self, "warn_filters") else []:
+            for warning in self.ctx.warn_filters if hasattr(self.ctx, "warn_filters") else []:
                 warnings.filterwarnings("ignore", category=globals()[warning])
 
             if required_metainf is not None:
@@ -297,14 +302,11 @@ class JsonPersister():
                         raise ValueError(f"config {k2} is supposed to be {self.ctx.get_config(k2, silent=True, silence_defaultwarning=True)} but dependency {k} requires it to be {v2}")
                         #TODO instead of the valuerror, print (and optionally directly perform) the commands to create it with these configs instead
                 if file["basename"] in v["used_in"] and k in self.loaded_objects:  #ensure that the info of all currently loaded files corresponds to all of those the file used
-                    if self.loaded_objects[k]["path"] != v["path"]:
+                    if self.loaded_objects[k]["path"] != v["path"] or self.loaded_objects[k]["metadata"].get("obj_info") != v["metadata"].get("obj_info"):
                         warnings.warn(f"A different {k} was used for file {file['basename']}!", DifferentFileWarning)
-                    if self.loaded_objects[k]["metadata"] != v["metadata"]:
-                        raise NotImplementedError("TODO instead work with settings.MAY_DIFFER_IN_DEPENDENCIES!!")
-                        warnings.warn(f"There is different Metadata for {k} and for {file['basename']}")
-                        diff_keys = {i for i in self.loaded_objects[k]["metadata"].keys() if self.loaded_objects[k]["metadata"][i] != v["metadata"][i]}
-                        if "used_config" in diff_keys:
-                            assert {k: v for k, v in self.loaded_objects[k]["metadata"]["used_config"][0].items() if k not in ["BASE_DIR"]} == {k: v for k, v in v["metadata"]["used_config"][0].items() if k not in ["BASE_DIR"]}
+                    if self.loaded_objects[k]["metadata"].get("used_config") != v["metadata"].get("used_config"):
+                        diff_configs = {k2 for k2 in self.loaded_objects[k]["metadata"]["used_config"][0].keys()|v["metadata"]["used_config"][0].keys() if self.loaded_objects[k]["metadata"]["used_config"][0].get(k2) != v["metadata"]["used_config"][0].get(k2)}
+                        assert diff_configs <= set(settings.MAY_DIFFER_IN_DEPENDENCIES), f"Different settings where used in a dependency: {diff_configs - set(settings.MAY_DIFFER_IN_DEPENDENCIES)}"
             for k, v in file.get("used_influentials", {}).items():
                 if k not in settings.MAY_DIFFER_IN_DEPENDENCIES:
                     assert self.ctx.get_config(k, silent=True, silence_defaultwarning=True, default_false=True) == standardize_config_val(k, v)  #check that all current influential settings are consistent with what the file had

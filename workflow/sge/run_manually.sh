@@ -28,5 +28,5 @@ source $MA_CONDAPATH/bin/activate derive_conceptualspaces
 export PYTHONPATH=$MA_CONDAPATH:$PYTHONPATH
 cd $MA_CODEPATH
 
-snakemake --directory $MA_BASE_DIR --cores 1 -p "$SNAKEMAKE_ARGS" --unlock
-snakemake --directory $MA_BASE_DIR --cores 1 -p "$SNAKEMAKE_ARGS"
+snakemake --directory $MA_BASE_DIR --cores 1 -p $SNAKEMAKE_ARGS --unlock
+snakemake --directory $MA_BASE_DIR --cores 1 -p $SNAKEMAKE_ARGS
