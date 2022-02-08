@@ -112,7 +112,7 @@ def rank_saldirs(pp_descriptions, embedding, clusters, filtered_dcm, prim_lambda
     n_items = len(pp_descriptions)
 
     from derive_conceptualspace.semantic_directions.create_candidate_svm import select_salient_terms
-    select_salient_terms(metrics, decision_planes, get_setting("PRIM_LAMBDA"), get_setting("SEC_LAMBDA"))
+    select_salient_terms(metrics, decision_planes, prim_lambda=prim_lambda, sec_lambda=sec_lambda, metricname=metricname)
 
     # TODO this is only bc in debug i set the min_existinds to 1
     metrics = {k: v for k, v in metrics.items() if len(v["existinds"]) >= 25}

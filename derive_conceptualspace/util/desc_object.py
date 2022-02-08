@@ -1,5 +1,6 @@
 import random
 import textwrap
+import warnings
 from collections import Counter
 from os.path import basename
 from typing import Optional, List
@@ -276,7 +277,7 @@ class DescriptionList():
                 return DocTermMatrix(dtm=aslist, all_terms=all_words, quant_name="count")
         else:
             if (max_ngram or 1) != self.proc_ngram_range[1] or (max_ngram not in [None, 1] and not self.proc_has_ngrams):
-                logger.warning(f"The Preprocessing had max-ngrams={self.proc_ngram_range[1]}, now you require {max_ngram or 1}!")
+                warnings.warn(f"The Preprocessing had max-ngrams={self.proc_ngram_range[1]}, now you require {max_ngram or 1}!")
                 if (max_ngram or 1) < self.proc_ngram_range[1]:
                     raise NotImplementedError()
                 cnt = CountVectorizer(strip_accents=None, lowercase=False, stop_words=None, ngram_range=(1, max_ngram), min_df=min_df)

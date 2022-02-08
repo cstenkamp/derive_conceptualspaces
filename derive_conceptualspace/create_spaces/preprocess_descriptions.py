@@ -26,11 +26,11 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 class PPComponents():
     SKCOUNTVEC_SUPPORTS = ["sentwise_merge", "add_title", "add_subtitle", "remove_htmltags", "remove_stopwords", "convert_lower", "remove_diacritics", "add_additionals"]
     OPTION_LETTER = dict(
-        sentwise_merge="m", #pre-preprocessing. If there are mutliple descriptions for different years
+        sentwise_merge="m", #pre-preprocessing. If there are mutliple descriptions for different years, either add all unique sentences or calculate relative term-frequencies
         add_additionals="f",
         add_title="a",
         add_subtitle="u",
-        remove_htmltags="h",
+        remove_htmltags=    "h",
         sent_tokenize="t",
         convert_lower="c",
         remove_stopwords="s",
@@ -70,6 +70,7 @@ class PPComponents():
 ########################################################################################################################
 
 def preprocess_descriptions_full(raw_descriptions, dataset_class, pp_components, for_language, translate_policy, languages, translations=None):
+    #TODO should I assert a minimal number of PP-Components? If I don't word-tokenize it all doesn't make much sense, does it?
     max_ngram = get_setting("MAX_NGRAM") if get_setting("NGRAMS_IN_EMBEDDING") else 1
     pp_components = PPComponents.from_str(pp_components)
     descriptions = dataset_class.preprocess_raw_file(raw_descriptions, pp_components)
@@ -86,8 +87,9 @@ def preprocess_descriptions_full(raw_descriptions, dataset_class, pp_components,
                             assert_all_translated=False, additionals={i: list(descriptions[i]) for i in dataset_class.additionals} if pp_components.add_additionals else None)
         if pp_components.use_skcountvec:
             descriptions = pp_descriptions_countvec(descriptions, pp_components, max_ngram, for_language).filter_words(min_words=get_setting("MIN_WORDS_PER_DESC"))
-            metainf = {"n_samples": len(descriptions), "ngrams_in_embedding": get_setting("NGRAMS_IN_EMBEDDING"), **({"pp_max_ngram": get_setting("MAX_NGRAM")} if get_setting("NGRAMS_IN_EMBEDDING") else {}),
-                       "min_words": get_setting("MIN_WORDS_PER_DESC")}
+            metainf = {"n_samples": len(descriptions), "ngrams_in_embedding": get_setting("NGRAMS_IN_EMBEDDING"), "min_words": get_setting("MIN_WORDS_PER_DESC")}
+            #TODO NO NO NO. ngrams_in_embedding is IRRELEVANT FOR THIS STEP!!!
+            if get_setting("NGRAMS_IN_EMBEDDING"): metainf["pp_max_ngram"] = get_setting("MAX_NGRAM")
         else:
             assert max_ngram == 1, "Cannot deal with n-grams without SKLearn!"
             descriptions = preprocess_descriptions(descriptions, pp_components).filter_words(min_words=get_setting("MIN_WORDS_PER_DESC"))
@@ -159,28 +161,24 @@ def create_bare_desclist(languages, translations, for_language, names, descripti
 
 def preprocess_descriptions(descriptions, components):
     """3.4 in [DESC15]"""
-    # TODO there's https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html
-    # TODO it must save which kind of preprocessing it did (removed stop words, convered lowercase, stemmed, ...)
-    descriptions = run_preprocessing_funcs(descriptions, components) #TODO allow the CountVectorizer!
+    descriptions = run_preprocessing_funcs(descriptions, components)
     print("Ran the following preprocessing funcs:", ", ".join(descriptions.proc_steps))
     descriptions.proc_min_df = 1
     descriptions.proc_ngram_range = (1, 1)
-    # vocab, descriptions = make_bow(descriptions) #TODO correct to remove?!
-    # vocab = sorted(set(flatten([flatten(desc.processed_text) for desc in descriptions])))
-    # return vocab, descriptions
     return descriptions
 
 
 
-def get_countvec(pp_components, max_ngram, for_language, min_df=1):
+def get_countvec(pp_components, max_ngram, language, min_df=1):
     #TODO play around with values for the many options this has!!
+    if isinstance(pp_components, str): pp_components=PPComponents.from_str(pp_components)
     if pp_components.remove_stopwords and get_setting("TRANSLATE_POLICY") == "origlang":
-        raise NotImplementedError("Cannot deal with per-language-stopwords in this mode")
+        raise NotImplementedError("Cannot deal with per-language-stopwords when using sklearn's CountVectorizer!")
     cnt = CountVectorizer(strip_accents="unicode" if pp_components.remove_diacritics else None,
                           lowercase = pp_components.convert_lower,
                           ngram_range=(1, max_ngram),
-                          min_df=min_df, #If 2, every component of a description has a "partner", I THINK that makes the dissimilarity-matrix better
-                          stop_words=get_stopwords(for_language) if pp_components.remove_stopwords else None, #TODO see https://scikit-learn.org/stable/modules/feature_extraction.html#stop-words
+                          min_df=min_df, #If 2, every component of a description has a "partner", making the dissimilarity-matrix more compact
+                          stop_words=get_stopwords(language) if pp_components.remove_stopwords else None, #TODO see https://scikit-learn.org/stable/modules/feature_extraction.html#stop-words
                           )
     # I cannot set min_df and max_df, as I need all words for the dissimilarity-matrix!
     # TODO when I set preprocessor here I can override the preprocessing (strip_accents and lowercase) stage while preserving tokenizing and n-grams generation steps

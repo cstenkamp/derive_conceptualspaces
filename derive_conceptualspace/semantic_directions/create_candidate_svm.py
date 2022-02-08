@@ -113,6 +113,7 @@ def select_salient_terms(metrics, decision_planes, prim_lambda, sec_lambda, metr
     # TODO maybe have a smart weighting function that takes into account the kappa-score of the term and/or the closeness to the original clustercenter
     return clusters, cluster_directions
 
+
 def create_candidate_svm(embedding, term, quants, plot_svm=False, descriptions=None, quant_name=None, pgbar=None, **kwargs):
     bin_labels = np.array(quants, dtype=bool) # Ensure that regardless of quant_measure this is correct binary classification labels
     # (tmp := len(quants)/(2*np.bincount(bin_labels)))[0]/tmp[1] is roughly equal to bin_labels.mean() so balancing is good

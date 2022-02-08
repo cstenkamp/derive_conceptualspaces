@@ -66,7 +66,8 @@ def run_preprocessing_funcs(descriptions:DescriptionList, components, word_token
     else:
         word_tokenize_all(descriptions, word_tokenizer=word_tokenizer, remove_stopwords=False)
         lemmatize_all(descriptions)
-        descriptions.process_all(lambda txt, stopwords: [[lemma for lemma in sent if lemma not in stopwords] for sent in txt], "remove_stopwords", indiv_kwargs=dict(stopwords=lambda desc: get_stopwords(desc.lang)))
+        if components.remove_stopwords:
+            descriptions.process_all(lambda txt, stopwords: [[lemma for lemma in sent if lemma not in stopwords] for sent in txt], "remove_stopwords", indiv_kwargs=dict(stopwords=lambda desc: get_stopwords(desc.lang)))
     if components.remove_diacritics:
         remove_diacritics_all(descriptions)
     if components.remove_punctuation:

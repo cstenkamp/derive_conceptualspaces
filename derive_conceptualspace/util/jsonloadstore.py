@@ -238,14 +238,14 @@ class JsonPersister():
                     correct_cands.append((cand, parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]), dirname(cand)).named))
                     if self.ctx.get_config("DEP_PREFERS_NONDEBUG"):
                         correct_cands = [i for i in correct_cands if i[1] != {k: v if standardize_config_name(k) != "DEBUG" else "True" for k, v in correct_cands[-1][1].items()}]
-                    elif len([i for i in correct_cands if {k:v for k,v in i[1].items() if standardize_config_name(k) != "DEBUG"}]) > 1:
+                    elif len(set(i[0] for i in correct_cands if {k:v for k,v in i[1].items() if standardize_config_name(k) != "DEBUG"})) > 1:
                         correct_cands = [i for i in correct_cands if i[1] != {k: v if standardize_config_name(k) != "DEBUG" else "False" for k, v in correct_cands[-1][1].items()}]
         if not correct_cands:
             if candidates: #otherwise dirstruct is not defined
                 print(f"You may need the file *b*{join(dirstruct, save_basename+'.json')}*b*")
                 #command is then `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR filepath)`
-            raise FileNotFoundError(fmt(f"There is no candidate for {save_basename} with the current config." + (f"You may need the file *b*{join(dirstruct, save_basename+'.json')}*b*" if candidates else "")))
-        assert len(correct_cands) == 1, f"Multiple file candidates: {correct_cands}"
+            raise FileNotFoundError(fmt(f"There is no candidate for {save_basename} with the current config." + (f" You may need the file *b*{join(dirstruct, save_basename+'.json')}*b*" if candidates else "")))
+        assert len(set(i[0] for i in correct_cands)) == 1, f"Multiple file candidates: {correct_cands}"
         return correct_cands[0][0]
 
 

@@ -3,14 +3,16 @@ import logging
 
 import numpy as np
 from scipy.spatial.distance import squareform
-
-from .create_embedding import create_dissimilarity_matrix, show_close_descriptions
+from sklearn.feature_extraction.text import TfidfTransformer
+from sklearn.pipeline import Pipeline
 
 from derive_conceptualspace.settings import get_setting
 from derive_conceptualspace.util.text_tools import tf_idf, ppmi
-from derive_conceptualspace.util.dtm_object import DocTermMatrix
+from .create_embedding import create_dissimilarity_matrix, show_close_descriptions
 from ..util.desc_object import DescriptionList
 from misc_util.pretty_print import pretty_print as print
+from derive_conceptualspace.create_spaces.preprocess_descriptions import get_countvec
+from derive_conceptualspace.util.dtm_object import csr_to_list, DocTermMatrix
 
 logger = logging.getLogger(basename(__file__))
 
@@ -26,7 +28,14 @@ def create_dissim_mat(descriptions: DescriptionList, quantification_measure, ver
     #Options here: get_setting("NGRAMS_IN_EMBEDDING"), get_setting("DISSIM_MAT_ONLY_PARTNERED")
     if get_setting("DEBUG"):
         descriptions._descriptions = descriptions._descriptions[:get_setting("DEBUG_N_ITEMS")]
-    dtm = descriptions.generate_DocTermMatrix(min_df=2 if get_setting("DISSIM_MAT_ONLY_PARTNERED") else 1)
+    if hasattr(descriptions, "recover_settings") and quantification_measure in ["tfidf", "tf"]:
+        #https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfTransformer.html
+        pipe = Pipeline([("count", get_countvec(**descriptions.recover_settings, min_df=2 if get_setting("DISSIM_MAT_ONLY_PARTNERED") else 1)),
+                        ("tfidf", TfidfTransformer(use_idf=(quantification_measure=="tfidf")))]).fit(descriptions.unprocessed_texts)
+        aslist, all_words = csr_to_list(pipe.transform(descriptions.unprocessed_texts), pipe["count"].vocabulary_)
+        dtm = DocTermMatrix(dtm=aslist, all_terms=all_words, quant_name=quantification_measure)
+    else:
+        dtm = descriptions.generate_DocTermMatrix(min_df=2 if get_setting("DISSIM_MAT_ONLY_PARTNERED") else 1)
     assert any(" " in i for i in dtm.all_terms.values()) == get_setting("NGRAMS_IN_EMBEDDING")
     quantification = dtm.apply_quant(quantification_measure, descriptions=descriptions, verbose=verbose)
     # das ist jetzt \textbf{v}_e with all e's as rows
