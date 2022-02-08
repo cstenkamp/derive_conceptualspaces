@@ -22,6 +22,7 @@ from derive_conceptualspace.settings import (
     ALL_TRANSLATE_POLICY, ALL_QUANTIFICATION_MEASURE, ALL_EXTRACTION_METHOD, ALL_EMBED_ALGO, ALL_DCM_QUANT_MEASURE,
     ENV_PREFIX,
     IS_INTERACTIVE,
+    standardize_config_name,
 )
 from derive_conceptualspace.create_spaces.translate_descriptions import (
     full_translate_column as translate_column_base,
@@ -89,16 +90,16 @@ def click_pass_add_context(fn):
 
 def load_envvfile(ctx, param, value):
     apply_dotenv_vars()
-    if param.name == "env_file" and value:
-        if not isfile(value) and isfile(join(os.getenv(ENV_PREFIX+"_"+"CONFIGDIR", ""), value)):
-            value = join(os.getenv(ENV_PREFIX+"_"+"CONFIGDIR"), value)
-        if not isfile(value):
-            raise click.exceptions.FileError(value)
-        load_dotenv(value)
+    if param.name == "env_file":
+        if value is None and os.getenv(ENV_PREFIX+"_"+standardize_config_name(param.name)):
+            value = os.getenv(ENV_PREFIX+"_"+standardize_config_name(param.name)) #default-value, but evaluated after reading the SELECT_ENV_FILE
+        if value:
+            if not isfile(value):
+                raise click.exceptions.FileError(value)
+            load_dotenv(value)
 
 @click.group()
-@click.option("--env-file", callback=load_envvfile, default=os.environ.get(ENV_PREFIX+"_"+"ENV_FILE"), type=click.Path(), is_eager=True,
-              help="If you want to provide environment-variables using .env-files you can provide the path to a .env-file here.")
+@click.option("--env-file", callback=load_envvfile, type=click.Path(), is_eager=True, help="If you want to provide environment-variables using .env-files you can provide the path to a .env-file here.")
 @click.option("--conf-file", default=None, type=click.Path(exists=True), help="You can also pass a yaml-file containing values for some of the settings")
 @click.option("--base-dir", type=click.Path(exists=True), default=None)
 @click.option("--dataset", type=str, default=None, help="The dataset you're solving here. Makes for the subfolder in base_dir where your data is stored and which of the classes in `load_data/dataset_specifics` will be used.")
@@ -173,7 +174,6 @@ def translate_descriptions(ctx, translate_policy, raw_descriptions_file, languag
 @click.option("--pp-components", type=str, default=None)
 @click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=None)
 @click.option("--raw-descriptions-file", type=str, default=None)
-@click.option("--max-ngram", type=int, default=None)
 @click_pass_add_context
 def preprocess_descriptions(ctx, json_persister, dataset_class, raw_descriptions_file, pp_components, language):
     raw_descriptions = json_persister.load(raw_descriptions_file, "raw_descriptions")

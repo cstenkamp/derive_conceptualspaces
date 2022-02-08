@@ -121,6 +121,7 @@ def extract_candidateterms_quantific(descriptions, max_ngram, quantific, verbose
 ########################################################################################################################
 
 def create_filtered_doc_cand_matrix(postprocessed_candidates, descriptions, min_term_count, dcm_quant_measure, use_n_docs_count=True, verbose=False):
+    assert min_term_count >= 2, "It doesn't make sense to consider candidates occuring only once, and if I don't, I can rely on the DTM from the dissim_mat (for 1-grams at least)!"
     doc_cand_matrix = create_doc_cand_matrix(postprocessed_candidates, descriptions, verbose=verbose)
     return filter_keyphrases(doc_cand_matrix, descriptions, min_term_count=min_term_count, dcm_quant_measure=dcm_quant_measure, use_n_docs_count=use_n_docs_count, verbose=verbose)
 

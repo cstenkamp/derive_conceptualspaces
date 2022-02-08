@@ -1,8 +1,10 @@
 import pandas as pd
-from derive_conceptualspace.load_data.dataset_specifics import BaseDataset
 import nltk
 from Levenshtein import distance
 from tqdm import tqdm
+
+from derive_conceptualspace.load_data.dataset_specifics import BaseDataset
+from derive_conceptualspace.settings import get_setting
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
@@ -24,6 +26,8 @@ class Dataset(BaseDataset):
         df = df.reset_index().drop(columns=["Unnamed: 0", "index", "n_descs"])
         # df = df[~df['description'].isnull()]
         df = df[df["description"]!="[]"]
+        if get_setting("DEBUG"):
+            df = df[:get_setting("DEBUG_N_ITEMS")*2]
         df = Dataset.merge_multidescs(df, pp_components)
         df.loc[:, 'ges_nwords'] = df["description"].str.count(" ").fillna(0)
         if pp_components.add_title:

@@ -28,25 +28,20 @@ def create_dissim_mat(descriptions: DescriptionList, quantification_measure, ver
     #Options here: get_setting("NGRAMS_IN_EMBEDDING"), get_setting("DISSIM_MAT_ONLY_PARTNERED")
     if get_setting("DEBUG"):
         descriptions._descriptions = descriptions._descriptions[:get_setting("DEBUG_N_ITEMS")]
-    if hasattr(descriptions, "recover_settings") and quantification_measure in ["tfidf", "tf"]:
-        #https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfTransformer.html
-        pipe = Pipeline([("count", get_countvec(**descriptions.recover_settings, min_df=2 if get_setting("DISSIM_MAT_ONLY_PARTNERED") else 1)),
-                        ("tfidf", TfidfTransformer(use_idf=(quantification_measure=="tfidf")))]).fit(descriptions.unprocessed_texts)
-        aslist, all_words = csr_to_list(pipe.transform(descriptions.unprocessed_texts), pipe["count"].vocabulary_)
-        dtm = DocTermMatrix(dtm=aslist, all_terms=all_words, quant_name=quantification_measure)
-    else:
-        dtm = descriptions.generate_DocTermMatrix(min_df=2 if get_setting("DISSIM_MAT_ONLY_PARTNERED") else 1)
-    assert any(" " in i for i in dtm.all_terms.values()) == get_setting("NGRAMS_IN_EMBEDDING")
-    quantification = dtm.apply_quant(quantification_measure, descriptions=descriptions, verbose=verbose)
+    dtm, metainf = descriptions.generate_DocTermMatrix(min_df=2 if get_setting("DISSIM_MAT_ONLY_PARTNERED") else 1,
+                                                       max_ngram=get_setting("MAX_NGRAM") if get_setting("NGRAMS_IN_EMBEDDING") else None,
+                                                       do_tfidf=quantification_measure if quantification_measure in ["tfidf", "tf"] else None)
+    assert any(" " in i for i in dtm.all_terms.values()) == (get_setting("NGRAMS_IN_EMBEDDING") and get_setting("MAX_NGRAM") > 1)
+    quantification = dtm.apply_quant(quantification_measure, descriptions=descriptions, verbose=verbose) if not metainf.get("sklearn_tfidf") else dtm
     # das ist jetzt \textbf{v}_e with all e's as rows
     #cannot use ppmis directly, because a) too sparse, and b) we need a geometric representation with euclidiean props (betweeness, parallism,..)
     assert all(len(set((lst := [i[0] for i in dtm]))) == len(lst) for dtm in quantification.dtm)
     dissim_mat = create_dissimilarity_matrix(quantification.as_csr(), dissim_measure=get_setting("dissim_measure"))
     assert np.allclose(dissim_mat, dissim_mat.T) #if so it's a correct dissimilarity-matrix and we can do squareform to compress
-    is_dissim = np.allclose(np.diagonal(dissim_mat), 0, atol=1e-10)
+    metainf["is_dissim"] = np.allclose(np.diagonal(dissim_mat), 0, atol=1e-10)
     if verbose:
         show_close_descriptions(dissim_mat, descriptions)
     dissim_mat = squareform(dissim_mat, checks=True) #saves > 50% storage space!
-    return quantification, dissim_mat, {"ngrams_in_embedding": get_setting("NGRAMS_IN_EMBEDDING"), "is_dissim": is_dissim}
+    return quantification, dissim_mat, metainf
 
 

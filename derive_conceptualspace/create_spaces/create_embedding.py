@@ -92,13 +92,9 @@ def create_embedding(dissim_mat, embed_dimensions, embed_algo, verbose=False, pp
 
 
 def create_mds(dissim_mat, embed_dimensions, metric=True, init_from_isomap=True):
-    #TODO - isn't isomap better suited than MDS? https://scikit-learn.org/stable/modules/manifold.html#multidimensional-scaling
-    # !! [DESC15] say they compared it and it's worse ([15] of [DESC15])!!!
-    if get_setting("DATASET") == "siddata2022" and get_setting("DEBUG"):
-        init_from_isomap = False #TODO hier klappt nämlich Isomap nicht lol
     max_iter = 10000 if not get_setting("DEBUG") else 100
     if not init_from_isomap:
-        warnings.warn("Motherfucker is broken!! Have to init from something, don't fucking ask why!")
+        warnings.warn("sklearn's MDS is broken!! Have to init from something, don't fucking ask why!")
         n_inits = math.ceil((max(get_ncpu()*2, (10 if not get_setting("DEBUG") else 3)))/get_ncpu())*get_ncpu() # minimally 10, maximally ncpu*2, but in any case a multiple of ncpu
         print(f"Running {'non-' if not metric else ''}metric MDS {n_inits} times with {get_ncpu(ignore_debug=True)} jobs for max {max_iter} iterations.")
         embedding = MDS(n_components=embed_dimensions, dissimilarity="precomputed",
@@ -120,6 +116,7 @@ def create_tsne(dissim_mat, embed_dimensions):
 
 
 def create_isomap(dissim_mat, embed_dimensions, neighbor_factor=2, **kwargs):
+    # https://scikit-learn.org/stable/modules/manifold.html#multidimensional-scaling says isomap better suited than MDS, but DESC15 say they compared it and it's worse ([15] of [DESC15])!
     n_neighbors=min(max(5, dissim_mat.shape[0]//neighbor_factor), dissim_mat.shape[0]-1)
     print(f"Running Isomap with {get_ncpu(ignore_debug=True)} jobs for max {n_neighbors} neighbors.")
     embedding = Isomap(n_jobs=get_ncpu(ignore_debug=True), n_neighbors=n_neighbors, n_components=embed_dimensions, metric="precomputed", **kwargs)

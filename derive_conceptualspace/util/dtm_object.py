@@ -34,7 +34,7 @@ class DocTermMatrix():
     def from_vocab_descriptions(vocab, descriptions, min_df=1, verbose=False):
         if hasattr(descriptions, "recover_settings"):
             warnings.warn("Are you sure you don't want to use descriptions.generate_DocTermMatrix instead?")
-        assert descriptions.proc_min_df <= min_df
+        assert descriptions.proc_min_df <= min_df #TODO!
         all_terms = {n: elem for n, elem in enumerate(vocab)}
         reverse_term_dict = {v: k for k,v in all_terms.items()}
         dtm = []
@@ -147,7 +147,7 @@ class DocTermMatrix():
 
     @staticmethod
     def filter(dtm, min_count, use_n_docs_count=True, verbose=False, descriptions=None, all_terms=None, cap_max=True):
-        """can get either a DocTermMatrix as dtm, or a DocTermMatrix.dtm as dtm and an all_terms value"""
+        """can input either a DocTermMatrix as dtm, or a DocTermMatrix.dtm as dtm and an all_terms value"""
         if not all_terms:
             assert isinstance(dtm, DocTermMatrix)
             all_terms = dtm.all_terms

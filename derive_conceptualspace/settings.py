@@ -12,7 +12,7 @@ ENV_PREFIX = "MA"
 ########################################################################################################################
 
 #!! use singular for these (bzw the form you'd use if there wasn't the "ALL_" before)
-ALL_PP_COMPONENTS = ["mfacsd2"]#, "autcsldp"] #,"tcsdp"                # If in preprocessing it should add coursetitle, lemmatize, etc #TODO "autcsldp", "tcsldp" (gehen gerade nicht weil die nicht mit ngrams klarkommen)
+ALL_PP_COMPONENTS = ["mfacsd2"]#, "autcsldp"] #,"tcsdp"                # If in preprocessing it should add title, lemmatize, etc #TODO "autcsldp", "tcsldp" (gehen gerade nicht weil die nicht mit ngrams klarkommen)
 ALL_TRANSLATE_POLICY = ["onlyorig", "translate"]#, "origlang"          # If non-english descriptions should be translated
 ALL_EMBED_ALGO = ["mds"]#, "tsne", "isomap"]                           # Actual Embedding of the Descriptions
 ALL_EMBED_DIMENSIONS = [100]#, 3] #, 50, 200                           # Actual Embedding of the Descriptions
@@ -51,7 +51,7 @@ DEFAULT_STANFORDNLP_VERSION = "4.2.2" #whatever's newest at https://stanfordnlp.
 DEFAULT_COURSE_TYPES = ["colloquium", "seminar", "internship", "practice", "lecture"]
 DEFAULT_CUSTOM_STOPWORDS = ("one", "also", "take")
 DEFAULT_MAX_NGRAM = 5
-DEFAULT_NGRAMS_IN_EMBEDDING = False #If I should set the ngram-range already in the preprocess_descriptions step (makes the dissimiliarity-matrix a shitton more sparse)
+DEFAULT_NGRAMS_IN_EMBEDDING = False # if the dissimilarity-matrix should already consider n-grams (makes it a LOT more sparse)
 DEFAULT_DISSIM_MAT_ONLY_PARTNERED = True
 DEFAULT_CANDS_USE_NDOCS_COUNT = True
 DEFAULT_MIN_WORDS_PER_DESC = 50
@@ -102,7 +102,7 @@ with set_noninfluentials(): #this context-manager adds all settings from here to
     CONF_PRIORITY = ["force", "smk_wildcard", "dependency", "cmd_args", "env_vars", "smk_args", "conf_file", "dataset_class", "defaults"] #no distinction between env_file and env_var bc load_dotenv is executed eagerly and just overwrites envvars from envfile
     #note that snakemake reads the conf_file differently and sets env-vars (that however apply force) from the configurations
     MAY_DIFFER_IN_DEPENDENCIES = ["DEBUG", "RANDOM_SEED", "CANDIDATE_MIN_TERM_COUNT", "BASE_DIR"]
-    DEFAULT_DEP_PREFERS_NONDEBUG = True
+    DEFAULT_DEP_PREFERS_NONDEBUG = False #PRECOMMIT #TODO
 
 ########################################################################################################################
 ######################################## set and get settings/env-vars #################################################

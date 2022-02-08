@@ -7,7 +7,8 @@ from typing import Optional, List
 import inspect
 import logging
 
-from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
+from sklearn.pipeline import Pipeline
 from tqdm import tqdm
 
 from .dtm_object import DocTermMatrix, csr_to_list
@@ -48,9 +49,6 @@ class Description():
 
     _add_title = property(lambda self: self.list_ref.add_title)
     _add_subtitle = property(lambda self: self.list_ref.add_subtitle)
-    _includes_ngrams = property(lambda self: self.list_ref.proc_has_ngrams)
-    _proc_min_df = property(lambda self: self.list_ref.proc_min_df)
-    _proc_ngram_range = property(lambda self: self.list_ref.proc_ngram_range) # ngram_range > 1 means the bow is incomplete!
 
     def json_serialize(self):
         return Struct(**{k: v for k,v in self.__dict__.items() if k != "list_ref"})
@@ -130,36 +128,37 @@ class Description():
         # Das heißt, ich kann einen Teil der very description um die es geht nehmen und wenn sie nicht oft genug insgesamt vorkommt würde count_phrase = 0 sein
         if not isinstance(item, str):
             assert False #in the future just return False
-        if self._proc_min_df == 1:
-            if (self._includes_ngrams and " " in item) or not " " in item:
-                return self.bow().get(item, 0)
-        if item in self.bow():
-            return self.bow()[item]
-        if self._proc_min_df == 1:
-            if " " in item:
-                return self.processed_as_string().count(item)
-            return self.processed_text.count(item)
-        raise NotImplementedError()
-        #TODO I don't feel like this is done...! I should be able to check if it's in there even if the doc-term-matrix forgot that its in there
-
-
-        if not " " in item:
-            return self.bow().get(item, 0)
-        elif self._includes_ngrams and item in self.bow():
-            return self.bow()[item]
-        else:
-            raise NotImplementedError()
-        # assert not any(" " in i for i in self.bow.keys()) #TODO add this assertion back once I have a parameter for if I should include n-grams
-        # if " " in item: #TODO why did I even need this originally? When did I check for items with spaces?
-        #     items = item.split(" ")
-        #     for it in items:
-        #         if it not in self.bow:
-        #             return 0
-        #     if item in self.processed_as_string():
+        raise NotImplementedError("TODO PP-Descriptions NEVER HAS NGRAMS (08.02.22)!! DEAL WITH IT!!!")
+        # if self._proc_min_df == 1:
+        #     if (self._includes_ngrams and " " in item) or not " " in item:
+        #         return self.bow().get(item, 0)
+        # if item in self.bow():
+        #     return self.bow()[item]
+        # if self._proc_min_df == 1:
+        #     if " " in item:
         #         return self.processed_as_string().count(item)
-        #     elif item in self.processed_as_string(no_dots=True):
-        #         return 0 # this is legit not a candidate, but I want to be able to set breakpoints in cases where this is not the reason
-        return self.bow.get(item, 0)
+        #     return self.processed_text.count(item)
+        # raise NotImplementedError()
+        # #TODO I don't feel like this is done...! I should be able to check if it's in there even if the doc-term-matrix forgot that its in there
+        #
+        #
+        # if not " " in item:
+        #     return self.bow().get(item, 0)
+        # elif self._includes_ngrams and item in self.bow():
+        #     return self.bow()[item]
+        # else:
+        #     raise NotImplementedError()
+        # # assert not any(" " in i for i in self.bow.keys()) #TODO add this assertion back once I have a parameter for if I should include n-grams
+        # # if " " in item: #TODO why did I even need this originally? When did I check for items with spaces?
+        # #     items = item.split(" ")
+        # #     for it in items:
+        # #         if it not in self.bow:
+        # #             return 0
+        # #     if item in self.processed_as_string():
+        # #         return self.processed_as_string().count(item)
+        # #     elif item in self.processed_as_string(no_dots=True):
+        # #         return 0 # this is legit not a candidate, but I want to be able to set breakpoints in cases where this is not the reason
+        # return self.bow.get(item, 0)
 
     def bow(self):
         if not hasattr(self, "_bow") or self._bow is None:
@@ -189,7 +188,6 @@ class DescriptionList():
         self.add_subtitle = add_subtitle
         self.translate_policy = translate_policy
         self.additionals_names = additionals_names
-        self.proc_has_ngrams = False
         self.proc_steps = []
         self._descriptions: List[Description] = []
 
@@ -208,8 +206,6 @@ class DescriptionList():
         for desc in descriptions[1][1]["_descriptions"]:
             assert desc[0] == "Description" and desc[1][0] == "Struct"
             obj.add(Description.fromstruct(desc[1][1]))
-        if get_setting("NGRAMS_IN_EMBEDDING", silent=True) and get_setting("MAX_NGRAM") > 1:
-            assert obj.proc_has_ngrams
         return obj
 
     def add(self, desc):
@@ -228,13 +224,12 @@ class DescriptionList():
         else:
             assert False, f"cannot confirm {confirmwhat}"
 
-    def process_all(self, proc_fn, proc_name, adds_ngrams=False, proc_base=None, indiv_kwargs=None, pgbar=""):
+    def process_all(self, proc_fn, proc_name, proc_base=None, indiv_kwargs=None, pgbar=""):
         for desc in tqdm(self._descriptions, desc=pgbar if isinstance(pgbar, str) else None) if pgbar else self._descriptions:
             kwargs = {k: v(desc) for k, v in indiv_kwargs.items()} if indiv_kwargs is not None else {}
             base = desc.processed_text if proc_base is None else proc_base(desc)
             desc.process(proc_fn(base, **kwargs), proc_name)
         self.proc_steps.append(proc_name)
-        self.proc_has_ngrams = self.proc_has_ngrams or adds_ngrams
 
     @property
     def processed_texts(self):
@@ -247,7 +242,6 @@ class DescriptionList():
             yield desc.unprocessed_text
 
     def all_words(self):
-        assert get_setting("NGRAMS_IN_EMBEDDING", silent=True) == self.proc_has_ngrams
         if not hasattr(self, "_all_words"):
             if isinstance(self._descriptions[0].processed_text[0], str):
                 self._all_words = set(flatten([i.processed_text for i in self._descriptions]))
@@ -256,44 +250,44 @@ class DescriptionList():
         return self._all_words
 
 
-    def generate_DocTermMatrix(self, min_df=1, max_ngram=None):
+    def generate_DocTermMatrix(self, min_df=1, max_ngram=None, do_tfidf=None):
         if self.proc_steps[-1] == "bow":
+            assert max_ngram is None, "Can't do!"
             print("Preprocessed produced a bag-of-words already. Config `max_ngram` becomes useless!")
             forbid_setting("max_ngram")
             all_words = dict(enumerate(set(flatten(i.bow().keys() for i in self._descriptions))))
             rev = {v: k for k, v in all_words.items()}
             dtm = [[[rev[k], v] for k, v in i.bow().items()] for i in self._descriptions]
             if min_df > 1:
-                return DocTermMatrix.filter(dtm, min_df, all_terms=all_words, use_n_docs_count=True) #TODO make use_n_docs_count an arg
-            return DocTermMatrix(dtm=dtm, all_terms=all_words, quant_name="count")
+                return DocTermMatrix.filter(dtm, min_df, all_terms=all_words, use_n_docs_count=get_setting("CANDS_USE_NDOCS_COUNT")), {"ngrams_in_embedding": False}
+            return DocTermMatrix(dtm=dtm, all_terms=all_words, quant_name="count"), {"ngrams_in_embedding": False}
         elif hasattr(self, "recover_settings"):
             from derive_conceptualspace.create_spaces.preprocess_descriptions import PPComponents, get_countvec
-            pp_components = PPComponents.from_str(self.recover_settings["pp_components"])
-            if pp_components.use_skcountvec:
-                max_ngram = max_ngram or int(self.recover_settings["max_ngram"])
-                cnt = get_countvec(pp_components, max_ngram, self.recover_settings["language"], min_df=min_df)
-                X = cnt.fit_transform(self.unprocessed_texts)
-                aslist, all_words = csr_to_list(X, cnt.vocabulary_)
-                return DocTermMatrix(dtm=aslist, all_terms=all_words, quant_name="count")
+            if PPComponents.from_str(self.recover_settings["pp_components"]).use_skcountvec:
+                cnt = get_countvec(**self.recover_settings, max_ngram=(max_ngram or 1), min_df=min_df)
+                fit_base = self.unprocessed_texts
+            else: raise NotImplementedError()
         else:
-            if (max_ngram or 1) != self.proc_ngram_range[1] or (max_ngram not in [None, 1] and not self.proc_has_ngrams):
-                warnings.warn(f"The Preprocessing had max-ngrams={self.proc_ngram_range[1]}, now you require {max_ngram or 1}!")
-                if (max_ngram or 1) < self.proc_ngram_range[1]:
-                    raise NotImplementedError()
-                cnt = CountVectorizer(strip_accents=None, lowercase=False, stop_words=None, ngram_range=(1, max_ngram), min_df=min_df)
-                X = cnt.fit_transform(self.iter("processed_as_string"))
-                aslist, all_words = csr_to_list(X, cnt.vocabulary_)
-                return DocTermMatrix(dtm=aslist, all_terms=all_words, quant_name="count")
-            return DocTermMatrix.from_descriptions(self, min_df=min_df)
+            cnt = CountVectorizer(strip_accents=None, lowercase=False, stop_words=None, ngram_range=(1, (max_ngram or 1)), min_df=min_df)
+            fit_base = lambda: self.iter("processed_as_string", no_dots=True)
+            # TODO If I can do sent_tokenize for the CountVectorizer I need to update this here as well!
+        if do_tfidf is not None:
+            #https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfTransformer.html
+            pipe = Pipeline([("count", cnt), ("tfidf", TfidfTransformer(use_idf=(do_tfidf=="tfidf")))]).fit(fit_base() if callable(fit_base) else fit_base)
+            aslist, all_words = csr_to_list(pipe.transform(fit_base() if callable(fit_base) else fit_base), pipe["count"].vocabulary_)
+            return DocTermMatrix(dtm=aslist, all_terms=all_words, quant_name=do_tfidf), {"ngrams_in_embedding": (get_setting("NGRAMS_IN_EMBEDDING") and get_setting("MAX_NGRAM") > 1), "sklearn_tfidf": True}
+        X = cnt.fit_transform(fit_base)
+        aslist, all_words = csr_to_list(X, cnt.vocabulary_)
+        return DocTermMatrix(dtm=aslist, all_terms=all_words, quant_name="count"), {"ngrams_in_embedding": (get_setting("NGRAMS_IN_EMBEDDING") and get_setting("MAX_NGRAM") > 1)}
 
 
     def add_embeddings(self, embeddings):
         for desc, embedding in zip(self._descriptions, list(embeddings)):
             desc.embedding = embedding
 
-    def iter(self, func):
+    def iter(self, func, **kwargs):
         for desc in self._descriptions:
-            yield getattr(desc, func)()
+            yield getattr(desc, func)(**kwargs)
 
     def filter_words(self, min_words):
         tmp = [i for i in self._descriptions if i.n_words() >= min_words]

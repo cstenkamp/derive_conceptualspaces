@@ -30,7 +30,7 @@ class PPComponents():
         add_additionals="f",
         add_title="a",
         add_subtitle="u",
-        remove_htmltags=    "h",
+        remove_htmltags="h",
         sent_tokenize="t",
         convert_lower="c",
         remove_stopwords="s",
@@ -71,31 +71,25 @@ class PPComponents():
 
 def preprocess_descriptions_full(raw_descriptions, dataset_class, pp_components, for_language, translate_policy, languages, translations=None):
     #TODO should I assert a minimal number of PP-Components? If I don't word-tokenize it all doesn't make much sense, does it?
-    max_ngram = get_setting("MAX_NGRAM") if get_setting("NGRAMS_IN_EMBEDDING") else 1
     pp_components = PPComponents.from_str(pp_components)
     descriptions = dataset_class.preprocess_raw_file(raw_descriptions, pp_components)
     if get_setting("preprocessed_bow", default_false=True):
-        descriptions = descriptions_from_bow(descriptions, languages, translations, translate_policy).filter_words(min_words=get_setting("MIN_WORDS_PER_DESC"))
+        descriptions = descriptions_from_bow(descriptions, languages, translations, translate_policy)
         if len(raw_descriptions["vecs"]) > len(descriptions):
             warnings.warn(f"Because of the min-words-per-desc setting, {len(raw_descriptions['vecs'])-len(descriptions)} of the original items needed to be removed!")
-        metainf = {"n_samples": len(descriptions), "min_words": get_setting("MIN_WORDS_PER_DESC")}
     else:
         if get_setting("DEBUG"):
-            descriptions = pd.DataFrame([descriptions.iloc[key] for key in random.sample(range(len(descriptions)), k=get_setting("DEBUG_N_ITEMS"))])
+            descriptions = descriptions[:get_setting("DEBUG_N_ITEMS")] #pd.DataFrame([descriptions.iloc[key] for key in random.sample(range(len(descriptions)), k=get_setting("DEBUG_N_ITEMS"))])
         descriptions = create_bare_desclist(languages, translations, for_language, list(descriptions["title"]), list(descriptions["description"]),
                             [i if str(i) != "nan" else None for i in descriptions["subtitle"]], translate_policy, pp_components=pp_components,
                             assert_all_translated=False, additionals={i: list(descriptions[i]) for i in dataset_class.additionals} if pp_components.add_additionals else None)
         if pp_components.use_skcountvec:
-            descriptions = pp_descriptions_countvec(descriptions, pp_components, max_ngram, for_language).filter_words(min_words=get_setting("MIN_WORDS_PER_DESC"))
-            metainf = {"n_samples": len(descriptions), "ngrams_in_embedding": get_setting("NGRAMS_IN_EMBEDDING"), "min_words": get_setting("MIN_WORDS_PER_DESC")}
-            #TODO NO NO NO. ngrams_in_embedding is IRRELEVANT FOR THIS STEP!!!
-            if get_setting("NGRAMS_IN_EMBEDDING"): metainf["pp_max_ngram"] = get_setting("MAX_NGRAM")
+            descriptions = pp_descriptions_countvec(descriptions, pp_components, for_language)
         else:
-            assert max_ngram == 1, "Cannot deal with n-grams without SKLearn!"
-            descriptions = preprocess_descriptions(descriptions, pp_components).filter_words(min_words=get_setting("MIN_WORDS_PER_DESC"))
-            metainf = {"n_samples": len(descriptions), "ngrams_in_embedding": False, "min_words": get_setting("MIN_WORDS_PER_DESC")}
+            descriptions = preprocess_descriptions(descriptions, pp_components)
+    descriptions = descriptions.filter_words(min_words=get_setting("MIN_WORDS_PER_DESC"))
     show_hist([i.n_words() for i in descriptions._descriptions], "Words per Description", xlabel="Number of Words")
-    return descriptions, metainf
+    return descriptions, {"n_samples": len(descriptions)}
 
 
 def descriptions_from_bow(descs, languages, translations, translate_policy):
@@ -106,7 +100,6 @@ def descriptions_from_bow(descs, languages, translations, translate_policy):
         desc_list.add(Description(lang=languages, text=None, title=name, subtitle=None, orig_textlang=None, bow=bow,
                                   additionals={k: v.get(name) for k, v in descs["classes"].items()}))
     desc_list.proc_steps.append("bow")
-    desc_list.proc_min_df = 1
     return desc_list
 
 
@@ -163,21 +156,18 @@ def preprocess_descriptions(descriptions, components):
     """3.4 in [DESC15]"""
     descriptions = run_preprocessing_funcs(descriptions, components)
     print("Ran the following preprocessing funcs:", ", ".join(descriptions.proc_steps))
-    descriptions.proc_min_df = 1
-    descriptions.proc_ngram_range = (1, 1)
     return descriptions
 
 
 
 def get_countvec(pp_components, max_ngram, language, min_df=1):
-    #TODO play around with values for the many options this has!!
     if isinstance(pp_components, str): pp_components=PPComponents.from_str(pp_components)
     if pp_components.remove_stopwords and get_setting("TRANSLATE_POLICY") == "origlang":
         raise NotImplementedError("Cannot deal with per-language-stopwords when using sklearn's CountVectorizer!")
     cnt = CountVectorizer(strip_accents="unicode" if pp_components.remove_diacritics else None,
                           lowercase = pp_components.convert_lower,
                           ngram_range=(1, max_ngram),
-                          min_df=min_df, #If 2, every component of a description has a "partner", making the dissimilarity-matrix more compact
+                          min_df=min_df, #If 2, every term has a "partner", making the dissimilarity-matrix more compact
                           stop_words=get_stopwords(language) if pp_components.remove_stopwords else None, #TODO see https://scikit-learn.org/stable/modules/feature_extraction.html#stop-words
                           )
     # I cannot set min_df and max_df, as I need all words for the dissimilarity-matrix!
@@ -188,17 +178,16 @@ def get_countvec(pp_components, max_ngram, language, min_df=1):
     return cnt
 
 
-def pp_descriptions_countvec(descriptions, pp_components, max_ngram, for_language):
+def pp_descriptions_countvec(descriptions, pp_components, for_language):
     if pp_components.remove_htmltags:
         descriptions.process_all(lambda data: re.compile(r'<.*?>').sub('', data), "remove_htmltags")
-    cnt = get_countvec(pp_components, max_ngram, for_language, min_df=1) #as the build_analyzer, in contrast to fit_transform, doesn't respect min_df anyway!!
+    cnt = get_countvec(pp_components, 1, for_language, min_df=1) #`build_analyzer`, in contrast to fit_transform, doesn't respect min_df anyway!!
     descriptions.process_all(cnt.build_preprocessor(), "preprocess")
     descriptions.process_all(cnt.build_tokenizer(), "tokenize")
-    descriptions.process_all(cnt.build_analyzer(), "analyze", adds_ngrams=max_ngram>1, proc_base=lambda desc: " ".join(desc.processed_text))
+    descriptions.process_all(cnt.build_analyzer(), "analyze", proc_base=lambda desc: " ".join(desc.processed_text))
     # TODO the analyze-step shouldn't find bigrams across sentences...! (resolves when sent_tokenizing)
-    descriptions.proc_min_df = 1
-    descriptions.proc_ngram_range = cnt.ngram_range
-    descriptions.recover_settings = dict(pp_components=str(pp_components), max_ngram=max_ngram, language=for_language)
+    # TODO if I can do sent_tokenize here I also need to handle DescriptionList.generate_DocTermMatrix
+    descriptions.recover_settings = dict(pp_components=str(pp_components), language=for_language)
     return descriptions
 
 

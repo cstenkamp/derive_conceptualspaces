@@ -37,6 +37,9 @@ from misc_util.pretty_print import pretty_print as print, fmt, TRANSLATOR, isnot
 def apply_dotenv_vars():
     """I want to be able to have env-vars in env-files (like `MA_DATA_BASE = $HOME/data`), and even nested env-vars (like `OTHER_VAR = {MA_DATA_BASE}/config`, so
     variables that refer to other variables defined im the same file. This does that."""
+    if os.getenv(f"{ENV_PREFIX}_SELECT_ENV_FILE"):
+        assert isfile(os.getenv(f"{ENV_PREFIX}_SELECT_ENV_FILE"))
+        load_dotenv(os.getenv(f"{ENV_PREFIX}_SELECT_ENV_FILE"))
     curr_envvars = {k: v for k, v in os.environ.items() if k.startswith(ENV_PREFIX+"_")}
     curr_envvars = {k: os.path.expandvars(v) for k, v in curr_envvars.items()} #replace envvars
     curr_envvars = {k: os.path.expandvars(os.path.expandvars(re.sub(r"{([^-\s]*?)}", r"$\1", v))) for k, v in curr_envvars.items()} #replace {ENV_VAR} with $ENV_VAR and then apply them
@@ -198,7 +201,7 @@ class CustomContext(ObjectWrapper):
 
     def read_configfile(self):
         if self.get_config("conf_file"):
-            fname = abspath(join(dirname(settings.__file__), "..", self.get_config("conf_file"))) if not isfile(self.get_config("conf_file")) and isfile(abspath(join(dirname(settings.__file__), "..", self.get_config("conf_file")))) else self.get_config("conf_file")
+            fname = join(os.getenv(f"{ENV_PREFIX}_CONFIGDIR", dirname(settings.__file__)), self.get_config("conf_file")) if not isfile(self.get_config("conf_file")) and join(os.getenv(f"{ENV_PREFIX}_CONFIGDIR", dirname(settings.__file__)), self.get_config("conf_file")) else self.get_config("conf_file")
             with open(fname, "r") as rfile:
                 config = yaml.load(rfile, Loader=yaml.SafeLoader)
             if config.get("__perdataset__"):
