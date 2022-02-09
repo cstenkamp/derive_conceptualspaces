@@ -28,14 +28,11 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 
 def extract_candidateterms(pp_descriptions, extraction_method, max_ngram, verbose=False):
     if extraction_method == "keybert":
-        raise NotImplementedError("TODO")
-        # candidateterms, metainf = extract_candidateterms_keybert_nopp(pp_descriptions, max_ngram, faster_keybert, verbose=verbose)
+        candidateterms, metainf = extract_candidateterms_keybert_nopp(pp_descriptions, max_ngram, get_setting("faster_keybert"), verbose=verbose)
     elif extraction_method == "pp_keybert":
         candidateterms, metainf = extract_candidateterms_keybert_preprocessed(pp_descriptions, max_ngram, get_setting("faster_keybert"), verbose=verbose)
-    elif extraction_method == "tfidf":
-        candidateterms, metainf = extract_candidateterms_quantific(pp_descriptions, max_ngram, quantific="tfidf", verbose=verbose)
-    elif extraction_method == "ppmi":
-        candidateterms, metainf = extract_candidateterms_quantific(pp_descriptions, max_ngram, quantific="ppmi", verbose=verbose)
+    elif extraction_method in ["tfidf", "tf", "all", "ppmi"]:
+        candidateterms, metainf = extract_candidateterms_quantific(pp_descriptions, max_ngram, quantific=extraction_method, verbose=verbose)
     else:
         raise NotImplementedError()
     flattened = set(flatten(candidateterms))
@@ -43,12 +40,14 @@ def extract_candidateterms(pp_descriptions, extraction_method, max_ngram, verbos
     metainf["n_candidateterms"] = len(flattened)
     return candidateterms, metainf
 
-def extract_candidateterms_keybert_nopp(pp_descriptions, faster_keybert=False, verbose=False):
-    vocab, descriptions = pp_descriptions.values()
-    extractor = KeyBertExtractor(False, faster=faster_keybert)
+def extract_candidateterms_keybert_nopp(descriptions, max_ngram, faster_keybert=False, verbose=False):
+    is_multilan = get_setting("TRANSLATE_POLICY") == "origlang" or get_setting("LANGUAGE") != "en"
+    extractor = KeyBertExtractor(is_multilan=is_multilan, faster=faster_keybert, max_ngram=max_ngram)
     candidateterms = []
     n_immediateworking_ges, n_fixed_ges, n_errs_ges = 0, 0, 0
-    for desc in tqdm(descriptions):
+    if get_setting("DEBUG"):
+        descriptions._descriptions = descriptions._descriptions[:get_setting("DEBUG_N_ITEMS")]
+    for desc in tqdm(descriptions._descriptions, desc="Extracting Keywords..."):
         keyberts, origextracts, (n_immediateworking, n_fixed, n_errs) = extractor(desc.text, desc.lang)
         #TODO maybe the best post-processing for all candidates is to run the exact processing I ran for the descriptions for all the results...?!
         # Because theoretically afterwards 100% of them should be in the processed_text
@@ -66,12 +65,13 @@ def extract_candidateterms_keybert_nopp(pp_descriptions, faster_keybert=False, v
 
 
 def extract_candidateterms_keybert_preprocessed(descriptions, max_ngram, faster_keybert=False, verbose=False):
-    from keybert import KeyBERT  # lazily loaded as it needs tensorflow which takes some time to init
+    from keybert import KeyBERT  # lazily loaded as it needs tensorflow/torch which takes some time to init
     model_name = "paraphrase-MiniLM-L6-v2" if faster_keybert else "paraphrase-mpnet-base-v2"
     print(f"Using model {model_name}")
     candidateterms = []
     kw_model = KeyBERT(model_name)
-    for desc in tqdm(descriptions._descriptions, desc="Running KeyBERT on descriptions"):
+    descs = descriptions._descriptions if not get_setting("DEBUG") else descriptions._descriptions[:get_setting("DEBUG_N_ITEMS")]
+    for desc in tqdm(descs, desc="Running KeyBERT on descriptions"):
         stopwords = get_stopwords(desc.lang)
         candidates = set()
         for nwords in range(1, max_ngram):
@@ -85,32 +85,31 @@ def extract_candidateterms_keybert_preprocessed(descriptions, max_ngram, faster_
 
 #TODO play around with the parameters here!
 def extract_candidateterms_quantific(descriptions, max_ngram, quantific, verbose=False):
-    max_per_doc_abs = get_setting("QUANTEXTRACT_MAXPERDOC_ABS");  max_per_doc_rel = get_setting("QUANTEXTRACT_MAXPERDOC_REL")
-    min_val = get_setting("QUANTEXTRACT_MINVAL"); min_val_percentile = get_setting("QUANTEXTRACT_MINVAL_PERC")
-    min_per_doc = get_setting("QUANTEXTRACT_MINPERDOC"); forcetake_percentile = get_setting("QUANTEXTRACT_FORCETAKE_PERC")
-    assert not (min_val and min_val_percentile)
     print(f"Loading Doc-Term-Matrix with min-term-count {get_setting('CANDIDATE_MIN_TERM_COUNT')}")
-    dtm = descriptions.generate_DocTermMatrix(min_df=get_setting("CANDIDATE_MIN_TERM_COUNT"), max_ngram=max_ngram)
+    dtm, mta = descriptions.generate_DocTermMatrix(min_df=get_setting("CANDIDATE_MIN_TERM_COUNT"), max_ngram=max_ngram, do_tfidf=quantific if quantific in ["tfidf", "tf"] else None)
     #Now I'm filtering here, I originally didn't want to do that but it makes the processing incredibly much faster
-    if quantific == "tfidf":
-        # quant = tf_idf(dtm, verbose=verbose, descriptions=descriptions)
-        quant = csr_to_list(TfidfTransformer().fit_transform(dtm.as_csr().T))
+    if quantific in ["tfidf", "tf"]:
+        quant = dtm.dtm if not mta.get("sklearn_tfidf") else csr_to_list(TfidfTransformer(use_idf=(quantific=="tfidf")).fit_transform(dtm.as_csr().T)) # tf_idf(dtm, verbose=verbose, descriptions=descriptions)
     elif quantific == "ppmi":
         quant = ppmi(dtm, verbose=verbose, descriptions=descriptions)
+    elif quantific == "all":
+        return dtm.terms_per_doc(), {"all_terms_are_candidates": True}
     else:
         raise NotImplementedError()
     metainf = dict()
+    min_val = get_setting("QUANTEXTRACT_MINVAL"); min_val_percentile = get_setting("QUANTEXTRACT_MINVAL_PERC")
+    assert not (min_val and min_val_percentile)
     if min_val_percentile:
         min_val = np.percentile(np.array(flatten([[j[1] for j in i] for i in quant])), min_val_percentile * 100)
         metainf.update(kw_min_val_percentile=min_val_percentile, kw_calculated_minval=min_val)
     else:
         metainf.update(kw_min_val=min_val)
-    forcetake_val = np.percentile(np.array(flatten([[j[1] for j in i] for i in quant])), forcetake_percentile * 100)
+    forcetake_val = np.percentile(np.array(flatten([[j[1] for j in i] for i in quant])), get_setting("QUANTEXTRACT_FORCETAKE_PERC") * 100)
     candidates = [ [ sorted(i, key=lambda x:x[1], reverse=True),
-                     min(round(len(i)*max_per_doc_rel), max_per_doc_abs),
+                     min(round(len(i)*get_setting("QUANTEXTRACT_MAXPERDOC_REL")), get_setting("QUANTEXTRACT_MAXPERDOC_ABS")),
                      set(j[0] for j in i if j[1] >= forcetake_val)]
                  for i in quant]
-    all_candidates = [set([k[0] for k in i[0][:min_per_doc]])|set([j[0] for j in i[0] if j[1] >= min_val][:i[1]])|i[2] for i in candidates]
+    all_candidates = [set([k[0] for k in i[0][:get_setting("QUANTEXTRACT_MINPERDOC")]])|set([j[0] for j in i[0] if j[1] >= min_val][:i[1]])|i[2] for i in candidates]
     if len(set(flatten(all_candidates))) == len(dtm.all_terms):
         metainf["all_terms_are_candidates"] = True
     return [[dtm.all_terms[j] for j in i] for i in all_candidates], metainf

@@ -14,7 +14,7 @@ class KeyBertExtractor():
     #TODO there is a minimum-frequency-argument!! https://github.com/MaartenGr/KeyBERT/blob/master/keybert/_model.py#L83-L101
     #TODO does this use the phrase_in_text function? SHOULD IT?
 
-    def __init__(self, is_multilan, faster=False):
+    def __init__(self, is_multilan, faster=False, max_ngram=1):
         """available models: https://github.com/MaartenGr/KeyBERT#25-embedding-models"""
         from keybert import KeyBERT #lazily loaded as it needs tensorflow which takes some time to init
         assert not (is_multilan and faster)
@@ -26,6 +26,7 @@ class KeyBertExtractor():
             self.model_name = "paraphrase-mpnet-base-v2"
         print(f"Using model {self.model_name}")
         self.kw_model = KeyBERT(self.model_name)
+        self.max_ngram = max_ngram
 
     def _fix_hyphenated(self, cand, comparedtext):
         # it may be the case that the candiate is something like "particle systems", however the text only has "many-particle systems".
@@ -137,7 +138,7 @@ class KeyBertExtractor():
 
         stopwords = get_stopwords(lang)
         candidates = set()
-        for nwords in range(1, 4):
+        for nwords in range(1, self.max_ngram):
             n_candidates = self.kw_model.extract_keywords(text, keyphrase_ngram_range=(1, nwords), stop_words=stopwords)
             candidates |= set(i[0] for i in n_candidates)
         candidates = list(candidates)

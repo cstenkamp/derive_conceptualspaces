@@ -72,6 +72,7 @@ class PPComponents():
 def preprocess_descriptions_full(raw_descriptions, dataset_class, pp_components, for_language, translate_policy, languages, translations=None):
     #TODO should I assert a minimal number of PP-Components? If I don't word-tokenize it all doesn't make much sense, does it?
     pp_components = PPComponents.from_str(pp_components)
+    print("The following Pre-Processings will be performed:", ", ".join([k for k, v in pp_components.di.items() if v]))
     descriptions = dataset_class.preprocess_raw_file(raw_descriptions, pp_components)
     if get_setting("preprocessed_bow", default_false=True):
         descriptions = descriptions_from_bow(descriptions, languages, translations, translate_policy)

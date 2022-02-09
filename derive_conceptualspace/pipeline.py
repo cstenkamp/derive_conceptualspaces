@@ -4,6 +4,7 @@ import os
 import random
 from datetime import datetime
 from os.path import join, dirname, abspath, isfile
+import inspect
 
 import click
 import numpy as np
@@ -86,7 +87,7 @@ class CustomContext(ObjectWrapper):
 
     def set_debug(self):
         if self.get_config("DEBUG"):
-            self.set_config("CANDIDATE_MIN_TERM_COUNT", 1, "force")
+            self.set_config("CANDIDATE_MIN_TERM_COUNT", 2, "force")
             print(f"Debug is active! #Items for Debug: {self.get_config('DEBUG_N_ITEMS', silent=True)}")
             if self.get_config("RANDOM_SEED", silence_defaultwarning=True):
                 print(f"Using a random seed: {self.get_config('RANDOM_SEED')}")
@@ -142,8 +143,8 @@ class CustomContext(ObjectWrapper):
         existing_configs = list(zip(*[i for i in self.toset_configs if i[0] == key and i[2] not in ["defaults", "smk_args"]]))
         if existing_configs and len(set(existing_configs[1])) > 1 and existing_configs[0][0] not in settings.MAY_DIFFER_IN_DEPENDENCIES:
             #TODO this has become a mess. I originally only wanted this warning for dependency, but then expanded it for force and now it's BS. Overhaul this!!
-            ordered_args = sorted(list(zip(*existing_configs[::-1][:2])), key=lambda x:CONF_PRIORITY.index(x[0]))
-            ordered_args = dict(sorted({v:k for k,v in list({v: k for k, v in ordered_args[::-1]}.items())}.items(), key=lambda x:CONF_PRIORITY.index(x[0]))) # per value only keep the highest-priority-thing that demanded it
+            ordered_args = sorted(list(zip(*existing_configs[::-1][:2])), key=lambda x:CONF_PRIORITY.index(re.sub(r'\[.*?\]', '', x[0])))
+            ordered_args = dict(sorted({v:k for k,v in list({v: k for k, v in ordered_args[::-1]}.items())}.items(), key=lambda x:CONF_PRIORITY.index(re.sub(r'\[.*?\]', '', x[0])))) # per value only keep the highest-priority-thing that demanded it
             if "dependency" in ordered_args and ordered_args["dependency"] != ordered_args.get("force", ordered_args["dependency"]):
                 raise ValueError(f"A Dependency requires {existing_configs[0][0]} to be {dict(ordered_args)['dependency']} but your other config demands {[v for k,v in ordered_args.items() if k!='dependency'][0]}")
             # if "dataset_class" in ordered_args and bool([k for k, v in ordered_args.items() if v != ordered_args["dataset_class"]]): #if something of higher prio overwrites dataset_class
@@ -155,7 +156,9 @@ class CustomContext(ObjectWrapper):
                     print(f"{ordered_args[1][0]} demanded config {existing_configs[0][0]} to be *r*{ordered_args[1][1]}*r*, but {ordered_args[0][0]} overwrites it to *b*{ordered_args[0][1]}*b*")
 
 
-    def pre_actualcommand_ops(self):
+    def pre_actualcommand_ops(self, torun_fn):
+        assert not any(i in self.forbidden_configs for i in set(inspect.getfullargspec(torun_fn).args)-{"ctx", "context"})
+        self.torun_fn_name = torun_fn.__name__ #with this I could eg. restrict settings to be asked for only by certain functions
         self.print_important_settings()
 
     @property
@@ -191,7 +194,7 @@ class CustomContext(ObjectWrapper):
             assert False, f"Config {key} is forbidden!"
         if key not in self.used_configs:
             conf_suggestions = [i[1:] for i in self.toset_configs if i[0] == key]
-            final_conf = min([i for i in conf_suggestions], key=lambda x: CONF_PRIORITY.index(x[1])) if len(conf_suggestions) > 0 else [None, "defaults"]
+            final_conf = min([i for i in conf_suggestions], key=lambda x: CONF_PRIORITY.index(re.sub(r'\[.*?\]', '', x[1]))) if len(conf_suggestions) > 0 else [None, "defaults"]
             if final_conf[1] == "defaults":
                 final_conf[0] = get_defaultsetting(key, silent=silence_defaultwarning, default_false=default_false)
             if silent:
@@ -210,7 +213,7 @@ class CustomContext(ObjectWrapper):
                 del config["__perdataset__"]
             for k, v in config.items():
                 if isinstance(v, list): #IDEA: wenn v eine liste ist und wenn ein cmd-arg bzw env-var einen wert hat der damit consistent ist, nimm das arg
-                    overwriters = [i[1:] for i in self.toset_configs if i[0]==standardize_config_name(k) and CONF_PRIORITY.index(i[2]) < CONF_PRIORITY.index("conf_file")]
+                    overwriters = [i[1:] for i in self.toset_configs if i[0]==standardize_config_name(k) and CONF_PRIORITY.index(re.sub(r'\[.*?\]', '', i[2])) < CONF_PRIORITY.index("conf_file")]
                     if overwriters and len(set([i[0] for i in overwriters])) > 1:
                         # assert len(overwriters) == 1 and overwriters[0][0] in v, "TODO: do this"
                         self.set_config(k, overwriters[0][0], "conf_file")

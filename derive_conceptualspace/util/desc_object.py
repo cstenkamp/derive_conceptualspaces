@@ -79,10 +79,10 @@ class Description():
             return self.text
         return self._origlang_text
 
-    def repr(self):
+    def repr(self, shortento=70):
         if self.text is None:
             return f"Description({self.orig_textlang}: {self.title})"
-        return f"Description({self.orig_textlang}: '{(('*b*'+self.title+'*b*. ') if self._add_title else '')} {(('*g*'+self.subtitle+'*g*. ') if self._add_subtitle and self.subtitle else '')}{textwrap.shorten(self.text, 70)}')"
+        return f"Description({self.orig_textlang}: '{(('*b*'+self.title+'*b*. ') if self._add_title else '')} {(('*g*'+self.subtitle+'*g*. ') if self._add_subtitle and self.subtitle else '')}{textwrap.shorten(self.text, shortento)}')"
 
     def __str__(self):
         return self.repr().replace("*b*", "").replace("*g*", "")
@@ -121,14 +121,27 @@ class Description():
         return bool(self.count_phrase(item))
 
     def count_phrase(self, item):
+        assert isinstance(item, str)
+        if not " " in item:
+            return self.bow().get(item, 0) #the bow contains ALL words of the desription (so min_df==1)
+        return occurrences(" "+self.processed_as_string()+" ", " "+item+" ") #pp-descriptions NEVER HAS NGRAMS, also not the BoW, deal with it.
+
+        #TODO now it still often occurs that there the text may contain: "deutschen sprachen deutschen sprachen deutschen sprache" and I'm looking for "deutschen sprache"
+        # -> correct is to return 1, however I DISLIKE this.
+
         #So, we need this for two things: kw-extraction and dissimilarity-matrix. In the former, we'll only take ones that occur often enough anyway,
         #           and in the latter...?
         #Problem: Es kann sein, dass processed_phrase filtered ist, sodass ..? #TODO argh
         # Das Problem ist ja, ich erzeuge erst die n-grams und lösche sie danach raus wenn sie nicht oft genug in anderen descriptions vorkommt.
         # Das heißt, ich kann einen Teil der very description um die es geht nehmen und wenn sie nicht oft genug insgesamt vorkommt würde count_phrase = 0 sein
-        if not isinstance(item, str):
-            assert False #in the future just return False
-        raise NotImplementedError("TODO PP-Descriptions NEVER HAS NGRAMS (08.02.22)!! DEAL WITH IT!!!")
+        # =============== feb22
+        # * Do I ever need different results for `term in description`??
+        #     * Do I ever need to test if this is also a CANDIDATE of that description, or do I always just test if it's IN THERE??
+        #     * can it be the case that I'm testing if it's in and I threw it out of this description because I removed certain words from this description, but not from others?? (too little doc-freq)
+        #         => answer SHOULD BE no, because min_df is something GLOBAL
+        # * It doesn't make sense to consider candidates occuring only once, and if I don't, I can rely on the DTM from the dissim_mat (for 1-grams at least)!
+        # ==============
+        # raise NotImplementedError("TODO PP-Descriptions NEVER HAS NGRAMS (08.02.22)!! DEAL WITH IT!!!")
         # if self._proc_min_df == 1:
         #     if (self._includes_ngrams and " " in item) or not " " in item:
         #         return self.bow().get(item, 0)
@@ -177,6 +190,19 @@ class Description():
             return len(self.processed_text)
         elif isinstance(self.processed_text[0][0], str):
             return len(flatten(self.processed_text))
+
+
+def occurrences(string, sub):
+    # https://stackoverflow.com/a/2970542/5122790
+    # reason for this: `" fruhen neuzeit fruhen neuzeit ".count(" "+"fruhen neuzeit"+" ") == 1` which is unintuitive as fuck
+    count = start = 0
+    while True:
+        start = string.find(sub, start) + 1
+        if start > 0:
+            count+=1
+        else:
+            return count
+
 
 ########################################################################################################################
 ########################################################################################################################
@@ -253,19 +279,20 @@ class DescriptionList():
     def generate_DocTermMatrix(self, min_df=1, max_ngram=None, do_tfidf=None):
         if self.proc_steps[-1] == "bow":
             assert max_ngram is None, "Can't do!"
-            print("Preprocessed produced a bag-of-words already. Config `max_ngram` becomes useless!")
+            print("Preprocessed produced a bag-of-words already. Config `max_ngram` is useless!")
             forbid_setting("max_ngram")
             all_words = dict(enumerate(set(flatten(i.bow().keys() for i in self._descriptions))))
             rev = {v: k for k, v in all_words.items()}
             dtm = [[[rev[k], v] for k, v in i.bow().items()] for i in self._descriptions]
+            dtm = DocTermMatrix(dtm=dtm, all_terms=all_words, quant_name="count")
             if min_df > 1:
-                return DocTermMatrix.filter(dtm, min_df, all_terms=all_words, use_n_docs_count=get_setting("CANDS_USE_NDOCS_COUNT")), {"ngrams_in_embedding": False}
-            return DocTermMatrix(dtm=dtm, all_terms=all_words, quant_name="count"), {"ngrams_in_embedding": False}
+                dtm = DocTermMatrix.filter(dtm, min_df, use_n_docs_count=get_setting("CANDS_USE_NDOCS_COUNT"), verbose=get_setting("VERBOSE"), descriptions=self)
+            return dtm, {"ngrams_in_embedding": False}
         elif hasattr(self, "recover_settings"):
             from derive_conceptualspace.create_spaces.preprocess_descriptions import PPComponents, get_countvec
             if PPComponents.from_str(self.recover_settings["pp_components"]).use_skcountvec:
                 cnt = get_countvec(**self.recover_settings, max_ngram=(max_ngram or 1), min_df=min_df)
-                fit_base = self.unprocessed_texts
+                fit_base = lambda: self.unprocessed_texts
             else: raise NotImplementedError()
         else:
             cnt = CountVectorizer(strip_accents=None, lowercase=False, stop_words=None, ngram_range=(1, (max_ngram or 1)), min_df=min_df)
@@ -273,12 +300,12 @@ class DescriptionList():
             # TODO If I can do sent_tokenize for the CountVectorizer I need to update this here as well!
         if do_tfidf is not None:
             #https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfTransformer.html
-            pipe = Pipeline([("count", cnt), ("tfidf", TfidfTransformer(use_idf=(do_tfidf=="tfidf")))]).fit(fit_base() if callable(fit_base) else fit_base)
-            aslist, all_words = csr_to_list(pipe.transform(fit_base() if callable(fit_base) else fit_base), pipe["count"].vocabulary_)
-            return DocTermMatrix(dtm=aslist, all_terms=all_words, quant_name=do_tfidf), {"ngrams_in_embedding": (get_setting("NGRAMS_IN_EMBEDDING") and get_setting("MAX_NGRAM") > 1), "sklearn_tfidf": True}
-        X = cnt.fit_transform(fit_base)
+            pipe = Pipeline([("count", cnt), ("tfidf", TfidfTransformer(use_idf=(do_tfidf=="tfidf")))]).fit(fit_base())
+            aslist, all_words = csr_to_list(pipe.transform(fit_base()), pipe["count"].vocabulary_)
+            return DocTermMatrix(dtm=aslist, all_terms=all_words, quant_name=do_tfidf), {"ngrams_in_embedding": any(" " in i for i in all_words.values()), "sklearn_tfidf": True}
+        X = cnt.fit_transform(fit_base())
         aslist, all_words = csr_to_list(X, cnt.vocabulary_)
-        return DocTermMatrix(dtm=aslist, all_terms=all_words, quant_name="count"), {"ngrams_in_embedding": (get_setting("NGRAMS_IN_EMBEDDING") and get_setting("MAX_NGRAM") > 1)}
+        return DocTermMatrix(dtm=aslist, all_terms=all_words, quant_name="count"), {"ngrams_in_embedding": any(" " in i for i in all_words.values())}
 
 
     def add_embeddings(self, embeddings):

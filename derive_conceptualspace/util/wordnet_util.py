@@ -27,3 +27,6 @@ def get_synset(term):
 if __name__ == '__main__':
     print(get_synset("math"))
     print(get_hyponyms("mathematics"))
+
+    # print(get_hypernyms("mathematics"))
+    # print(get_hypernyms("religion"))

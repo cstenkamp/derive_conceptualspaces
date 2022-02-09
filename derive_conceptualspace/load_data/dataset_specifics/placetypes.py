@@ -17,8 +17,9 @@ class Dataset(BaseDataset):
 
     @staticmethod
     def init(ctx):
-        ctx.set_config("pp_components", "none", "force") #for this class, pp_components don't make any sense.
-        ctx.set_config("language", "en", "force") #TODO maybe automatically do this if `ctx.has_config("all_descriptions_lang") and ctx.get_config("all_descriptions_lang")`
+        ctx.set_config("pp_components", "none", "force[dsetclass]") #for this class, pp_components don't make any sense.
+        ctx.set_config("language", "en", "force[dsetclass]") #TODO maybe automatically do this if `ctx.has_config("all_descriptions_lang") and ctx.get_config("all_descriptions_lang")`
+        ctx.set_config("max_ngram", None, "force[dsetclass]") #the data we have is a preprocessed BoW we cannot get the ngrams from
 
     @staticmethod
     def preprocess_raw_file(jsn, pp_components):

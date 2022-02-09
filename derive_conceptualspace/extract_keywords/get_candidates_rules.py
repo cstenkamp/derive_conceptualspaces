@@ -13,6 +13,3 @@ def extract_coursetype(desc, coursetypes=None):
         return max(counts.items(), key=lambda x:x[1])[0]
     return None
 
-def extract_tfidf():
-    #TODO: implement this, using src.main.util.text_tools.tf_idf
-    raise NotImplementedError()

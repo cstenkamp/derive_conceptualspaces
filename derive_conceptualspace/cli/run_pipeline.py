@@ -79,7 +79,7 @@ def click_pass_add_context(fn):
         for param, val in click_args.items():
             ctx.set_config(param, val, "cmd_args" if val is not None else "defaults")
         if isinstance(ctx.command, click.Command) and not isinstance(ctx.command, click.Group):
-            ctx.pre_actualcommand_ops()
+            ctx.pre_actualcommand_ops(fn)
         nkw = {k: ctx.get_config(k) for k in kwargs.keys() if k in set(inspect.getfullargspec(fn).args)-{"ctx", "context"}} #only give the function those args that it lists
         nkw.update({k: ctx.obj[k] for k in set(inspect.getfullargspec(fn).args)-{"ctx", "context"}-nkw.keys()}) #this adds the OBJECTS, the line above the CONFs
         res = fn(ctx, *args, **nkw)
@@ -250,7 +250,6 @@ def extract_candidateterms_stanfordlp(ctx):
 @click_pass_add_context
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
 def extract_candidateterms(ctx, max_ngram):
-    #TODO if not NGRAMS_IN_EMBEDDING and extraction_method in tfidf/ppmi, you have to re-extract, otherwise you won't get n-grams
     candidateterms, metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.get_config("extraction_method"), max_ngram, verbose=ctx.get_config("verbose"))
     ctx.obj["json_persister"].save("candidate_terms.json", candidateterms=candidateterms, metainf=metainf)
 
@@ -259,8 +258,8 @@ def extract_candidateterms(ctx, max_ngram):
 @click_pass_add_context
 def postprocess_candidateterms(ctx, json_persister):
     ctx.obj["candidate_terms"] = json_persister.load(None, "candidate_terms")
-    postprocessed_candidates = postprocess_candidateterms_base(ctx.obj["candidate_terms"], ctx.obj["pp_descriptions"], ctx.get_config("extraction_method"))
-    json_persister.save("postprocessed_candidates.json", postprocessed_candidates=postprocessed_candidates)
+    postprocessed_candidates, changeds = postprocess_candidateterms_base(ctx.obj["candidate_terms"], ctx.obj["pp_descriptions"], ctx.get_config("extraction_method"))
+    json_persister.save("postprocessed_candidates.json", postprocessed_candidates=postprocessed_candidates, changeds=changeds)
 
 
 @prepare_candidateterms.command()

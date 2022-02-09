@@ -9,6 +9,7 @@ import warnings
 from datetime import datetime, timedelta
 from os.path import isfile, splitext, dirname, join
 
+import ijson
 import numpy as np
 import pandas as pd
 from sklearn.manifold import MDS, TSNE, Isomap
@@ -211,7 +212,7 @@ class JsonPersister():
 
     def get_subdir(self, influential_confs):
         if not (self.dir_struct and all(i for i in self.dir_struct)):
-            return "", []
+            return "", [], {}, {}
         di = format_dict(influential_confs)
         dirstruct = [d.format_map(di) for d in self.dir_struct] #that will have "UNDEFINED" from some point on
         fulfilled_dirs = len(dirstruct) if not (tmp := [i for i, el in enumerate(dirstruct) if "UNDEFINED" in el]) else tmp[0]
@@ -245,8 +246,16 @@ class JsonPersister():
                 print(f"You may need the file *b*{join(dirstruct, save_basename+'.json')}*b*")
                 #command is then `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR filepath)`
             raise FileNotFoundError(fmt(f"There is no candidate for {save_basename} with the current config." + (f" You may need the file *b*{join(dirstruct, save_basename+'.json')}*b*" if candidates else "")))
-        assert len(set(i[0] for i in correct_cands)) == 1, f"Multiple file candidates: {correct_cands}"
-        return correct_cands[0][0]
+        if len(correct_cands) > 1: #if there is still more than 1 candidate, partially load them to extract configs
+            for cand in correct_cands:
+                with open(join(self.in_dir, cand[0])) as rfile:
+                    full_conf = dict([k for k in ijson.kvitems(rfile, "used_influentials")])
+                    diff_confs = [k for k, v in full_conf.items() if self.ctx.has_config(k) and self.ctx.get_config(k, silent=True) != v and k not in settings.MAY_DIFFER_IN_DEPENDENCIES]
+                    if diff_confs:
+                        correct_cands = [i for i in correct_cands if i != cand]
+        correct_cands = list(set(i[0] for i in correct_cands))
+        assert len(correct_cands) == 1, f"Multiple file candidates: {correct_cands}"
+        return correct_cands[0]
 
 
     def add_file_metas(self, file): #TODO overhaul 16.01.2022
@@ -309,7 +318,10 @@ class JsonPersister():
                         assert diff_configs <= set(settings.MAY_DIFFER_IN_DEPENDENCIES), f"Different settings where used in a dependency: {diff_configs - set(settings.MAY_DIFFER_IN_DEPENDENCIES)}"
             for k, v in file.get("used_influentials", {}).items():
                 if k not in settings.MAY_DIFFER_IN_DEPENDENCIES:
-                    assert self.ctx.get_config(k, silent=True, silence_defaultwarning=True, default_false=True) == standardize_config_val(k, v)  #check that all current influential settings are consistent with what the file had
+                    if self.ctx.has_config(k):
+                        assert self.ctx.get_config(k, silent=True, silence_defaultwarning=True, default_false=True) == standardize_config_val(k, v)  #check that all current influential settings are consistent with what the file had
+                    else:
+                        self.ctx.set_config(k, v, "dependency") #ensure that IF we WOULD use this config, it must be equal to what it was in the dependency
                 elif self.ctx.get_config(k, silent=True) != standardize_config_val(k, v):
                     print(f"The setting {k} was *r*{v}*r* in a dependency and is *b*{self.ctx.get_config(k, silent=True)}*b* here!")
 

@@ -35,7 +35,7 @@ def tokenize_text(text, stopwords=None):
 ########################################################################################################################
 
 def phrase_in_text(phrase, text, return_count=False):
-    #TODO ensure this is correct and all classes that should use this use this.
+    # feb22: you can only use this in extracting candidates, not in postprocessing them!
     def process(txt, add_ending=False):
         if add_ending: txt = txt + " asdf" #why this? Because word_tokenize("dr.") != word_tokenize("dr. asdf")
         txt = tokenize_text(txt)[1]

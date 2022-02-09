@@ -23,8 +23,7 @@ prim_lambda:                  0.5
 sec_lambda:                   0.1
 __perdataset__:
   placetypes:
-    quantextract_forcetake_perc: 0 #in the placetypes-dataset, ALL words are candidates (21.8k)
-    extraction_method: "tfidf" #the forcetake means the same in ppmi & tfidf, and tfidf is quicker
+    extraction_method: "all" #in the placetypes-dataset, ALL words are candidates (21.8k)
 
 #TODO alles ab cand-filter fehlt noch...
 

@@ -1,7 +1,6 @@
 import warnings
 from collections import Counter
-from itertools import repeat
-from multiprocessing.pool import ThreadPool
+from functools import lru_cache
 
 from plotly.serializers import np
 from scipy.sparse import csr_matrix
@@ -12,7 +11,6 @@ from scipy.spatial.distance import squareform
 from derive_conceptualspace.settings import get_setting
 from derive_conceptualspace.util.jsonloadstore import Struct
 from derive_conceptualspace.util.mpl_tools import show_hist
-from derive_conceptualspace.util.threadworker import WorkerPool
 
 from misc_util.pretty_print import pretty_print as print
 
@@ -101,14 +99,17 @@ class DocTermMatrix():
 
     #num_occurences = [sum([term_ind in i for i in occurs_in]) for term_ind in tqdm(range(len(dtm.all_terms)))]
 
-    @property
-    def doc_freqs(self):
+    def doc_freqs(self, verbose=False):
         """the number of documents containing a word, for all words"""
         if not hasattr(self, "_doc_freqs"):
-            occurences = [set(i[0] for i in doc) for doc in self.dtm]
-            self._doc_freqs = {term: sum(term in doc for doc in occurences) for term in tqdm(list(self.all_terms.keys()), desc="Calculating Doc-Frequencies")}
-            print("Most frequent term:", self.all_terms[max(self._doc_freqs.items(), key=lambda x:x[1])[0]])
+            # occurences = [set(i[0] for i in doc) for doc in self.dtm]
+            # self._doc_freqs = {term: sum(term in doc for doc in occurences) for term in tqdm(list(self.all_terms.keys()), desc="Calculating Doc-Frequencies")}
+            self._doc_freqs = dict(enumerate(self.as_csr(binary=True).sum(axis=1).squeeze().tolist()[0]))
+            if verbose:
+                most_freq = sorted(self._doc_freqs.items(), key=lambda x:x[1], reverse=True)[:5]
+                print("Most frequent terms:", ", ".join([f"{self.all_terms[term]} ({num})" for term, num in most_freq]))
         return self._doc_freqs
+
 
     def terms_per_doc(self):
         if not hasattr(self, "_terms_per_doc"):
@@ -127,13 +128,15 @@ class DocTermMatrix():
             self._term_existinds = [[ndoc for ndoc, doc in enumerate(occurs_in) if k in doc] for k in self.all_terms.keys()]
         return self._term_existinds if use_index else {self.all_terms[k]: v for k,v in enumerate(self._term_existinds)}
 
-    def as_csr(self):
-        if not hasattr(self, "_csr"):
+    @lru_cache
+    def as_csr(self, binary=False):
+        if binary:
+            data = flatten([[1 for _ in row] for row in self.dtm])
+        else:
             data = flatten([[elem[1] for elem in row] for row in self.dtm])
-            row = flatten([[elem[0] for elem in row] for row in self.dtm])
-            col = flatten([[nrow for elem in row] for nrow, row in enumerate(self.dtm)])
-            self._csr = csr_matrix((data, (row, col)), shape=(len(self.all_terms), len(self.dtm)))
-        return self._csr
+        row = flatten([[elem[0] for elem in row] for row in self.dtm])
+        col = flatten([[nrow for _ in row] for nrow, row in enumerate(self.dtm)])
+        return csr_matrix((data, (row, col)), shape=(len(self.all_terms), len(self.dtm)))
 
     def add_pseudo_keyworddocs(self):
         # see [VISR12: 4.2.1] they create a pseudo-document d_t for each tag
@@ -146,51 +149,45 @@ class DocTermMatrix():
 
 
     @staticmethod
-    def filter(dtm, min_count, use_n_docs_count=True, verbose=False, descriptions=None, all_terms=None, cap_max=True):
-        """can input either a DocTermMatrix as dtm, or a DocTermMatrix.dtm as dtm and an all_terms value"""
-        if not all_terms:
-            assert isinstance(dtm, DocTermMatrix)
-            all_terms = dtm.all_terms
-            dtm = dtm.dtm
-        else:
-            assert not isinstance(dtm, DocTermMatrix)
+    def filter(dtm, min_count, use_n_docs_count=True, verbose=False, descriptions=None, cap_max=True):
+        """accepts only a DocTermMatrix as input from now on. descriptions only for verbosity"""
+        assert isinstance(dtm, DocTermMatrix)
         if use_n_docs_count:
-            occurences = [set(i[0] for i in doc) for doc in dtm]
-            if False: # get_ncpu() > 1:
-                print(f"Running with {get_ncpu()*2} Threads")
-                def fn(term, occurences, pgbar):
-                    pgbar.update(1)
-                    return sum([term in i for i in occurences])
-                with tqdm(total=len(all_terms), desc="Counting Terms") as pgbar, ThreadPool(get_ncpu()*2) as p:
-                    res = p.starmap(fn, zip(list(all_terms.keys()), repeat(occurences), repeat(pgbar)))
-            else:
-                term_counts = {term: sum([term in i for i in occurences]) for term in tqdm(all_terms.keys(), desc="Counting Terms")}
+            term_counts = dtm.doc_freqs()
         else:
             flat_terms = [flatten([[i[0]] * i[1] for i in doc]) for doc in dtm]
             term_counts = Counter(flatten(flat_terms))
         used_terms = {k: v for k, v in term_counts.items() if v >= min_count}
         if cap_max:
-            used_terms = {k: v for k, v in used_terms.items() if v <= len(dtm)-min_count}
+            used_terms = {k: v for k, v in used_terms.items() if v <= dtm.n_docs-min_count}
         if verbose:
-            print(f"Filtering such that terms occur " + (f"in at least {min_count} documents" if use_n_docs_count else
-                                                         f"at least {min_count} times") + f", which are {len(used_terms)} of {len(term_counts)} terms.")
+            print(f"Filtered such that terms occur " + (f"in at least {min_count} documents" if use_n_docs_count else
+                                                        f"at least {min_count} times") + f", which are {len(used_terms)} of {len(term_counts)} terms.")
             most_used = sorted(list(used_terms.items()), key=lambda x: x[1], reverse=True)[:10]
-            print("The most used terms are: " + ", ".join([f"{all_terms[ind]} ({count})" for ind, count in most_used]))
+            print("The most used terms are: " + ", ".join([f"{dtm.all_terms[ind]} ({count})" for ind, count in most_used]))
             show_hist(list(used_terms.values()), "Occurences per Keyword", xlabel="Occurences per Keyword", cutoff_percentile=93)
-        doc_term_matrix = [[[all_terms[ind], num] for ind, num in doc] for doc in dtm]
-        all_terms = {all_terms[elem]: i for i, elem in enumerate(used_terms.keys())}; del used_terms
-        doc_term_matrix = [[[all_terms[ind], num] for ind, num in doc if ind in all_terms] for doc in doc_term_matrix]
-        assert set(i[0] for doc in doc_term_matrix for i in doc) == set(all_terms.values())
-        all_terms = {v: k for k, v in all_terms.items()}
+        used_terms_set = set(used_terms.keys())
+        all_terms_new = dict(enumerate([v for k, v in dtm.all_terms.items() if k in used_terms_set]))
+        all_terms_new_rev = {v: k for k, v in all_terms_new.items()}
+        dtm_translator = {k: all_terms_new_rev[v] for k, v in dtm.all_terms.items() if k in used_terms_set}
+        doc_term_matrix = [[[dtm_translator.get(ind), num] for ind, num in doc if ind in used_terms_set] for doc in dtm.dtm]
         if descriptions:
-            assert all(all_terms[ind] in descriptions._descriptions[ndoc] for ndoc, doc in enumerate(tqdm(doc_term_matrix)) for ind, count in doc)
+            if get_setting("DO_SANITYCHECKS") and False: #TODO #PRECOMMIT add back!
+                expected_bows = {ndoc: {all_terms_new[elem]: count for elem, count in doc} for ndoc, doc in enumerate(doc_term_matrix[:10])}
+                assert all(all(v==descriptions._descriptions[i].bow()[k] for k, v in expected_bows[i].items()) for i in range(10))
+                assert all(all_terms_new[ind] in descriptions._descriptions[ndoc] for ndoc, doc in enumerate(tqdm(doc_term_matrix, desc="Cross-checking filtered DCM with Descriptions [sanity-check]")) for ind, count in doc)
             if verbose:
-                print("Documents without any keyphrase:", [descriptions._descriptions[i] for i, e in enumerate(doc_term_matrix) if len(e) < 1][:5])
-                print("Documents with just 1 keyphrase:", [[descriptions._descriptions[i], all_terms[e[0][0]]] for i, e in enumerate(doc_term_matrix) if len(e) == 1][:5])
-        return DocTermMatrix(dtm=doc_term_matrix, all_terms=all_terms, quant_name="count")
+                shown = []
+                for n_keyphrases in [0, 1, 20]:
+                    items = [[descriptions._descriptions[i], [all_terms_new[j[0]] for j in e]] for i, e in enumerate(doc_term_matrix) if len(e) <= n_keyphrases]
+                    if items:
+                        print(f"Documents with max {n_keyphrases} keyphrases ({len(items)}):\n  "+"\n  ".join(f"{i[0]}: {', '.join(i[1])}" for i in [j for j in items if j[0] not in shown][:5][:5]))
+                        shown += [i[0] for i in items]
+        return DocTermMatrix(dtm=doc_term_matrix, all_terms=all_terms_new, quant_name="count")
 
 
     def doc_freq(self, keyword, rel=False, supress=False):
+        raise NotImplementedError("TODO I overhauled doc_freqs so I likely have to overhaul this as well!") #on 8.2.22 - is this even used?
         if supress:
             return len(self.term_existinds(use_index=False).get(keyword, [])) / (self.n_docs if rel else 1)
         return len(self.term_existinds(use_index=False)[keyword]) / (self.n_docs if rel else 1)
