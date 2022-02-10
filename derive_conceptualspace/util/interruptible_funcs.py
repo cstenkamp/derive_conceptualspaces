@@ -3,6 +3,7 @@ import os
 from os.path import splitext
 from datetime import datetime, timedelta
 from collections import deque
+from itertools import islice
 
 from tqdm import tqdm
 
@@ -47,7 +48,7 @@ class InterruptibleLoad():
 ########################################################################################################################
 
 class Interruptible():
-    def __init__(self, iterable, append_var, metainf_var, shutdown_time=70, timeavg_samples=10, continue_from=None, pgbar=None):
+    def __init__(self, iterable, append_var, metainf_var, shutdown_time=70, timeavg_samples=10, continue_from=None, pgbar=None, total=None):
         #pgbar is either None or a string. If it's not None, we will wrap in tqdm and use the var-value as desc
         self.iterable = iterable
         self.append_var = append_var
@@ -57,9 +58,20 @@ class Interruptible():
         self.pgbar = pgbar
         self.metainf_var = metainf_var
         self.kb_int = False
+        self.total = total
 
     def __enter__(self):
         return self
+
+    def append_olds(self, old_results):
+        if len(self.append_var) > 1:
+            for n, part in enumerate(old_results.values()):
+                if isinstance(part, dict):
+                    for k, v in part.items():
+                        self.append_var[n][k] = v
+        else:
+            for elem in old_results:
+                self.append_var.append(elem)
 
     def __iter__(self):
         self.interrupt_time = None
@@ -67,19 +79,21 @@ class Interruptible():
             self.interrupt_time = datetime.strptime(os.environ["KILLED_AT"], "%d.%m.%Y, %H:%M:%S")-timedelta(seconds=self.shutdown_time)
             print(f"This loop will interrupt at {self.interrupt_time.strftime('%d.%m.%Y, %H:%M:%S')}")
         self.last_times = deque([datetime.now()], maxlen=self.timeavg_samples)
-        self.full_len = len(self.iterable)
+        self.full_len = len(self.iterable) if not self.total else self.total
         if self.continue_from is not None:
             old_results, self.old_metainf, countervarnames = self.continue_from
             if self.old_metainf is not None: assert self.metainf_var is not None
             print(f"Continuing a previously interrupted loop ({self.old_metainf['N_RUNS']} runs already). Starting at element {self.old_metainf['INTERRUPTED_AT'] + 1}/{self.full_len}")
             assert all(v == self.old_metainf[k] for k, v in self.metainf_var.items()), "The metainf changed!"
-            for elem in old_results:
-                self.append_var.append(elem)
-            self.iterable = self.iterable[self.old_metainf['INTERRUPTED_AT']:]
+            self.append_olds(old_results)
+            try:
+                self.iterable = self.iterable[self.old_metainf["INTERRUPTED_AT"]+1:]
+            except TypeError:
+                self.iterable = islice(self.iterable, self.old_metainf["INTERRUPTED_AT"]+1, None)
             sys.stderr.flush(); sys.stdout.flush()
         else:
             self.old_metainf = None
-        self.n_elems = len(self.iterable)  #TODO only if it has a len!
+        self.n_elems = len(self.iterable) if hasattr(self.iterable, "__len__") else (self.total - self.old_metainf.get('INTERRUPTED_AT', 0) if self.old_metainf else self.total)
         if self.pgbar:
             self.tqdm = tqdm(self.iterable, desc=self.pgbar, total=self.n_elems)
         self.iter = enumerate(self.iterable) if self.pgbar is None else enumerate(self.tqdm)

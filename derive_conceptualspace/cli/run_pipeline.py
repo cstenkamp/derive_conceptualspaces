@@ -298,15 +298,21 @@ def generate_conceptualspace(ctx, json_persister):
     """[group] CLI base to create the actual conceptual spaces"""
     ctx.obj["filtered_dcm"] = json_persister.load(None, "filtered_dcm", loader=dtm_loader)
     ctx.obj["embedding"] = json_persister.load(None, "embedding", loader=lambda **args: args["embedding"])
-    assert ctx.obj["embedding"].embedding_.shape[0] == len(ctx.obj["filtered_dcm"].dtm), f'The Doc-Candidate-Matrix contains {len(ctx.obj["filtered_dcm"].dtm)} items But your embedding has {ctx.obj["embedding"].embedding_.shape[0] } descriptions!'
+    if ctx.get_config("DEBUG"):
+        assert ctx.obj["embedding"].embedding_.shape[0] <= len(ctx.obj["filtered_dcm"].dtm), f'The Doc-Candidate-Matrix contains {len(ctx.obj["filtered_dcm"].dtm)} items But your embedding has {ctx.obj["embedding"].embedding_.shape[0] } descriptions!'
+    else:
+        assert ctx.obj["embedding"].embedding_.shape[0] == len(ctx.obj["filtered_dcm"].dtm), f'The Doc-Candidate-Matrix contains {len(ctx.obj["filtered_dcm"].dtm)} items But your embedding has {ctx.obj["embedding"].embedding_.shape[0] } descriptions!'
 
 
 @generate_conceptualspace.command()
 @click_pass_add_context
 def create_candidate_svm(ctx):
     ctx.obj["pp_descriptions"] = ctx.p.load(None, "pp_descriptions", loader=DescriptionList.from_json, silent=True)
-    decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"))
-    ctx.p.save("clusters.json", decision_planes=decision_planes, metrics=metrics)
+    # decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"))
+    # ctx.p.save("clusters.json", decision_planes=decision_planes, metrics=metrics)
+    with InterruptibleLoad(ctx, "clusters.json", loader=lambda x:x) as mgr:
+        decision_planes, metrics, metainf = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"), **mgr.kwargs)
+    mgr.save(decision_planes=decision_planes, metrics=metrics, metainf=metainf)
     #TODO hier war dcm = DocTermMatrix(json_load(join(ctx.obj["base_dir"], dcm_filename), assert_meta=("CANDIDATE_MIN_TERM_COUNT", "STANFORDNLP_VERSION"))), krieg ich das wieder hin?
 
 

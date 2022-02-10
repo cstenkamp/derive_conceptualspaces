@@ -78,6 +78,7 @@ def show_data_info(ctx):
             print("Latest commit messages:\n  ", "\n   ".join(tmp))
     dates = {k: v["metadata"]["obj_info"]["date"] for k, v in ctx.obj["json_persister"].loaded_objects.items() if v.get("metadata", {}).get("obj_info", {}).get("date")}
     print("Dates:\n ", "\n  ".join(f"{k.rjust(max(len(i) for i in dates))}: {v}" for k, v in dates.items()))
+    #TODO if there's PREV_RUN_INFO in the metadata (`"PREV_RUN_INFO" in ctx.obj["json_persister"].loaded_objects["clusters"].get("metadata", {})`) add stdout and stderr of that!
     output = {k: merge_streams(v["metadata"]["obj_info"]["stdout"], v["metadata"]["obj_info"]["stderr"], k) for k, v in ctx.obj["json_persister"].loaded_objects.items() if v.get("metadata", {}).get("obj_info", {}).get("stdout")}
     print()
     N_SPACES = 30

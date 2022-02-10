@@ -234,13 +234,13 @@ class JsonPersister():
             candidates = [i for i in candidates if splitext(i)[0].endswith(postfix)]
         for cand in candidates: #ich muss nicht reverse-matchen, ich kann die required confs nehmen, anwenden und schauen ob's gleich ist!
             demanded_confs = self.dirname_vars(cand.count(os.sep))
-            dirstruct = self.get_subdir({standardize_config_name(i): self.ctx.get_config(i) for i in demanded_confs})[0]
+            dirstruct = self.get_subdir({standardize_config_name(i): self.ctx.get_config(i, silent=True) for i in demanded_confs})[0]
             if dirname(cand) == dirstruct:
                 correct_cands.append((cand, parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]), dirname(cand)).named)) #2nd elem ist der Versuch die configs draus zu parsen
             if self.ctx.get_config("DEBUG"): #if NOW debug=True, you may still load stuff for which debug=False (TODO: settings.DEPENDENCIES_PREFER_NODEBUG)
-                if dirname(cand) == self.get_subdir({**{standardize_config_name(i): self.ctx.get_config(i) for i in demanded_confs}, "DEBUG": False})[0] and cand not in correct_cands:
+                if dirname(cand) == self.get_subdir({**{standardize_config_name(i): self.ctx.get_config(i, silent=True) for i in demanded_confs}, "DEBUG": False})[0] and cand not in correct_cands:
                     correct_cands.append((cand, parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]), dirname(cand)).named))
-                    if self.ctx.get_config("DEP_PREFERS_NONDEBUG"):
+                    if self.ctx.get_config("DEP_PREFERS_NONDEBUG", silent=True):
                         correct_cands = [i for i in correct_cands if i[1] != {k: v if standardize_config_name(k) != "DEBUG" else "True" for k, v in correct_cands[-1][1].items()}]
                     elif len(set(i[0] for i in correct_cands if {k:v for k,v in i[1].items() if standardize_config_name(k) != "DEBUG"})) > 1:
                         correct_cands = [i for i in correct_cands if i[1] != {k: v if standardize_config_name(k) != "DEBUG" else "False" for k, v in correct_cands[-1][1].items()}]
@@ -435,11 +435,15 @@ class JsonPersister():
         assert isfile(filepath)
         obj["PREV_RUN_INFO"] = {}
         for equalkey in ["loaded_files", "used_influentials", "used_config", "forbidden_configs", "obj_info", "created_plots", "runtime", "PREV_RUN_INFO"]:
-            with open(filepath) as rfile:
-                if equalkey in ["used_config", "runtime"]:
-                    loaded = [i for i in ijson.items(rfile, equalkey)][0]
-                else:
-                    loaded = {k: tuple(v) if isinstance(v, list) else v for k,v in ijson.kvitems(rfile, equalkey)}
+            with open(filepath, "rb") as rfile:
+                try:
+                    if equalkey in ["used_config", "runtime"]:
+                        loaded = [i for i in ijson.items(rfile, equalkey)][0]
+                    else:
+                        loaded = {k: tuple(v) if isinstance(v, list) else v for k,v in ijson.kvitems(rfile, equalkey)}
+                except ijson.common.IncompleteJSONError:
+                    with open(filepath, "r") as rfile:
+                        loaded = json.load(rfile).get(equalkey, {}) #TODO having to do this sucks.
             if equalkey == "loaded_files":
                 assert all(tuple((k2, v2) for k2, v2 in obj[equalkey][k].items() if k2 != "metadata") == tuple((k2, v2) for k2, v2 in loaded[k].items() if k2 != "metadata") for k in obj[equalkey].keys())
             elif equalkey == "used_config":
@@ -450,6 +454,8 @@ class JsonPersister():
                 if len(loaded) > 0:
                     assert not any(i in obj["PREV_RUN_INFO"] for i in loaded.keys())
                     obj["PREV_RUN_INFO"].update(loaded)
+            # elif equalkey == "used_influentials":
+            #     assert all(obj[equalkey][k]==loaded[k] for k in obj[equalkey].keys() & loaded.keys())
             else:
                 assert (not obj[equalkey] and not loaded) or obj[equalkey] == loaded
         return obj

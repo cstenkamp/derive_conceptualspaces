@@ -3,6 +3,7 @@ from multiprocessing.pool import ThreadPool
 import warnings
 from textwrap import shorten
 import random
+import time
 
 from tqdm import tqdm
 import sklearn.svm
@@ -13,6 +14,7 @@ import pandas as pd
 
 from derive_conceptualspace.settings import get_setting, IS_INTERACTIVE, get_ncpu
 from derive_conceptualspace.util.base_changer import NDPlane, ThreeDPlane
+from derive_conceptualspace.util.interruptible_funcs import Interruptible
 from derive_conceptualspace.util.threadworker import WorkerPool
 from derive_conceptualspace.util.threedfigure import ThreeDFigure
 from misc_util.pretty_print import pretty_print as print
@@ -21,7 +23,7 @@ norm = lambda vec: vec/np.linalg.norm(vec)
 vec_cos = lambda v1, v2: np.arccos(np.clip(np.dot(norm(v1), norm(v2)), -1.0, 1.0))  #https://stackoverflow.com/a/13849249/5122790
 
 
-def create_candidate_svms(dcm, embedding, descriptions, verbose):
+def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=None):
     decision_planes = {}
     metrics = {}
     compareto_ranking = get_setting("classifier_compareto_ranking")
@@ -31,18 +33,25 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose):
         # Ensure that regardless of quant_measure `np.array(quants, dtype=bool)` are correct binary classification labels
         raise NotImplementedError()
     terms = list(dcm.all_terms.values())
+    metainf = {}
     if get_setting("DEBUG"):
-        terms = terms[:get_setting("DEBUG_N_ITEMS")]
+        maxlen = min(len(terms), len(embedding.embedding_), get_setting("DEBUG_N_ITEMS"), len(dcm.dtm))
+        terms = terms[:maxlen]
+        embedding.embedding_ = embedding.embedding_[:maxlen]
+        dcm.dtm = dcm.dtm[:maxlen]
+        print(f"Debug-Mode: Running for {maxlen} Items.")
         # assert all(i in terms for i in ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze'])
         # terms = ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze']
         # assert len([i for i in descriptions._descriptions if 'nature' in i]) == len([i for i in dcm.term_quants('nature') if i > 0])
-    assert all(len([i for i in descriptions._descriptions if term in i]) == len([i for i in dcm.term_quants(term) if i > 0]) for term in random.sample(terms, 5))
+    else:
+        assert all(len([i for i in descriptions._descriptions if term in i]) == len([i for i in dcm.term_quants(term) if i > 0]) for term in random.sample(terms, 5))
     if get_ncpu() == 1:
         quants_s = [dcm.term_quants(term) for term in tqdm(terms, desc="Counting Terms")]
-        for term, quants in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs", total=len(terms)):
-            cand_mets, decision_plane, term = create_candidate_svm(embedding.embedding_, term, quants, quant_name=dcm.quant_name)
-            metrics[term] = cand_mets
-            decision_planes[term] = decision_plane
+        with Interruptible(zip(terms, quants_s), (decision_planes, metrics), metainf, continue_from=continue_from, pgbar="Creating Candidate SVMs", total=len(terms)) as iter:
+            for term, quants in iter: #in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs", total=len(terms))
+                cand_mets, decision_plane, term = create_candidate_svm(embedding.embedding_, term, quants, quant_name=dcm.quant_name)
+                metrics[term] = cand_mets
+                decision_planes[term] = decision_plane
     else:
         print(f"Starting Multiprocessed with {get_ncpu()} CPUs")
         with WorkerPool(get_ncpu(), dcm, pgbar="Counting Terms") as pool:
@@ -52,7 +61,7 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose):
         for cand_mets, decision_plane, term in res:
             metrics[term] = cand_mets
             decision_planes[term] = decision_plane
-    if (didnt_converge := len([1 for i in metrics.values() if not i["did_converge"]])):
+    if (didnt_converge := len([1 for i in metrics.values() if i and not i["did_converge"]])):
         warnings.warn(f"{didnt_converge} of the {len(metrics)} SVMs did not converge!", sklearn.exceptions.ConvergenceWarning)
     if verbose:
         df = pd.DataFrame(metrics).T
@@ -62,7 +71,7 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose):
             with pd.option_context('display.max_rows', 11, 'display.max_columns', 20, 'display.expand_frame_repr', False, 'display.max_colwidth', 20, 'display.float_format', '{:.4f}'.format):
                 print(str(df.sort_values(by=metricname, ascending=False)[:10]).replace(metricname, f"*r*{metricname}*r*"))
         if embedding.embedding_.shape[1] == 3 and IS_INTERACTIVE:
-            best_elem = max(metrics.items(), key=lambda x:x[1]["f_one"])
+            best_elem = max(metrics.items(), key=lambda x:(x[1] or {}).get("f_one",0))
             create_candidate_svm(embedding.embedding_, best_elem[0], dcm.term_quants(best_elem[0]), quant_name=dcm.quant_name, plot_svm=True, descriptions=descriptions)
             while (another := input("Another one to display: ").strip()) != "":
                 if "," in another:
@@ -72,7 +81,8 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose):
                     highlight = []
                 create_candidate_svm(embedding.embedding_, another, dcm.term_quants(another), quant_name=dcm.quant_name, plot_svm=True, descriptions=descriptions, highlight=highlight)
     # clusters, cluster_directions = select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda)
-    return decision_planes, metrics
+    return decision_planes, metrics, metainf
+
 
 class Comparer():
     def __init__(self, decision_planes, compare_fn):
