@@ -399,7 +399,7 @@ class JsonPersister():
                "basename": basename, "obj_info": get_all_info(), "created_plots": self.created_plots,
                "used_config": (self.ctx.used_configs, self.ctx.toset_configs), "metainf": metainf, "runtime": runtime,
                "forbidden_configs": self.ctx.forbidden_configs}
-        if "NEWLY_INTERRUPTED" in metainf:
+        if isinstance(metainf, dict) and "NEWLY_INTERRUPTED" in metainf:
             filename += "_INTERRUPTED"
             oldname = filename
         if bool(overwrite_old):
