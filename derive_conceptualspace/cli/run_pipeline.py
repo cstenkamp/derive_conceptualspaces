@@ -250,8 +250,27 @@ def extract_candidateterms_stanfordlp(ctx):
 @click_pass_add_context
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
 def extract_candidateterms(ctx, max_ngram):
-    candidateterms, metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.get_config("extraction_method"), max_ngram, verbose=ctx.get_config("verbose"))
-    ctx.obj["json_persister"].save("candidate_terms.json", candidateterms=candidateterms, metainf=metainf)
+    try:
+        tmp = ctx.p.get_file_by_config("", "candidate_terms", postfix="INTERRUPTED")
+        tmp2, old_metainf = ctx.p.load(tmp, "candidate_terms_CONTINUE", silent=True, required_metainf=["INTERRUPTED_AT"], return_metainf=True, loader=lambda **args: args["candidateterms"])
+        if "NEWLY_INTERRUPTED" in old_metainf: del old_metainf["NEWLY_INTERRUPTED"]
+        countervarnames = ["n_candidateterms", "n_immediateworking", "n_fixed", "n_errs"] #these ones we just count forward, all others besides this and INTERRUPTED_AT we will assert to be equal
+        kwargs = dict(continue_from=(tmp2, old_metainf, countervarnames))
+    except FileNotFoundError:
+        kwargs = {}
+    candidateterms, metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.get_config("extraction_method"), max_ngram, verbose=ctx.get_config("verbose"), **kwargs)
+    if kwargs.get("continue_from"):
+        metainf = {**metainf, **{k: v+old_metainf.get(k,0) for k, v in metainf.items() if k in countervarnames}}
+        if metainf.get("NEWLY_INTERRUPTED"):
+            assert metainf["INTERRUPTED_AT"] > old_metainf["INTERRUPTED_AT"], "Not a single Iteration?!"
+        assert all(v == old_metainf[k] for k, v in metainf.items() if k not in countervarnames+["NEWLY_INTERRUPTED", "INTERRUPTED_AT", "KEYBORD_INTERRUPTED"])
+        metainf["N_RUNS"] = old_metainf.get("N_RUNS", 0) + 1
+        overwrite_old = old_metainf
+    else:
+        if metainf.get("NEWLY_INTERRUPTED"):
+            metainf["N_RUNS"] = 1
+        overwrite_old = False
+    ctx.p.save("candidate_terms.json", candidateterms=candidateterms, metainf=metainf, overwrite_old=overwrite_old)
 
 
 @prepare_candidateterms.command()

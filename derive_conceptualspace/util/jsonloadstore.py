@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 from sklearn.manifold import MDS, TSNE, Isomap
 from parse import parse
+from decimal import Decimal
 
 from derive_conceptualspace import settings
 from derive_conceptualspace.settings import standardize_config_name, standardize_config_val
@@ -42,7 +43,7 @@ class NumpyEncoder(json.JSONEncoder):
             return ["Struct", obj.__dict__]
         elif isinstance(obj, np.integer):
             return int(obj)
-        elif isinstance(obj, np.floating):
+        elif isinstance(obj, (np.floating, Decimal)):
             return float(obj)
         elif isinstance(obj, np.ndarray):
             return ["np.ndarray", obj.tolist()]
@@ -224,11 +225,13 @@ class JsonPersister():
                 )
 
 
-    def get_file_by_config(self, subdir, save_basename):
+    def get_file_by_config(self, subdir, save_basename, postfix=None):
         """If no filename specified, recursively search for files whose name startswith save_basename, and then from
            the paths of the results, reverse-engineer the demanded configs of these files and then match them up"""
         correct_cands = []
         candidates = [join(path, name)[len(self.in_dir):] for path, subdirs, files in os.walk(join(self.in_dir, subdir)) for name in files if name.startswith(save_basename)]
+        if postfix:
+            candidates = [i for i in candidates if splitext(i)[0].endswith(postfix)]
         for cand in candidates: #ich muss nicht reverse-matchen, ich kann die required confs nehmen, anwenden und schauen ob's gleich ist!
             demanded_confs = self.dirname_vars(cand.count(os.sep))
             dirstruct = self.get_subdir({standardize_config_name(i): self.ctx.get_config(i) for i in demanded_confs})[0]
@@ -304,7 +307,10 @@ class JsonPersister():
                 warnings.filterwarnings("ignore", category=globals()[warning])
 
             if required_metainf is not None:
-                raise NotImplementedError("TODO: custom checking of metainf!")
+                if isinstance(required_metainf, list):
+                    assert all(i in file["metainf"] for i in required_metainf)
+                else:
+                    raise NotImplementedError("TODO: custom checking of metainf if it's a dict!")
             for k, v in file.get("loaded_files", {}).items():
                 for k2, v2 in v.get("metadata", {}).get("used_influentials", {}).items():
                     if k2 not in settings.MAY_DIFFER_IN_DEPENDENCIES and self.ctx.has_config(k2, include_default=False) and self.ctx.get_config(k2, silent=True) != standardize_config_val(k2, v2):
@@ -338,7 +344,7 @@ class JsonPersister():
         # assert all(self.used_config[k] == tmp["introduced_config"][k] for k in self.used_config.keys() & tmp.get("introduced_config", {}).keys())
         #TODO overhaul 16.01.2022: do I need this????
 
-    def load(self, filename, save_basename, /, loader=None, silent=False, required_metainf=None):
+    def load(self, filename, save_basename, /, loader=None, silent=False, required_metainf=None, return_metainf=False):
         filename = filename or self.get_file_by_config("", save_basename)
         if not isfile(join(self.in_dir, filename)) and isfile(join(self.in_dir, self.ctx.get_config("dataset"), filename)):
             filename = join(self.ctx.get_config("dataset"), filename)
@@ -346,7 +352,7 @@ class JsonPersister():
             obj = pd.read_csv(join(self.in_dir, filename))
             full_metadata = {}
         elif splitext(filename)[1] == ".json":
-            obj = json_load(join(self.in_dir, filename))
+            orig = obj = json_load(join(self.in_dir, filename))
             full_metadata = {k: v for k,v in obj.items() if k not in ["object", "loaded_files"]} if "object" in obj else {}
             self.check_file_metas(obj, required_metainf) #must be first check than add, otherwise a dependency can just overwrite demanded params
             if not silent:
@@ -365,9 +371,11 @@ class JsonPersister():
             #     else: self.ctx.obj[k] = v
             assert save_basename not in self.loaded_objects
             self.loaded_objects[save_basename] = {"content": obj, "path": join(self.in_dir, filename), "used_in": ["this"], "metadata": full_metadata}
+        if return_metainf:
+            return obj, orig["metainf"]
         return obj
 
-    def save(self, basename, /, force_overwrite=False, ignore_confs=None, metainf=None, **kwargs):
+    def save(self, basename, /, force_overwrite=False, ignore_confs=None, metainf=None, overwrite_old=False, **kwargs):
         basename, ext = splitext(basename)
         filename = basename
         # if relevant_params is not None:
@@ -390,8 +398,18 @@ class JsonPersister():
         obj = {"loaded_files": loaded_files, "used_influentials": used_influentials,
                "basename": basename, "obj_info": get_all_info(), "created_plots": self.created_plots,
                "used_config": (self.ctx.used_configs, self.ctx.toset_configs), "metainf": metainf, "runtime": runtime,
-               "forbidden_configs": self.ctx.forbidden_configs,
-               "object": kwargs} #object should be last!!
+               "forbidden_configs": self.ctx.forbidden_configs}
+        if "NEWLY_INTERRUPTED" in metainf:
+            filename += "_INTERRUPTED"
+            oldname = filename
+        if bool(overwrite_old):
+            if "NEWLY_INTERRUPTED" not in metainf:
+                oldname = filename + "_INTERRUPTED"
+                metainf["NOW_FINISHED"] = True
+            obj = self.check_add_interrupted_overwrite_metas(obj, join(self.out_dir, subdir, oldname + ext), metainf["N_RUNS"]-1)
+            os.remove(join(self.out_dir, subdir, oldname + ext))
+            obj["PREV_RUN_INFO"][str(metainf["N_RUNS"]-1)]["metainf"] = overwrite_old #overwrite_old is old_metainf
+        obj["object"] = kwargs #object should be last for ijson-loading!
         name = json_dump(obj, join(self.out_dir, subdir, filename+ext), forbid_overwrite=not force_overwrite)
         new_influentials = {k: v for k, v in used_influentials.items() if k not in self.loaded_influentials}
         print((f"Saved under {name}. \n"
@@ -411,3 +429,27 @@ class JsonPersister():
         tmp = {}
         [tmp.update(i) for i in per_file.values()]
         return tmp
+
+
+    def check_add_interrupted_overwrite_metas(self, obj, filepath, last_run_nr):
+        assert isfile(filepath)
+        obj["PREV_RUN_INFO"] = {}
+        for equalkey in ["loaded_files", "used_influentials", "used_config", "forbidden_configs", "obj_info", "created_plots", "runtime", "PREV_RUN_INFO"]:
+            with open(filepath) as rfile:
+                if equalkey in ["used_config", "runtime"]:
+                    loaded = [i for i in ijson.items(rfile, equalkey)][0]
+                else:
+                    loaded = {k: tuple(v) if isinstance(v, list) else v for k,v in ijson.kvitems(rfile, equalkey)}
+            if equalkey == "loaded_files":
+                assert all(tuple((k2, v2) for k2, v2 in obj[equalkey][k].items() if k2 != "metadata") == tuple((k2, v2) for k2, v2 in loaded[k].items() if k2 != "metadata") for k in obj[equalkey].keys())
+            elif equalkey == "used_config":
+                assert all(loaded[0][k]==obj[equalkey][0][k] or tuple(loaded[0][k])==tuple(obj[equalkey][0][k]) for k in loaded[0].keys()|set(obj[equalkey][0].keys()))
+            elif equalkey in ["obj_info", "created_plots", "runtime"]:
+                obj["PREV_RUN_INFO"].setdefault(str(last_run_nr), {})[equalkey] = loaded
+            elif equalkey == "PREV_RUN_INFO":
+                if len(loaded) > 0:
+                    assert not any(i in obj["PREV_RUN_INFO"] for i in loaded.keys())
+                    obj["PREV_RUN_INFO"].update(loaded)
+            else:
+                assert (not obj[equalkey] and not loaded) or obj[equalkey] == loaded
+        return obj

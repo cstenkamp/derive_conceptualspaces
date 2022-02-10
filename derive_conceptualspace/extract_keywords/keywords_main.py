@@ -1,3 +1,4 @@
+import sys
 from collections import Counter
 from os.path import join, basename
 import logging
@@ -25,14 +26,63 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 ########################################################################################################################
 ########################################################################################################################
 ########################################################################################################################
+import os
+from datetime import datetime, timedelta
+from collections import deque
+if os.getenv("WALL_SECS"):
+    wall_secs = int(os.environ['WALL_SECS'])
+    killed_at = datetime.now() + timedelta(seconds=wall_secs)
+    os.environ["KILLED_AT"] = killed_at.strftime("%d.%m.%Y, %H:%M:%S")
+    print(f"Walltime: {wall_secs}s. Will be killed at {os.environ['KILLED_AT']}")
 
-def extract_candidateterms(pp_descriptions, extraction_method, max_ngram, verbose=False):
+
+def interruptible(iterable, shutdown_time=60, timeavg_samples=10, continue_from=None, pgbar=None, append_var=None, metainf_var=None, kb_int_ref=None):
+    #pgbar is either None or a string. If it's not None, we will wrap in tqdm and use the var-value as desc
+    #kb_int is a dictionary containing one singe boolean, to be set to True from the OUTSIDE with a keyboard-interrupt
+    interrupt_time = None
+    if os.getenv("KILLED_AT"):
+        interrupt_time = datetime.strptime(os.environ["KILLED_AT"], "%d.%m.%Y, %H:%M:%S")-timedelta(seconds=shutdown_time)
+        print(f"This loop will interrupt at {interrupt_time.strftime('%d.%m.%Y, %H:%M:%S')}")
+    last_times = deque([datetime.now()], maxlen=timeavg_samples)
+    if continue_from is not None:
+        old_results, old_metainf, countervarnames = continue_from
+        assert append_var is not None
+        if old_metainf is not None: assert metainf_var is not None
+        print(f"Continuing a previously interrupted loop ({old_metainf['N_RUNS']} runs already). Starting at element {old_metainf['INTERRUPTED_AT'] + 1}/{len(iterable)}")
+        assert all(v == old_metainf[k] for k, v in metainf_var.items()), "The metainf changed!"
+        for elem in old_results:
+            append_var.append(elem)
+        full_len = len(iterable)
+        iterable = iterable[old_metainf['INTERRUPTED_AT']:]
+        sys.stderr.flush(); sys.stdout.flush()
+    n_elems = len(iterable)  #TODO only if it has a len!
+    iter = enumerate(iterable) if pgbar is None else enumerate(tqdm(iterable, desc=pgbar, total=n_elems))
+    for n, elem in iter:
+        yield elem
+        last_times.append(datetime.now())
+        timedeltas = [last_times[i]-last_times[i-1] for i in range(1, len(last_times))]
+        average_timedelta = sum(timedeltas, timedelta(0)) / len(timedeltas) # https://stackoverflow.com/a/3617540/5122790
+        if (interrupt_time and datetime.now()+average_timedelta*0.9 >= interrupt_time) or kb_int_ref["kb_int"]:
+            if kb_int_ref["kb_int"]:
+                metainf_var["KEYBORD_INTERRUPTED"] = True
+            if continue_from is not None:
+                print(f"Interrupted at iteration {n}/{n_elems} ({old_metainf['INTERRUPTED_AT']+n}/{full_len}) because we will hit the wall-time!")
+                metainf_var["INTERRUPTED_AT"] = n+old_metainf["INTERRUPTED_AT"]
+            else:
+                print(f"Interrupted at iteration {n}/{n_elems} because we will hit the wall-time!")
+                metainf_var["INTERRUPTED_AT"] = n
+            metainf_var["NEWLY_INTERRUPTED"] = True
+            raise InterruptedError()
+
+
+
+def extract_candidateterms(pp_descriptions, extraction_method, max_ngram, verbose=False, continue_from=None):
     if extraction_method == "keybert":
-        candidateterms, metainf = extract_candidateterms_keybert_nopp(pp_descriptions, max_ngram, get_setting("faster_keybert"), verbose=verbose)
+        candidateterms, metainf = extract_candidateterms_keybert_nopp(pp_descriptions, max_ngram, get_setting("faster_keybert"), verbose=verbose, continue_from=continue_from)
     elif extraction_method == "pp_keybert":
-        candidateterms, metainf = extract_candidateterms_keybert_preprocessed(pp_descriptions, max_ngram, get_setting("faster_keybert"), verbose=verbose)
+        candidateterms, metainf = extract_candidateterms_keybert_preprocessed(pp_descriptions, max_ngram, get_setting("faster_keybert"), verbose=verbose, continue_from=continue_from)
     elif extraction_method in ["tfidf", "tf", "all", "ppmi"]:
-        candidateterms, metainf = extract_candidateterms_quantific(pp_descriptions, max_ngram, quantific=extraction_method, verbose=verbose)
+        candidateterms, metainf = extract_candidateterms_quantific(pp_descriptions, max_ngram, quantific=extraction_method, verbose=verbose, continue_from=continue_from)
     else:
         raise NotImplementedError()
     flattened = set(flatten(candidateterms))
@@ -40,31 +90,36 @@ def extract_candidateterms(pp_descriptions, extraction_method, max_ngram, verbos
     metainf["n_candidateterms"] = len(flattened)
     return candidateterms, metainf
 
-def extract_candidateterms_keybert_nopp(descriptions, max_ngram, faster_keybert=False, verbose=False):
+def extract_candidateterms_keybert_nopp(descriptions, max_ngram, faster_keybert=False, verbose=False, continue_from=None):
     is_multilan = get_setting("TRANSLATE_POLICY") == "origlang" or get_setting("LANGUAGE") != "en"
     extractor = KeyBertExtractor(is_multilan=is_multilan, faster=faster_keybert, max_ngram=max_ngram)
+    metainf = {"keybertextractor_modelname": extractor.model_name}
+    if get_setting("DEBUG"):
+        assert continue_from is None, "This is too complex for me right now"
+        descriptions._descriptions = descriptions._descriptions[:get_setting("DEBUG_N_ITEMS")]
     candidateterms = []
     n_immediateworking_ges, n_fixed_ges, n_errs_ges = 0, 0, 0
-    if get_setting("DEBUG"):
-        descriptions._descriptions = descriptions._descriptions[:get_setting("DEBUG_N_ITEMS")]
-    for desc in tqdm(descriptions._descriptions, desc="Extracting Keywords..."):
-        keyberts, origextracts, (n_immediateworking, n_fixed, n_errs) = extractor(desc.text, desc.lang)
-        #TODO maybe the best post-processing for all candidates is to run the exact processing I ran for the descriptions for all the results...?!
-        # Because theoretically afterwards 100% of them should be in the processed_text
-        if (ct := extract_coursetype(desc)) and ct not in keyberts:
-            keyberts += [ct]
-        candidateterms.append(keyberts)
-        n_immediateworking_ges += n_immediateworking
-        n_fixed_ges += n_fixed
-        n_errs_ges += n_errs
-    if verbose:
-        print(f"Immediately working: {n_immediateworking_ges}")
-        print(f"Fixed: {n_fixed_ges}")
-        print(f"Errors: {n_errs_ges}")
-    return candidateterms, {"keybertextractor_modelname": extractor.model_name}
+    kb_int = {"kb_int": False}
+    try:
+        for desc in interruptible(descriptions._descriptions, continue_from=continue_from, pgbar="Extracting Keywords...", append_var=candidateterms, metainf_var=metainf, kb_int_ref=kb_int):
+            try:
+                keyberts, origextracts, (n_immediateworking, n_fixed, n_errs) = extractor(desc.text, desc.lang)
+                #TODO best post-processing for candidates is to run the same processing as for the descriptions! => afterwards 100% of them should be in the processed_text (started doing that in postprocess_candidates!)
+                if (ct := extract_coursetype(desc)) and ct not in keyberts:
+                    keyberts += [ct]
+                candidateterms.append(keyberts)
+                n_immediateworking_ges += n_immediateworking
+                n_fixed_ges += n_fixed
+                n_errs_ges += n_errs
+            except KeyboardInterrupt:
+                kb_int["kb_int"] = True
+    except InterruptedError:
+        assert "NEWLY_INTERRUPTED" in metainf
+    metainf = {**metainf, "n_immediateworking": n_immediateworking_ges, "n_fixed": n_fixed_ges, "n_errs": n_errs_ges}
+    return candidateterms, metainf
 
 
-def extract_candidateterms_keybert_preprocessed(descriptions, max_ngram, faster_keybert=False, verbose=False):
+def extract_candidateterms_keybert_preprocessed(descriptions, max_ngram, faster_keybert=False, verbose=False, **kwargs):
     from keybert import KeyBERT  # lazily loaded as it needs tensorflow/torch which takes some time to init
     model_name = "paraphrase-MiniLM-L6-v2" if faster_keybert else "paraphrase-mpnet-base-v2"
     print(f"Using model {model_name}")
@@ -84,7 +139,7 @@ def extract_candidateterms_keybert_preprocessed(descriptions, max_ngram, faster_
     return candidateterms, {"keybertextractor_modelname": model_name, "kw_max_ngram": max_ngram}
 
 #TODO play around with the parameters here!
-def extract_candidateterms_quantific(descriptions, max_ngram, quantific, verbose=False):
+def extract_candidateterms_quantific(descriptions, max_ngram, quantific, verbose=False, **kwargs):
     print(f"Loading Doc-Term-Matrix with min-term-count {get_setting('CANDIDATE_MIN_TERM_COUNT')}")
     dtm, mta = descriptions.generate_DocTermMatrix(min_df=get_setting("CANDIDATE_MIN_TERM_COUNT"), max_ngram=max_ngram, do_tfidf=quantific if quantific in ["tfidf", "tf"] else None)
     #Now I'm filtering here, I originally didn't want to do that but it makes the processing incredibly much faster
