@@ -221,6 +221,7 @@ class CustomContext(ObjectWrapper):
                         self.set_config(k, v[0], "conf_file")
                 else:
                     self.set_config(k, v, "conf_file")
+            print(f"Config-File {fname} loaded.")
 
     def used_influential_confs(self):
         tmp = {k: v for k, v in self.used_configs.items() if k not in settings.NON_INFLUENTIAL_CONFIGS}
@@ -269,6 +270,7 @@ class SnakeContext():
         title_languages=lambda **kwargs: kwargs["langs"],
         languages=lambda **kwargs: kwargs["langs"],
         raw_descriptions=None,
+        postprocessed_candidates=None,
     )
     # TODO das autoloader_di ist schon ne Mischung von Code und Daten, aber wohin sonst damit?
 

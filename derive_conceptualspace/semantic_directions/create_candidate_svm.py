@@ -14,6 +14,7 @@ import pandas as pd
 
 from derive_conceptualspace.settings import get_setting, IS_INTERACTIVE, get_ncpu
 from derive_conceptualspace.util.base_changer import NDPlane, ThreeDPlane
+from derive_conceptualspace.util.dtm_object import DocTermMatrix
 from derive_conceptualspace.util.interruptible_funcs import Interruptible
 from derive_conceptualspace.util.threadworker import WorkerPool
 from derive_conceptualspace.util.threedfigure import ThreeDFigure
@@ -21,6 +22,8 @@ from misc_util.pretty_print import pretty_print as print
 
 norm = lambda vec: vec/np.linalg.norm(vec)
 vec_cos = lambda v1, v2: np.arccos(np.clip(np.dot(norm(v1), norm(v2)), -1.0, 1.0))  #https://stackoverflow.com/a/13849249/5122790
+flatten = lambda l: [item for sublist in l for item in sublist]
+unique = lambda iterable: list({i:None for i in iterable}.keys())
 
 
 def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=None):
@@ -36,10 +39,12 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
     metainf = {}
     if get_setting("DEBUG"):
         maxlen = min(len(terms), len(embedding.embedding_), get_setting("DEBUG_N_ITEMS"), len(dcm.dtm))
-        terms = terms[:maxlen]
-        embedding.embedding_ = embedding.embedding_[:maxlen]
-        dcm.dtm = dcm.dtm[:maxlen]
-        print(f"Debug-Mode: Running for {maxlen} Items.")
+        working_inds = [nterm for nterm, term in enumerate(terms[:maxlen]) if np.array(dcm.term_quants(term)[:maxlen], dtype=bool).std()] #those with >1 class
+        term_inds = unique(flatten([j[0] for j in dcm.dtm[i]] for i in working_inds))
+        terms = [dcm.all_terms[i] for i in term_inds]
+        embedding.embedding_ = embedding.embedding_[working_inds]
+        dcm = DocTermMatrix([dcm.dtm[i] for i in working_inds], {i: dcm.all_terms[i] for i in term_inds}, dcm.quant_name)
+        print(f"Debug-Mode: Running for {len(working_inds)} Items and {len(terms)} Terms.")
         # assert all(i in terms for i in ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze'])
         # terms = ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze']
         # assert len([i for i in descriptions._descriptions if 'nature' in i]) == len([i for i in dcm.term_quants('nature') if i > 0])

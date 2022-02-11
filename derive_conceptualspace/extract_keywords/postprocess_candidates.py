@@ -18,9 +18,10 @@ def postprocess_candidateterms(candidate_terms, descriptions, extraction_method)
     To count the descriptions they are in, I'll both generate a new doc-term-matrix with the respective ngram
     AND check if it's in the literal text of the description, such that after this, i can savely forget the original descriptions and focus on DTMs.
     """
-    candidate_terms, = candidate_terms.values()
     if get_setting("DEBUG"):
-        descriptions._descriptions = descriptions._descriptions[:len(candidate_terms)]
+        maxlen = min(len(candidate_terms), len(descriptions._descriptions), get_setting("DEBUG_N_ITEMS"))
+        descriptions._descriptions = descriptions._descriptions[:maxlen]
+        candidate_terms = candidate_terms[:maxlen]
     assert len(candidate_terms) == len(descriptions), f"Candidate Terms: {len(candidate_terms)}, Descriptions: {len(descriptions)}"
     flattened = set(flatten(candidate_terms))
     print("Extracted Unique Terms: ", ", ".join([f"{k+1}-grams: {v}" for k, v in sorted(Counter([i.count(" ") for i in flattened]).items(), key=lambda x:x[0])]), "| sum:", len(flattened))
@@ -29,9 +30,7 @@ def postprocess_candidateterms(candidate_terms, descriptions, extraction_method)
     dtm = descriptions.generate_DocTermMatrix(min_df=1, max_ngram=max_found_ngram)[0] #TODO check if this works for all parameter-combis
 
     postprocessed_candidates = [[] for _ in candidate_terms]
-    fails = set()
-    changeds = set()
-    toolong = set()
+    fails, changeds, toolong = set(), set(), set()
 
     if extraction_method == "keybert":
         from derive_conceptualspace.create_spaces.preprocess_descriptions import PPComponents, get_countvec
@@ -44,10 +43,10 @@ def postprocess_candidateterms(candidate_terms, descriptions, extraction_method)
         try_edit_fns = ()
     all_edit_fns = flatten([list(permutations(try_edit_fns, i+1)) for i in range(len(try_edit_fns))])
 
-    for desc_ind, desc in enumerate(tqdm(descriptions._descriptions)):
+    for desc_ind, desc in enumerate(tqdm(descriptions._descriptions, desc="Checking extracted candidates per-description")):
         term_counts = {dtm.all_terms[ind]: count for ind, count in dtm.dtm[desc_ind]}
         for cand in candidate_terms[desc_ind]:
-            if cand.count(" ")+1 > get_setting("MAX_NGRAM"):
+            if cand.count(" ")+1 > (get_setting("MAX_NGRAM") or 1):
                 toolong.add(cand)
                 continue
             cond, ncand = check_cand(cand, desc, edit_fns=all_edit_fns)
@@ -70,10 +69,11 @@ def postprocess_candidateterms(candidate_terms, descriptions, extraction_method)
     for k, v in changeds:
         changeds_dict[k].append(v)
 
-    for desc_ind, desc in enumerate(descriptions._descriptions):
+    for desc_ind, desc in enumerate(tqdm(descriptions._descriptions, desc="Checking a second time")):
+        desc_txt = desc.processed_as_string(allow_shorten=True)
         for cand in postprocessed_candidates[desc_ind]:
             assert cand in desc
-            assert cand in desc.processed_as_string()
+            assert cand in desc_txt
 
     if toolong:
         print(f"Had to drop {len(toolong)} out of {len(flatten(candidate_terms))} (non-unique) candidates because they were too long.")

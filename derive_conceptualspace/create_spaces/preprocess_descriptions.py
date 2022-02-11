@@ -97,6 +97,8 @@ def descriptions_from_bow(descs, languages, translations, translate_policy):
     if translate_policy != "onlyorig" or languages != "en":
         raise NotImplementedError()
     desc_list = DescriptionList(add_title=False, add_subtitle=False, translate_policy=translate_policy, additionals_names=list(descs["classes"].keys()))
+    if get_setting("DEBUG"):
+        descs["vecs"] = dict(list(descs["vecs"].items())[:get_setting("DEBUG_N_ITEMS")])
     for name, bow in descs["vecs"].items():
         desc_list.add(Description(lang=languages, text=None, title=name, subtitle=None, orig_textlang=None, bow=bow,
                                   additionals={k: v.get(name) for k, v in descs["classes"].items()}))

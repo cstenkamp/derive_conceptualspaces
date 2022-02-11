@@ -27,6 +27,12 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 class DifferentFileWarning(Warning):
     pass
 
+class ConfigError(Exception):
+    pass
+
+class DependencyError(ConfigError):
+    pass
+
 ########################################################################################################################
 ########################################################################################################################
 # stuff to serialize to JSON
@@ -225,7 +231,7 @@ class JsonPersister():
                 )
 
 
-    def get_file_by_config(self, subdir, save_basename, postfix=None):
+    def get_file_by_config(self, subdir, save_basename, postfix=None, strict_checking=False):
         """If no filename specified, recursively search for files whose name startswith save_basename, and then from
            the paths of the results, reverse-engineer the demanded configs of these files and then match them up"""
         correct_cands = []
@@ -237,26 +243,30 @@ class JsonPersister():
             dirstruct = self.get_subdir({standardize_config_name(i): self.ctx.get_config(i, silent=True) for i in demanded_confs})[0]
             if dirname(cand) == dirstruct:
                 correct_cands.append((cand, parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]), dirname(cand)).named)) #2nd elem ist der Versuch die configs draus zu parsen
-            if self.ctx.get_config("DEBUG"): #if NOW debug=True, you may still load stuff for which debug=False (TODO: settings.DEPENDENCIES_PREFER_NODEBUG)
+            if self.ctx.get_config("DEBUG", silent=True): #if NOW debug=True, you may still load stuff for which debug=False (TODO: settings.DEPENDENCIES_PREFER_NODEBUG)
                 if dirname(cand) == self.get_subdir({**{standardize_config_name(i): self.ctx.get_config(i, silent=True) for i in demanded_confs}, "DEBUG": False})[0] and cand not in correct_cands:
                     correct_cands.append((cand, parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]), dirname(cand)).named))
-                    if self.ctx.get_config("DEP_PREFERS_NONDEBUG", silent=True):
-                        correct_cands = [i for i in correct_cands if i[1] != {k: v if standardize_config_name(k) != "DEBUG" else "True" for k, v in correct_cands[-1][1].items()}]
-                    elif len(set(i[0] for i in correct_cands if {k:v for k,v in i[1].items() if standardize_config_name(k) != "DEBUG"})) > 1:
-                        correct_cands = [i for i in correct_cands if i[1] != {k: v if standardize_config_name(k) != "DEBUG" else "False" for k, v in correct_cands[-1][1].items()}]
+        if self.ctx.get_config("DEBUG", silent=True):
+            if self.ctx.get_config("DEP_PREFERS_NONDEBUG", silent=True):
+                correct_cands = [i for i in correct_cands if i[1] != {k: v if standardize_config_name(k) != "DEBUG" else "True" for k, v in correct_cands[-1][1].items()}]
+            elif len(set(i[0] for i in correct_cands if {k:v for k,v in i[1].items() if standardize_config_name(k) != "DEBUG"})) > 1:
+                correct_cands = [i for i in correct_cands if i[1] != {k: v if standardize_config_name(k) != "DEBUG" else "False" for k, v in correct_cands[-1][1].items()}]
+        if len(correct_cands) > 1 or strict_checking: #if there is still more than 1 candidate, partially load them to extract configs
+            for cand in correct_cands:
+                with open(join(self.in_dir, cand[0])) as rfile:
+                    if strict_checking:
+                        full_conf = [k for k in ijson.items(rfile, "used_config")][0][0]
+                    else:
+                        full_conf = dict([k for k in ijson.kvitems(rfile, "used_influentials")])
+                    diff_confs = [k for k, v in full_conf.items() if self.ctx.has_config(k) and self.ctx.get_config(k, silent=True) != v and k not in settings.MAY_DIFFER_IN_DEPENDENCIES]
+                    if diff_confs:
+                        correct_cands = [i for i in correct_cands if i != cand]
+        correct_cands = list(set(i[0] for i in correct_cands))
         if not correct_cands:
             if candidates: #otherwise dirstruct is not defined
                 print(f"You may need the file *b*{join(dirstruct, save_basename+'.json')}*b*")
                 #command is then `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR filepath)`
             raise FileNotFoundError(fmt(f"There is no candidate for {save_basename} with the current config." + (f" You may need the file *b*{join(dirstruct, save_basename+'.json')}*b*" if candidates else "")))
-        if len(correct_cands) > 1: #if there is still more than 1 candidate, partially load them to extract configs
-            for cand in correct_cands:
-                with open(join(self.in_dir, cand[0])) as rfile:
-                    full_conf = dict([k for k in ijson.kvitems(rfile, "used_influentials")])
-                    diff_confs = [k for k, v in full_conf.items() if self.ctx.has_config(k) and self.ctx.get_config(k, silent=True) != v and k not in settings.MAY_DIFFER_IN_DEPENDENCIES]
-                    if diff_confs:
-                        correct_cands = [i for i in correct_cands if i != cand]
-        correct_cands = list(set(i[0] for i in correct_cands))
         assert len(correct_cands) == 1, f"Multiple file candidates: {correct_cands}"
         return correct_cands[0]
 
@@ -321,7 +331,8 @@ class JsonPersister():
                         warnings.warn(f"A different {k} was used for file {file['basename']}!", DifferentFileWarning)
                     if self.loaded_objects[k]["metadata"].get("used_config") != v["metadata"].get("used_config"):
                         diff_configs = {k2 for k2 in self.loaded_objects[k]["metadata"]["used_config"][0].keys()|v["metadata"]["used_config"][0].keys() if self.loaded_objects[k]["metadata"]["used_config"][0].get(k2) != v["metadata"]["used_config"][0].get(k2)}
-                        assert diff_configs <= set(settings.MAY_DIFFER_IN_DEPENDENCIES), f"Different settings where used in a dependency: {diff_configs - set(settings.MAY_DIFFER_IN_DEPENDENCIES)}"
+                        if not diff_configs <= set(settings.MAY_DIFFER_IN_DEPENDENCIES):
+                            raise DependencyError(f"Different settings were used in a dependency: {diff_configs - set(settings.MAY_DIFFER_IN_DEPENDENCIES)}")
             for k, v in file.get("used_influentials", {}).items():
                 if k not in settings.MAY_DIFFER_IN_DEPENDENCIES:
                     if self.ctx.has_config(k):
@@ -447,7 +458,7 @@ class JsonPersister():
             if equalkey == "loaded_files":
                 assert all(tuple((k2, v2) for k2, v2 in obj[equalkey][k].items() if k2 != "metadata") == tuple((k2, v2) for k2, v2 in loaded[k].items() if k2 != "metadata") for k in obj[equalkey].keys())
             elif equalkey == "used_config":
-                assert all(loaded[0][k]==obj[equalkey][0][k] or tuple(loaded[0][k])==tuple(obj[equalkey][0][k]) for k in loaded[0].keys()|set(obj[equalkey][0].keys()))
+                assert all(loaded[0][k]==obj[equalkey][0][k] or tuple(loaded[0][k])==tuple(obj[equalkey][0][k]) for k in (loaded[0].keys()|set(obj[equalkey][0].keys()))-set(settings.NON_INFLUENTIAL_CONFIGS))
             elif equalkey in ["obj_info", "created_plots", "runtime"]:
                 obj["PREV_RUN_INFO"].setdefault(str(last_run_nr), {})[equalkey] = loaded
             elif equalkey == "PREV_RUN_INFO":

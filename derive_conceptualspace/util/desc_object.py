@@ -106,9 +106,13 @@ class Description():
     @property
     def unprocessed_text(self):
         """returns minimally processed text (translated and with title/subtitle, but no pp steps)"""
-        return ((self.title+". ") if self._add_title else "") + ((self.subtitle+". ") if self._add_subtitle and self.subtitle else "") + self.text
+        firstpart = ((self.title+". ") if self._add_title else "") + ((self.subtitle+". ") if self._add_subtitle and self.subtitle else "")
+        secondpart = self.text if self.text is not None else " ".join([f"{k} "*v for k, v in self.bow().items()])
+        return firstpart + secondpart
 
-    def processed_as_string(self, no_dots=False):
+    def processed_as_string(self, no_dots=False, allow_shorten=False):
+        if allow_shorten and len(self.processing_steps) == 0 and not self._add_subtitle and not self._add_subtitle:
+            return " ".join([k for k in self.bow().keys()])
         sent_join = " " if no_dots else ". "
         if isinstance(self.processed_text, list):
             if isinstance(self.processed_text[0], list):
@@ -278,7 +282,7 @@ class DescriptionList():
 
     def generate_DocTermMatrix(self, min_df=1, max_ngram=None, do_tfidf=None):
         if self.proc_steps[-1] == "bow":
-            assert max_ngram is None, "Can't do!"
+            assert max_ngram in [None, 1], "Can't do!"
             print("Preprocessed produced a bag-of-words already. Config `max_ngram` is useless!")
             forbid_setting("max_ngram")
             all_words = dict(enumerate(set(flatten(i.bow().keys() for i in self._descriptions))))

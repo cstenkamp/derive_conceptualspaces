@@ -50,7 +50,6 @@ def extract_candidateterms_keybert_nopp(descriptions, max_ngram, faster_keybert=
     extractor = KeyBertExtractor(is_multilan=is_multilan, faster=faster_keybert, max_ngram=max_ngram)
     metainf = {"keybertextractor_modelname": extractor.model_name}
     if get_setting("DEBUG"):
-        assert continue_from is None, "This is too complex for me right now"
         descriptions._descriptions = descriptions._descriptions[:get_setting("DEBUG_N_ITEMS")]
     candidateterms = []
     n_immediateworking_ges, n_fixed_ges, n_errs_ges = 0, 0, 0
@@ -131,7 +130,13 @@ def create_filtered_doc_cand_matrix(postprocessed_candidates, descriptions, min_
 
 
 def create_doc_cand_matrix(postprocessed_candidates, descriptions, verbose=False):
-    assert len(postprocessed_candidates) == len(descriptions)
+    postprocessed_candidates, changeds_dict = postprocessed_candidates.values()
+    if get_setting("DEBUG"):
+        maxlen = min(len(postprocessed_candidates), len(descriptions), get_setting("DEBUG_N_ITEMS"))
+        postprocessed_candidates = postprocessed_candidates[:maxlen]
+        descriptions._descriptions = descriptions._descriptions[:maxlen]
+    else:
+        assert len(postprocessed_candidates) == len(descriptions)
     assert all(cand in desc for ndesc, desc in enumerate(descriptions._descriptions) for cand in postprocessed_candidates[ndesc])
     all_phrases = list(set(flatten(postprocessed_candidates)))
     if get_setting("DEBUG"):

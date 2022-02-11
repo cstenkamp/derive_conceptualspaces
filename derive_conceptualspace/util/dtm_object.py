@@ -125,8 +125,8 @@ class DocTermMatrix():
     def term_existinds(self, use_index=True):
         if not hasattr(self, "_term_existinds"):
             occurs_in = [set(j[0] for j in i) if i else [] for i in self.dtm]
-            self._term_existinds = [[ndoc for ndoc, doc in enumerate(occurs_in) if k in doc] for k in self.all_terms.keys()]
-        return self._term_existinds if use_index else {self.all_terms[k]: v for k,v in enumerate(self._term_existinds)}
+            self._term_existinds = {k: [ndoc for ndoc, doc in enumerate(occurs_in) if k in doc] for k in self.all_terms.keys()}
+        return self._term_existinds if use_index else {self.all_terms[k]: v for k,v in self._term_existinds.items()}
 
     @lru_cache
     def as_csr(self, binary=False):
@@ -172,9 +172,10 @@ class DocTermMatrix():
         dtm_translator = {k: all_terms_new_rev[v] for k, v in dtm.all_terms.items() if k in used_terms_set}
         doc_term_matrix = [[[dtm_translator.get(ind), num] for ind, num in doc if ind in used_terms_set] for doc in dtm.dtm]
         if descriptions:
-            if get_setting("DO_SANITYCHECKS") and False: #TODO #PRECOMMIT add back!
+            if get_setting("DO_SANITYCHECKS"):
                 expected_bows = {ndoc: {all_terms_new[elem]: count for elem, count in doc} for ndoc, doc in enumerate(doc_term_matrix[:10])}
-                assert all(all(v==descriptions._descriptions[i].bow()[k] for k, v in expected_bows[i].items()) for i in range(10))
+                assert all(all(v==descriptions._descriptions[i].bow()[k] for k, v in expected_bows[i].items() if not " " in k) for i in range(10))
+                assert all(all(v==descriptions._descriptions[i].count_phrase(k) for k, v in expected_bows[i].items() if not " " in k) for i in range(10))
                 assert all(all_terms_new[ind] in descriptions._descriptions[ndoc] for ndoc, doc in enumerate(tqdm(doc_term_matrix, desc="Cross-checking filtered DCM with Descriptions [sanity-check]")) for ind, count in doc)
             if verbose:
                 shown = []

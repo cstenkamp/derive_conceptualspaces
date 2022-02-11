@@ -259,7 +259,7 @@ def extract_candidateterms(ctx, max_ngram):
 @prepare_candidateterms.command()
 @click_pass_add_context
 def postprocess_candidateterms(ctx, json_persister):
-    ctx.obj["candidate_terms"] = json_persister.load(None, "candidate_terms")
+    ctx.obj["candidate_terms"] = json_persister.load(None, "candidate_terms", loader=lambda **args: args["candidate_terms"])
     postprocessed_candidates, changeds = postprocess_candidateterms_base(ctx.obj["candidate_terms"], ctx.obj["pp_descriptions"], ctx.get_config("extraction_method"))
     json_persister.save("postprocessed_candidates.json", postprocessed_candidates=postprocessed_candidates, changeds=changeds)
 
@@ -273,7 +273,7 @@ def postprocess_candidateterms(ctx, json_persister):
 def create_filtered_doc_cand_matrix(ctx, candidate_min_term_count, cands_use_ndocs_count):
     # TODO missing options here: `tag-share` (chap. 4.2.1 of [VISR12])
     # TODO Do I need pp_descriptions except for verbosity? -> if not, make loading silent
-    ctx.obj["postprocessed_candidates"] = ctx.obj["json_persister"].load(None, "postprocessed_candidates", loader = lambda **args: args["postprocessed_candidates"])
+    ctx.obj["postprocessed_candidates"] = ctx.obj["json_persister"].load(None, "postprocessed_candidates")
     filtered_dcm = create_filtered_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], min_term_count=candidate_min_term_count,
                                                     dcm_quant_measure=ctx.get_config("dcm_quant_measure"), use_n_docs_count=cands_use_ndocs_count, verbose=ctx.get_config("verbose"))
     ctx.obj["json_persister"].save("filtered_dcm.json", doc_term_matrix=filtered_dcm)
@@ -298,9 +298,7 @@ def generate_conceptualspace(ctx, json_persister):
     """[group] CLI base to create the actual conceptual spaces"""
     ctx.obj["filtered_dcm"] = json_persister.load(None, "filtered_dcm", loader=dtm_loader)
     ctx.obj["embedding"] = json_persister.load(None, "embedding", loader=lambda **args: args["embedding"])
-    if ctx.get_config("DEBUG"):
-        assert ctx.obj["embedding"].embedding_.shape[0] <= len(ctx.obj["filtered_dcm"].dtm), f'The Doc-Candidate-Matrix contains {len(ctx.obj["filtered_dcm"].dtm)} items But your embedding has {ctx.obj["embedding"].embedding_.shape[0] } descriptions!'
-    else:
+    if not ctx.get_config("DEBUG"):
         assert ctx.obj["embedding"].embedding_.shape[0] == len(ctx.obj["filtered_dcm"].dtm), f'The Doc-Candidate-Matrix contains {len(ctx.obj["filtered_dcm"].dtm)} items But your embedding has {ctx.obj["embedding"].embedding_.shape[0] } descriptions!'
 
 
@@ -308,12 +306,9 @@ def generate_conceptualspace(ctx, json_persister):
 @click_pass_add_context
 def create_candidate_svm(ctx):
     ctx.obj["pp_descriptions"] = ctx.p.load(None, "pp_descriptions", loader=DescriptionList.from_json, silent=True)
-    # decision_planes, metrics = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"))
-    # ctx.p.save("clusters.json", decision_planes=decision_planes, metrics=metrics)
     with InterruptibleLoad(ctx, "clusters.json", loader=lambda x:x) as mgr:
         decision_planes, metrics, metainf = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"), **mgr.kwargs)
     mgr.save(decision_planes=decision_planes, metrics=metrics, metainf=metainf)
-    #TODO hier war dcm = DocTermMatrix(json_load(join(ctx.obj["base_dir"], dcm_filename), assert_meta=("CANDIDATE_MIN_TERM_COUNT", "STANFORDNLP_VERSION"))), krieg ich das wieder hin?
 
 
 @generate_conceptualspace.command()

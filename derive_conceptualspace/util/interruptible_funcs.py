@@ -7,6 +7,9 @@ from itertools import islice
 
 from tqdm import tqdm
 
+from derive_conceptualspace.util.jsonloadstore import DependencyError
+
+
 class InterruptibleLoad():
     def __init__(self, ctx, name_with_ending, loader=None, metainf_countervarnames=None):
         self.ctx = ctx
@@ -18,12 +21,12 @@ class InterruptibleLoad():
         basename, ext = splitext(self.name_with_ending)
         self.loader = self.loader or (lambda **kw: kw[basename])
         try:
-            tmp = self.ctx.p.get_file_by_config("", basename, postfix="INTERRUPTED")
+            tmp = self.ctx.p.get_file_by_config("", basename, postfix="INTERRUPTED", strict_checking=True)
             tmp2, self.old_metainf = self.ctx.p.load(tmp, f"{basename}_CONTINUE", silent=True, required_metainf=["INTERRUPTED_AT"], return_metainf=True, loader=self.loader)
             if "NEWLY_INTERRUPTED" in self.old_metainf:
                 del self.old_metainf["NEWLY_INTERRUPTED"]
             self.kwargs = dict(continue_from=(tmp2, self.old_metainf, self.metainf_countervarnames))
-        except FileNotFoundError:
+        except (FileNotFoundError, DependencyError):
             self.kwargs = {}
         return self
 
