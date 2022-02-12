@@ -19,12 +19,15 @@ else
    echo "ENV-FILE: $MA_ENV_FILE"
 fi
 
-SNAKEMAKE_ARGS="$*"
-SNAKEMAKE_ARGS=${SNAKEMAKE_ARGS:-default}
+SNAKEMAKE_ARGS=("$@") #https://stackoverflow.com/a/3816747/5122790
+if [[ -z "${SNAKEMAKE_ARGS}" ]]; then
+  SNAKEMAKE_ARGS=default
+fi
+echo "Snakemake-Args: $SNAKEMAKE_ARGS"
 
 ################################## run snakemake #######################################
 
-source $MA_CONDAPATH/bin/activate derive_conceptualspaces
+source $MA_CONDAPATH/bin/activate ${MA_CONDA_ENVNAME:-derive_conceptualspaces}
 export PYTHONPATH=$MA_CONDAPATH:$PYTHONPATH
 cd $MA_CODEPATH
 

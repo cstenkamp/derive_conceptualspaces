@@ -48,7 +48,7 @@ else
 fi
 
 # activate env etc (TODO make env-name an arg)
-source $MA_CONDAPATH/bin/activate derive_conceptualspaces
+source $MA_CONDAPATH/bin/activate ${MA_CONDA_ENVNAME:-derive_conceptualspaces}
 cd $MA_CODEPATH
 
 echo "Snakemake-Args: $SNAKEMAKE_ARGS"

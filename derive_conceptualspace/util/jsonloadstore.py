@@ -6,8 +6,9 @@ import re
 import subprocess
 import sys
 import warnings
+from collections import ChainMap
 from datetime import datetime, timedelta
-from os.path import isfile, splitext, dirname, join
+from os.path import isfile, splitext, dirname, join, basename
 
 import ijson
 import numpy as np
@@ -230,45 +231,71 @@ class JsonPersister():
                 {k:v for k, v in influential_confs.items() if k not in used_keys.keys()} #what you didn't use
                 )
 
+    def get_file_config(self, filepath):
+        if not isfile(filepath) and isfile(join(self.in_dir, filepath)):
+            filepath = join(self.in_dir, filepath)
+        with open(filepath) as rfile:
+            used_conf = next(ijson.items(rfile, "used_influentials")) #next(ijson.items(rfile, "used_config"))[0]
+            rfile.seek(0)
+            used_files = next(ijson.items(rfile, "loaded_files"))
+        used_conf = {k: v for k, v in used_conf.items() if k not in set(settings.MAY_DIFFER_IN_DEPENDENCIES)-set(standardize_config_name(i) for i in self.dirname_vars())}
+        all_used_conf = dict(ChainMap(*(i["metadata"].get("used_influentials", {}) for i in used_files.values()), used_conf))
+        return all_used_conf
 
-    def get_file_by_config(self, subdir, save_basename, postfix=None, strict_checking=False):
-        """If no filename specified, recursively search for files whose name startswith save_basename, and then from
-           the paths of the results, reverse-engineer the demanded configs of these files and then match them up"""
-        correct_cands = []
+
+
+    def get_file_by_config(self, subdir, save_basename, postfix=None):
+        """If no filename specified, recursively search for files whose name startswith save_basename, and then for any candidates,
+           check if there is a file with their config-keys and the config-values of this instance."""
         candidates = [join(path, name)[len(self.in_dir):] for path, subdirs, files in os.walk(join(self.in_dir, subdir)) for name in files if name.startswith(save_basename)]
         if postfix:
             candidates = [i for i in candidates if splitext(i)[0].endswith(postfix)]
-        for cand in candidates: #ich muss nicht reverse-matchen, ich kann die required confs nehmen, anwenden und schauen ob's gleich ist!
-            demanded_confs = self.dirname_vars(cand.count(os.sep))
-            dirstruct = self.get_subdir({standardize_config_name(i): self.ctx.get_config(i, silent=True) for i in demanded_confs})[0]
-            if dirname(cand) == dirstruct:
-                correct_cands.append((cand, parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]), dirname(cand)).named)) #2nd elem ist der Versuch die configs draus zu parsen
-            if self.ctx.get_config("DEBUG", silent=True): #if NOW debug=True, you may still load stuff for which debug=False (TODO: settings.DEPENDENCIES_PREFER_NODEBUG)
-                if dirname(cand) == self.get_subdir({**{standardize_config_name(i): self.ctx.get_config(i, silent=True) for i in demanded_confs}, "DEBUG": False})[0] and cand not in correct_cands:
-                    correct_cands.append((cand, parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]), dirname(cand)).named))
-        if self.ctx.get_config("DEBUG", silent=True):
-            if self.ctx.get_config("DEP_PREFERS_NONDEBUG", silent=True):
-                correct_cands = [i for i in correct_cands if i[1] != {k: v if standardize_config_name(k) != "DEBUG" else "True" for k, v in correct_cands[-1][1].items()}]
-            elif len(set(i[0] for i in correct_cands if {k:v for k,v in i[1].items() if standardize_config_name(k) != "DEBUG"})) > 1:
-                correct_cands = [i for i in correct_cands if i[1] != {k: v if standardize_config_name(k) != "DEBUG" else "False" for k, v in correct_cands[-1][1].items()}]
-        if len(correct_cands) > 1 or strict_checking: #if there is still more than 1 candidate, partially load them to extract configs
-            for cand in correct_cands:
-                with open(join(self.in_dir, cand[0])) as rfile:
-                    if strict_checking:
-                        full_conf = [k for k in ijson.items(rfile, "used_config")][0][0]
-                    else:
-                        full_conf = dict([k for k in ijson.kvitems(rfile, "used_influentials")])
-                    diff_confs = [k for k, v in full_conf.items() if self.ctx.has_config(k) and self.ctx.get_config(k, silent=True) != v and k not in settings.MAY_DIFFER_IN_DEPENDENCIES]
-                    if diff_confs:
-                        correct_cands = [i for i in correct_cands if i != cand]
-        correct_cands = list(set(i[0] for i in correct_cands))
-        if not correct_cands:
-            if candidates: #otherwise dirstruct is not defined
-                print(f"You may need the file *b*{join(dirstruct, save_basename+'.json')}*b*")
-                #command is then `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR filepath)`
-            raise FileNotFoundError(fmt(f"There is no candidate for {save_basename} with the current config." + (f" You may need the file *b*{join(dirstruct, save_basename+'.json')}*b*" if candidates else "")))
-        assert len(correct_cands) == 1, f"Multiple file candidates: {correct_cands}"
+        if not candidates: #TODO try best to get the required conf to tell in the exception
+            raise FileNotFoundError(fmt(f"There is no candidate for {save_basename} with the current config."))
+        correct_cands = set()
+        for cand in candidates: #from the bad candidates I can even figure out the good ones
+            demanded_config = {k: self.ctx.get_config(k, silent=True, default_false=True) for k in self.get_file_config(cand).keys()}
+            correct_cands.add(os.sep.join(self.get_filepath(demanded_config, save_basename)))
+            if self.ctx.get_config("DEBUG", silent=True): #if NOW debug=True, you may still load stuff for which debug=False
+                correct_cands.add(os.sep.join(self.get_filepath({**demanded_config, "DEBUG": False}, save_basename)))
+        correct_cands = flatten([[join(self.in_dir, dirname(i), j) for j in os.listdir(join(self.in_dir, dirname(i))) if j.startswith(basename(i))] for i in correct_cands])
+        if postfix:
+            correct_cands = [i for i in correct_cands if splitext(i)[0].endswith(postfix)]
+        if len(correct_cands) > 1: # if there are two files that are equal except `self.get_file_config(i).get("DEBUG")`, take the one from `self.ctx.get_config("DEP_PREFERS_NONDEBUG", silent=True)`
+            by_dirnamevars = [(','.join(sorted([k for k, v in self.get_file_config(i).items() if k in [standardize_config_name(i) for i in self.dirname_vars()]])), (i, self.get_file_config(i).get("DEBUG"))) for i in correct_cands]
+            correct_cands = [{i[1][1]: i[1][0] for i in by_dirnamevars if i[0] == k}[not self.ctx.get_config("DEP_PREFERS_NONDEBUG", silent=True)] for k in set(j[0] for j in by_dirnamevars) if len([i[1] for i in by_dirnamevars if i[0] == k]) == 2]
+        elif not correct_cands:
+            possible_file = os.sep.join(self.get_filepath(demanded_config, save_basename))+".json"
+            #command is then `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR filepath)`
+            raise FileNotFoundError(fmt(f"There is no candidate for {save_basename} with the current config. You may need the file *b*{possible_file}*b*"))
+        assert len(correct_cands) == 1, f"Multiple file candidates: {', '.join(i.replace(self.in_dir, '') for i in correct_cands)}"
         return correct_cands[0]
+
+
+        # demanded_confs = self.dirname_vars(cand.count(os.sep))
+        # dirstruct = self.get_subdir({standardize_config_name(i): self.ctx.get_config(i, silent=True) for i in demanded_confs})[0]
+        # if dirname(cand) == dirstruct:
+        #     correct_cands.append((cand, parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]), dirname(cand)).named)) #2nd elem ist der Versuch die configs draus zu parsen
+        # if self.ctx.get_config("DEBUG", silent=True): #if NOW debug=True, you may still load stuff for which debug=False (TODO: settings.DEPENDENCIES_PREFER_NODEBUG)
+        #     if dirname(cand) == self.get_subdir({**{standardize_config_name(i): self.ctx.get_config(i, silent=True) for i in demanded_confs}, "DEBUG": False})[0] and cand not in correct_cands:
+        #         correct_cands.append((cand, parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]), dirname(cand)).named))
+        # if self.ctx.get_config("DEBUG", silent=True):
+        #     if self.ctx.get_config("DEP_PREFERS_NONDEBUG", silent=True):
+        #         correct_cands = [i for i in correct_cands if i[1] != {k: v if standardize_config_name(k) != "DEBUG" else "True" for k, v in correct_cands[-1][1].items()}]
+        #     elif len(set(i[0] for i in correct_cands if {k:v for k,v in i[1].items() if standardize_config_name(k) != "DEBUG"})) > 1:
+        #         correct_cands = [i for i in correct_cands if i[1] != {k: v if standardize_config_name(k) != "DEBUG" else "False" for k, v in correct_cands[-1][1].items()}]
+        # if len(correct_cands) > 1 or strict_checking or True: #if there is still more than 1 candidate, partially load them to extract configs
+        #     for cand in correct_cands:
+        #         with open(join(self.in_dir, cand[0])) as rfile:
+        #             if strict_checking:
+        #                 full_conf = [k for k in ijson.items(rfile, "used_config")][0][0]
+        #             else:
+        #                 full_conf = dict([k for k in ijson.kvitems(rfile, "used_influentials")])
+        #             diff_confs = [k for k, v in full_conf.items() if self.ctx.has_config(k) and self.ctx.get_config(k, silent=True) != v and k not in settings.MAY_DIFFER_IN_DEPENDENCIES]
+        #             if diff_confs:
+        #                 correct_cands = [i for i in correct_cands if i != cand]
+        # correct_cands = list(set(i[0] for i in correct_cands))
+
 
 
     def add_file_metas(self, file): #TODO overhaul 16.01.2022
@@ -335,8 +362,9 @@ class JsonPersister():
                             raise DependencyError(f"Different settings were used in a dependency: {diff_configs - set(settings.MAY_DIFFER_IN_DEPENDENCIES)}")
             for k, v in file.get("used_influentials", {}).items():
                 if k not in settings.MAY_DIFFER_IN_DEPENDENCIES:
-                    if self.ctx.has_config(k):
-                        assert self.ctx.get_config(k, silent=True, silence_defaultwarning=True, default_false=True) == standardize_config_val(k, v)  #check that all current influential settings are consistent with what the file had
+                    if self.ctx.has_config(k): #check that all current influential settings are consistent with what the file had
+                        if self.ctx.get_config(k, silent=True, silence_defaultwarning=True, default_false=True) != standardize_config_val(k, v):
+                            raise DependencyError(f"Different settings were used in a dependency: {k} is {self.ctx.get_config(k)} here and {v} in a dependency!")
                     else:
                         self.ctx.set_config(k, v, "dependency") #ensure that IF we WOULD use this config, it must be equal to what it was in the dependency
                 elif self.ctx.get_config(k, silent=True) != standardize_config_val(k, v):
@@ -386,6 +414,12 @@ class JsonPersister():
             return obj, orig["metainf"]
         return obj
 
+    def get_filepath(self, relevant_confs, filename):
+        subdir, _, shoulduse_infls, _ = self.get_subdir(relevant_confs)
+        if self.incompletedirnames_to_filenames and shoulduse_infls:
+            filename += "_"+("_".join(str(i) for i in shoulduse_infls.values()))
+        return subdir, filename
+
     def save(self, basename, /, force_overwrite=False, ignore_confs=None, metainf=None, overwrite_old=False, **kwargs):
         basename, ext = splitext(basename)
         filename = basename
@@ -399,9 +433,7 @@ class JsonPersister():
         used_influentials = {k: v for k, v in self.ctx.used_influential_confs().items() if k not in ignore_confs} if ignore_confs else self.ctx.used_influential_confs()
         relevant_confs = {**self.loaded_influentials, **used_influentials}
         if ignore_confs: relevant_confs = {k: v for k, v in relevant_confs.items() if k not in ignore_confs}
-        subdir, _, shoulduse_infls, _ = self.get_subdir(relevant_confs)
-        if self.incompletedirnames_to_filenames and shoulduse_infls:
-            filename += "_"+("_".join(str(i) for i in shoulduse_infls.values()))
+        subdir, filename = self.get_filepath(relevant_confs, filename)
         loaded_files = {k: dict(path=v["path"], used_in=makelist(v["used_in"], basename), metadata=v["metadata"]) for k, v in self.loaded_objects.items()}
         # assert all(self.ctx.obj[v] == k for v, k in self.loaded_relevant_params.items()) #TODO overhaul 16.01.2022: add back?!
         os.makedirs(join(self.out_dir, subdir), exist_ok=True)

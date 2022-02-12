@@ -14,6 +14,7 @@ from derive_conceptualspace.util.desc_object import Description, DescriptionList
 from derive_conceptualspace.settings import get_setting
 from derive_conceptualspace.util.text_tools import run_preprocessing_funcs, tf_idf, get_stopwords
 from derive_conceptualspace.util.mpl_tools import show_hist
+import math
 
 logger = logging.getLogger(basename(__file__))
 
@@ -82,8 +83,8 @@ def preprocess_descriptions_full(raw_descriptions, dataset_class, pp_components,
         if get_setting("DEBUG"):
             descriptions = descriptions[:get_setting("DEBUG_N_ITEMS")] #pd.DataFrame([descriptions.iloc[key] for key in random.sample(range(len(descriptions)), k=get_setting("DEBUG_N_ITEMS"))])
         descriptions = create_bare_desclist(languages, translations, for_language, list(descriptions["title"]), list(descriptions["description"]),
-                            [i if str(i) != "nan" else None for i in descriptions["subtitle"]], translate_policy, pp_components=pp_components,
-                            assert_all_translated=False, additionals={i: list(descriptions[i]) for i in dataset_class.additionals} if pp_components.add_additionals else None)
+                            [i if str(i) != "nan" else None for i in descriptions["subtitle"]], translate_policy, pp_components=pp_components, assert_all_translated=False,
+                             additionals={i: [j if not (isinstance(j, float) and math.isnan(j)) else None for j in descriptions[i]] for i in dataset_class.additionals} if pp_components.add_additionals else None)
         if pp_components.use_skcountvec:
             descriptions = pp_descriptions_countvec(descriptions, pp_components, for_language)
         else:
