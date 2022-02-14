@@ -130,7 +130,9 @@ def get_ncpu(ram_per_core=None, ignore_debug=False):
         return 1
     ncpus = get_setting("N_CPUS")
     if os.getenv("NSLOTS"):
-        print("This machine has been given NSLOTS and it is", os.getenv("NSLOTS"))
+        if not os.getenv(f"{ENV_PREFIX}shutups_nslots"):
+            print("This machine has been given NSLOTS and it is", os.getenv("NSLOTS"))
+        os.environ[f"{ENV_PREFIX}shutups_nslots"] = "1"
         ncpus = max(int(os.environ["NSLOTS"]) - 1, 1)
         # "To ensure that your job is scheduled on a host you are advised not to have request more  than $NCPU -1 parallel environments."
     if "GOTO_NUM_THREADS" in os.environ:  # see https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html#threads

@@ -18,7 +18,7 @@ from derive_conceptualspace.settings import get_setting
 from derive_conceptualspace.util.misc_architecture import merge_streams
 from misc_util.logutils import CustomIO
 from misc_util.pretty_print import pretty_print as print
-from derive_conceptualspace.util.mpl_tools import actually_plot
+from derive_conceptualspace.util.mpl_tools import actually_plot, generate_filepath
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 logger = logging.getLogger(basename(__file__))
@@ -55,7 +55,8 @@ def show_data_info(ctx):
         add_txt = "\n  ".join([f"{el}: {ctx.get_config(el)}" for el in newparam.get(key, [])])
         dot.node(key, key + ("\n\n  " + add_txt if add_txt else ""))
     dot.edges([[k, e] for k, v in dependencies.items() for e in v])
-    # print(dot.source) #TODO save to file
+    with open(generate_filepath("dependency_graph", ".dot"), "w") as wfile:
+        wfile.write(dot.source) #`dot -Tpdf dependency_graph_2022-02-14_11-36-45.dot -o dependency_graph_2022-02-14_11-36-45.pdf`
     if ctx.get_config("verbose"):
         dot.render(view=True)
     commits = {k: v.get("metadata", {}).get("obj_info", {}).get("git_hash", {}).get("inner_commit") for k, v in ctx.obj["json_persister"].loaded_objects.items()}

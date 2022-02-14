@@ -15,15 +15,18 @@ def show_fig(fig, title):
     if is_pycharm and not isnotebook():
         fig.show()
     if not isnotebook():
-        title = title.replace(" ", "_")
-        title += "_"+datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        save_path = os.getenv("MA_BASE_DIR") or os.environ["HOME"]
-        save_path = os.path.join(save_path, "saved_plots", datetime.now().strftime("%Y-%m-%d"), title+".png")
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        print(f"Saving figure `{title}` under `{save_path}`")
+        save_path = generate_filepath(title)
         fig.savefig(save_path)
 
 
+def generate_filepath(title, ext=".png"):
+    title = title.replace(" ", "_")
+    title += "_"+datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    save_path = os.getenv("MA_BASE_DIR") or os.environ["HOME"]
+    save_path = os.path.join(save_path, "saved_plots", datetime.now().strftime("%Y-%m-%d"), title+ext)
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    print(f"Saving figure `{title}` under `{save_path}`")
+    return save_path
 
 def show_hist(x, title="", xlabel="Data", ylabel="Count", cutoff_percentile=95, **kwargs): # density=False shows counts
     #see https://stackoverflow.com/a/33203848/5122790

@@ -278,32 +278,6 @@ class JsonPersister():
         return correct_cands[0]
 
 
-        # demanded_confs = self.dirname_vars(cand.count(os.sep))
-        # dirstruct = self.get_subdir({standardize_config_name(i): self.ctx.get_config(i, silent=True) for i in demanded_confs})[0]
-        # if dirname(cand) == dirstruct:
-        #     correct_cands.append((cand, parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]), dirname(cand)).named)) #2nd elem ist der Versuch die configs draus zu parsen
-        # if self.ctx.get_config("DEBUG", silent=True): #if NOW debug=True, you may still load stuff for which debug=False (TODO: settings.DEPENDENCIES_PREFER_NODEBUG)
-        #     if dirname(cand) == self.get_subdir({**{standardize_config_name(i): self.ctx.get_config(i, silent=True) for i in demanded_confs}, "DEBUG": False})[0] and cand not in correct_cands:
-        #         correct_cands.append((cand, parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]), dirname(cand)).named))
-        # if self.ctx.get_config("DEBUG", silent=True):
-        #     if self.ctx.get_config("DEP_PREFERS_NONDEBUG", silent=True):
-        #         correct_cands = [i for i in correct_cands if i[1] != {k: v if standardize_config_name(k) != "DEBUG" else "True" for k, v in correct_cands[-1][1].items()}]
-        #     elif len(set(i[0] for i in correct_cands if {k:v for k,v in i[1].items() if standardize_config_name(k) != "DEBUG"})) > 1:
-        #         correct_cands = [i for i in correct_cands if i[1] != {k: v if standardize_config_name(k) != "DEBUG" else "False" for k, v in correct_cands[-1][1].items()}]
-        # if len(correct_cands) > 1 or strict_checking or True: #if there is still more than 1 candidate, partially load them to extract configs
-        #     for cand in correct_cands:
-        #         with open(join(self.in_dir, cand[0])) as rfile:
-        #             if strict_checking:
-        #                 full_conf = [k for k in ijson.items(rfile, "used_config")][0][0]
-        #             else:
-        #                 full_conf = dict([k for k in ijson.kvitems(rfile, "used_influentials")])
-        #             diff_confs = [k for k, v in full_conf.items() if self.ctx.has_config(k) and self.ctx.get_config(k, silent=True) != v and k not in settings.MAY_DIFFER_IN_DEPENDENCIES]
-        #             if diff_confs:
-        #                 correct_cands = [i for i in correct_cands if i != cand]
-        # correct_cands = list(set(i[0] for i in correct_cands))
-
-
-
     def add_file_metas(self, file): #TODO overhaul 16.01.2022
         for k, v in file.get("loaded_files", {}).items(): #for all files that THAT file loaded
             if k in self.loaded_objects: #if that file is already loaded
@@ -320,28 +294,6 @@ class JsonPersister():
                 self.ctx.set_config(k, v, "dependency") #if a dependency used a value, that's maximum priority (and fail if already used)
         for cnf in file.get("forbidden_config", []):
             self.ctx.forbid_config(cnf)
-
-        # for k, v in file.get("loaded_files", {}).items():
-        #     if k not in self.loaded_objects: self.loaded_objects[k] = v
-        #     elif file["basename"] in v[2]:
-        #         assert {k:v for k,v in self.loaded_objects[k][3].items()} == v[3]
-        #         self.loaded_objects[k][2].extend(v[2])
-        #     elif k in self.loaded_objects:
-        #         self.loaded_objects[k][2].extend(v[2])
-        # for k, v in file.get("relevant_params", {}).items():
-        #     if k in self.loaded_relevant_params: assert self.loaded_relevant_params[k] == v
-        #     else: self.loaded_relevant_params[k] = v
-        # for k, v in file.get("relevant_metainf", {}).items():
-        #     if k in self.loaded_relevant_metainf: assert self.loaded_relevant_metainf[k] == v
-        #     else: self.loaded_relevant_metainf[k] = v
-        #     if self.ctx.obj["strict_metainf_checking"]:
-        #         assert k in complete_metainf, f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}`, but you don't have a value for this!"
-        #         assert complete_metainf[k] in [v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
-        #     else:
-        #         assert complete_metainf.get(k) in [None, v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
-        # obj = tmp["object"] if "object" in tmp else tmp
-        # obj_info = {**tmp.get("obj_info", {}), "relevant_params": tmp.get("relevant_params", {}), "relevant_metainf": tmp.get("relevant_metainf", {})}
-        # assert all(self.used_config[k] == tmp["introduced_config"][k] for k in self.used_config.keys() & tmp.get("introduced_config", {}).keys())
 
 
     def check_file_metas(self, file, required_metainf=None):
@@ -376,18 +328,6 @@ class JsonPersister():
                 elif self.ctx.get_config(k, silent=True) != standardize_config_val(k, v):
                     print(f"The setting {k} was *r*{v}*r* in a dependency and is *b*{self.ctx.get_config(k, silent=True)}*b* here!")
 
-        # for k, v in file.get("relevant_metainf", {}).items():
-        #     if k in self.loaded_relevant_metainf: assert self.loaded_relevant_metainf[k] == v
-        #     else: self.loaded_relevant_metainf[k] = v
-        #     if self.ctx.obj["strict_metainf_checking"]:
-        #         assert k in complete_metainf, f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}`, but you don't have a value for this!"
-        #         assert complete_metainf[k] in [v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
-        #     else:
-        #         assert complete_metainf.get(k) in [None, v, "ANY"], f"The file `{tmp['basename']}` required the relevant-meta-inf `{k}` to be `{v}`, but here it is `{complete_metainf[k]}`!"
-        # obj = tmp["object"] if "object" in tmp else tmp
-        # obj_info = {**tmp.get("obj_info", {}), "relevant_params": tmp.get("relevant_params", {}), "relevant_metainf": tmp.get("relevant_metainf", {})}
-        # assert all(self.used_config[k] == tmp["introduced_config"][k] for k in self.used_config.keys() & tmp.get("introduced_config", {}).keys())
-        #TODO overhaul 16.01.2022: do I need this????
 
     def load(self, filename, save_basename, /, loader=None, silent=False, required_metainf=None, return_metainf=False):
         filename = filename or self.get_file_by_config("", save_basename)

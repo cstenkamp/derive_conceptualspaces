@@ -46,4 +46,6 @@ def create_dissim_mat(descriptions: DescriptionList, quantification_measure, ver
     dissim_mat = squareform(dissim_mat, checks=True) #saves > 50% storage space!
     return quantification, dissim_mat, metainf
 
+    #TODO: When I calculate PPMI here, relative to all documents and all possible terms, ist das relevant/unintended dass
+    # die Grundgesamtheit (alle possible terms) ja anders ist als wenn ich das später nur auf den keyphrases mache? Kann ich das optional gleihcsetzen?
 

@@ -6,7 +6,7 @@
 
 #pp_components:                mfatcsldp
 translate_policy:             onlyorig
-quantification_measure:       ppmi
+quantification_measure:       [ppmi, tfidf]
 dissim_measure:               norm_ang_dist
 embed_algo:                   "mds"
 embed_dimensions:             [3, 50, 100, 200]
@@ -16,7 +16,7 @@ extraction_method:            tfidf
 #TODO this should be part of the dataset-config!
 max_ngram:                    5                   # not explicitly, but it takes adjective phrases so it's something >=3
 
-classifier_compareto_ranking: [count, ppmi]
+classifier_compareto_ranking: [count, ppmi, tfidf]
 classifier_succmetric:        kappa_rank2rank_onlypos_min
 prim_lambda:                  0.5
 sec_lambda:                   0.1

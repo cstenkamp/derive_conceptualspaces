@@ -72,6 +72,7 @@ class CustomContext(ObjectWrapper):
         self.forbidden_configs = []
         self._initialized = False
         self._given_warnings = []
+        self.silent = False
         if hasattr(orig_ctx, "post_init"):
             type(orig_ctx).post_init(self)
 

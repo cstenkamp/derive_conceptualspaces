@@ -209,8 +209,6 @@ def create_dissim_mat(ctx, json_persister):
     with InterruptibleLoad(ctx, "dissim_mat.json", metainf_ignorevarnames=["is_dissim"]) as mgr:
         quant_dtm, dissim_mat, metainf = create_dissim_mat_base(pp_descriptions, ctx.get_config("quantification_measure"), ctx.get_config("verbose"), **mgr.kwargs)
     mgr.save(quant_dtm=quant_dtm, dissim_mat=dissim_mat, metainf=metainf)
-    # quant_dtm, dissim_mat, metainf = create_dissim_mat_base(pp_descriptions, ctx.get_config("quantification_measure"), ctx.get_config("verbose"))
-    # ctx.obj["json_persister"].save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat, metainf=metainf)
 
 
 @create_spaces.command()
