@@ -30,9 +30,6 @@ fi
 ########################## stuff you don't need to care about ##########################
 # set other env-vars
 export WALL_SECS=$(echo $WALLTIME | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }' )
-export PATH="$CONDAPATH:$PATH"
-export RUNNERFILE="$CODEPATH/workflow/sge/run_snakemake.sge"
-export PYTHONPATH="$CODEPATH:$PYTHONPATH"
 export RUN_NR=${RUN_NR:-1}
 echo "This is run nr $RUN_NR"
 
@@ -46,6 +43,10 @@ else
    export MA_ENV_FILE=$MA_CONFIGDIR/$MA_ENV_FILE;
    echo "ENV-FILE: $MA_ENV_FILE"
 fi
+
+export PATH="$CONDAPATH:$PATH"
+export RUNNERFILE="$CODEPATH/workflow/sge/run_snakemake.sge"
+export PYTHONPATH="$CODEPATH:$PYTHONPATH"
 
 # activate env etc (TODO make env-name an arg)
 source $MA_CONDAPATH/bin/activate ${MA_CONDA_ENVNAME:-derive_conceptualspaces}
