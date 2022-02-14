@@ -308,8 +308,8 @@ def generate_conceptualspace(ctx, json_persister):
 def create_candidate_svm(ctx):
     ctx.obj["pp_descriptions"] = ctx.p.load(None, "pp_descriptions", loader=DescriptionList.from_json, silent=True)
     with InterruptibleLoad(ctx, "clusters.json", loader=lambda x:x) as mgr:
-        decision_planes, metrics, metainf = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"), **mgr.kwargs)
-    mgr.save(decision_planes=decision_planes, metrics=metrics, metainf=metainf)
+        quants_s, decision_planes, metrics, metainf = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"), **mgr.kwargs)
+    mgr.save(quants_s=quants_s, decision_planes=decision_planes, metrics=metrics, metainf=metainf)
 
 
 @generate_conceptualspace.command()

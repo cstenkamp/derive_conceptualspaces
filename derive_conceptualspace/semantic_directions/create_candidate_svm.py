@@ -1,5 +1,4 @@
 from itertools import repeat
-from multiprocessing.pool import ThreadPool
 import warnings
 from textwrap import shorten
 import random
@@ -15,9 +14,10 @@ import pandas as pd
 from derive_conceptualspace.settings import get_setting, IS_INTERACTIVE, get_ncpu
 from derive_conceptualspace.util.base_changer import NDPlane, ThreeDPlane
 from derive_conceptualspace.util.dtm_object import DocTermMatrix
-from derive_conceptualspace.util.interruptible_funcs import Interruptible
+from derive_conceptualspace.util.interruptible_funcs import Interruptible, SkipContext
 from derive_conceptualspace.util.threadworker import WorkerPool
 from derive_conceptualspace.util.threedfigure import ThreeDFigure
+from derive_conceptualspace.util.threadpool import ThreadPool
 from misc_util.pretty_print import pretty_print as print
 
 norm = lambda vec: vec/np.linalg.norm(vec)
@@ -59,13 +59,27 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
                 decision_planes[term] = decision_plane
     else:
         print(f"Starting Multiprocessed with {get_ncpu()} CPUs")
-        with WorkerPool(get_ncpu(), dcm, pgbar="Counting Terms") as pool:
-            quants_s = pool.work(list(terms), lambda dcm, term: dcm.term_quants(term))
-        with tqdm(total=len(quants_s), desc="Creating Candidate SVMs") as pgbar, ThreadPool(get_ncpu()) as p:
-            res = p.starmap(create_candidate_svm, zip(repeat(embedding.embedding_), terms, quants_s, repeat(False), repeat(None), repeat(dcm.quant_name), repeat(pgbar)))
-        for cand_mets, decision_plane, term in res:
-            metrics[term] = cand_mets
-            decision_planes[term] = decision_plane
+        # with WorkerPool(get_ncpu(), dcm, pgbar="Counting Terms") as pool:
+        #     quants_s = pool.work(terms, lambda dcm, term: dcm.term_quants(term))  #TODO: the time when this will be interrupted must work also if I do another Interruptible below!
+        with SkipContext() as skipped, Interruptible(terms, [[], None, None], metainf, continue_from=continue_from, contains_mp=True, name="Counting") as iter:
+            with WorkerPool(get_ncpu(), dcm, pgbar="Counting Terms", comqu=iter.comqu) as pool:
+                quants_s, interrupted = pool.work(iter.iterable, lambda dcm, term: dcm.term_quants(term))
+            quants_s, _, _ = iter.notify([quants_s, None, None], exception=interrupted)
+            if interrupted is not False:
+                return quants_s, None, None, metainf #TODO interrupted_at_step oder so zu metainf
+        if skipped.args is not None:
+            quants_s, _, _ = skipped.args
+        assert len(quants_s) == len(terms)
+
+        with Interruptible(zip(terms, quants_s), [None, [], None], metainf, continue_from=continue_from, contains_mp=True, name="SMVs", total=len(quants_s)) as iter:
+            with tqdm(total=iter.n_elems, desc="Creating Candidate SVMs") as pgbar, ThreadPool(get_ncpu(), comqu=iter.comqu) as p:
+                res, interrupted = p.starmap(create_candidate_svm, zip(repeat(embedding.embedding_, iter.n_elems), repeat("next_0"), repeat("next_1"), repeat(False), repeat(None), repeat(dcm.quant_name), repeat(pgbar)), draw_from=iter.iterable)
+            _, res, _ = iter.notify([None, res, None], exception=interrupted)
+            if interrupted is not False:
+                return quants_s, res, None, metainf
+            for cand_mets, decision_plane, term in res:
+                metrics[term] = cand_mets
+                decision_planes[term] = decision_plane
     if (didnt_converge := len([1 for i in metrics.values() if i and not i["did_converge"]])):
         warnings.warn(f"{didnt_converge} of the {len(metrics)} SVMs did not converge!", sklearn.exceptions.ConvergenceWarning)
     if verbose:
@@ -86,7 +100,7 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
                     highlight = []
                 create_candidate_svm(embedding.embedding_, another, dcm.term_quants(another), quant_name=dcm.quant_name, plot_svm=True, descriptions=descriptions, highlight=highlight)
     # clusters, cluster_directions = select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda)
-    return decision_planes, metrics, metainf
+    return quants_s, decision_planes, metrics, metainf
 
 
 class Comparer():

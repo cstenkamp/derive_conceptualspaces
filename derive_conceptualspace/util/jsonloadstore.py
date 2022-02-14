@@ -260,7 +260,7 @@ class JsonPersister():
             raise FileNotFoundError(fmt(f"There is no candidate for {save_basename} with the current config."))
         correct_cands = set()
         for cand in candidates: #from the bad candidates I can even figure out the good ones
-            demanded_config = {k: self.ctx.get_config(k, silent=True, default_false=True, silence_defaultwarning=self.ctx.silent) for k in self.get_file_config(cand).keys()}
+            demanded_config = {k: self.ctx.get_config(k, silent=True, default_false=True, silence_defaultwarning=True) for k in self.get_file_config(cand).keys()}
             correct_cands.add(os.sep.join(self.get_filepath(demanded_config, save_basename))+extension)
             if self.ctx.get_config("DEBUG", silent=True): #if NOW debug=True, you may still load stuff for which debug=False
                 correct_cands.add(os.sep.join(self.get_filepath({**demanded_config, "DEBUG": False}, save_basename))+extension)
