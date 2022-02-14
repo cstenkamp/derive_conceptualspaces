@@ -77,6 +77,8 @@ def npify_rek(di):
                 res[k] = Struct(**npify_rek(v[1]))
             elif isinstance(v, dict):
                 res[k] = npify_rek(v)
+            elif isinstance(v, list) and len(v) > 0 and isinstance(v[0], list) and all(i[0] == "np.ndarray" for i in v):
+                res[k] = [np.array(i[1]) for i in v]
             else: #TODO also lists?
                 res[k] = v
         return res
@@ -250,7 +252,7 @@ class JsonPersister():
 
     def get_file_by_config(self, subdir, save_basename, postfix=None, extension=".json"):
         """If no filename specified, recursively search for files whose name startswith save_basename, and then for any candidates,
-           check if there is a file with their config-keys and the config-values of this instance."""
+           check if there is a file with their config-Fkeys and the config-values of this instance."""
         candidates = [join(path, name)[len(self.in_dir):] for path, subdirs, files in os.walk(join(self.in_dir, subdir)) for name in files if name.startswith(save_basename)]
         if postfix: candidates = [i for i in candidates if splitext(i)[0].endswith(postfix)]
         if extension: candidates = [i for i in candidates if splitext(i)[1] == extension]
@@ -258,12 +260,12 @@ class JsonPersister():
             raise FileNotFoundError(fmt(f"There is no candidate for {save_basename} with the current config."))
         correct_cands = set()
         for cand in candidates: #from the bad candidates I can even figure out the good ones
-            demanded_config = {k: self.ctx.get_config(k, silent=True, default_false=True) for k in self.get_file_config(cand).keys()}
+            demanded_config = {k: self.ctx.get_config(k, silent=True, default_false=True, silence_defaultwarning=self.ctx.silent) for k in self.get_file_config(cand).keys()}
             correct_cands.add(os.sep.join(self.get_filepath(demanded_config, save_basename))+extension)
             if self.ctx.get_config("DEBUG", silent=True): #if NOW debug=True, you may still load stuff for which debug=False
                 correct_cands.add(os.sep.join(self.get_filepath({**demanded_config, "DEBUG": False}, save_basename))+extension)
+        if postfix: correct_cands = [splitext(i)[0] + "_" + postfix + splitext(i)[1] for i in correct_cands]
         correct_cands = flatten([[join(self.in_dir, dirname(i), j) for j in os.listdir(join(self.in_dir, dirname(i))) if j.startswith(basename(i))] for i in correct_cands if isdir(join(self.in_dir, dirname(i)))])
-        if postfix: correct_cands = [i for i in correct_cands if splitext(i)[0].endswith(postfix)]
         if extension: correct_cands = [i for i in correct_cands if splitext(i)[1] == extension]
         if len(correct_cands) > 1: # if there are two files that are equal except `self.get_file_config(i).get("DEBUG")`, take the one from `self.ctx.get_config("DEP_PREFERS_NONDEBUG", silent=True)`
             by_dirnamevars = [(','.join(sorted([k for k, v in self.get_file_config(i).items() if k in [standardize_config_name(i) for i in self.dirname_vars()]])), (i, self.get_file_config(i).get("DEBUG"))) for i in correct_cands]
@@ -503,6 +505,8 @@ class JsonPersister():
                     obj["PREV_RUN_INFO"].update(loaded)
             # elif equalkey == "used_influentials":
             #     assert all(obj[equalkey][k]==loaded[k] for k in obj[equalkey].keys() & loaded.keys())
+            elif equalkey == 'forbidden_configs':
+                assert set(loaded) <= set(obj[equalkey])
             else:
                 assert (not obj[equalkey] and not loaded) or obj[equalkey] == loaded
         return obj

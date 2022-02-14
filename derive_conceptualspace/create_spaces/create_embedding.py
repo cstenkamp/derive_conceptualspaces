@@ -10,6 +10,7 @@ from scipy.spatial.distance import squareform, cdist
 from sklearn.manifold import MDS, TSNE, Isomap
 from tqdm import tqdm
 
+from derive_conceptualspace.util.interruptible_funcs import Interruptible
 from derive_conceptualspace.util.threadworker import WorkerPool
 from derive_conceptualspace.settings import get_setting, get_ncpu
 from misc_util.pretty_print import pretty_print as print
@@ -26,7 +27,7 @@ cos_to_normangdiff = lambda cosine: 2/math.pi*(np.arccos(-cosine+1))
 # https://www.kaggle.com/cpmpml/ultra-fast-distance-matrix-computation/notebook
 # it WOULD be squareform(np.apply_along_axis(cos_to_normangdiff, 0, pdist(arr, metric="cosine"))), but this way we don't have a progressbar
 
-def create_dissimilarity_matrix(arr, dissim_measure):
+def create_dissimilarity_matrix(arr, dissim_measure, metainf=None, **interrupt_kwargs):
     """returns the dissimilarity matrix, needed as input for the MDS. Input is the dataframe
     that contains all ppmi's of all entities (entities are rows, columns are terms, cells are then the
     ppmi(e,t) for all entity-term-combinations. Output is the normalized angular difference between
@@ -37,9 +38,9 @@ def create_dissimilarity_matrix(arr, dissim_measure):
         arr = arr.toarray().T
     assert arr.shape[0] < arr.shape[1], "I cannot believe your Doc-Term-Matrix has less distinct words then documents."
     assert arr.max(axis=1).min() > 0, "If one of the vectors is zero the calculation will fail!"
-    return _create_dissim_mat(arr, dissim_measure)
+    return _create_dissim_mat(arr, dissim_measure, metainf=metainf, **interrupt_kwargs)
 
-def _create_dissim_mat(arr, dissim_measure, force_singlethread=False, n_chunks=200, silent=False):
+def _create_dissim_mat(arr, dissim_measure, force_singlethread=False, n_chunks=200, silent=False, metainf=None, continue_from=None):
     # return squareform(np.apply_along_axis(cos_to_normangdiff, 0, pdist(arr, metric="cosine")))
     # assert np.allclose(np.hstack([cdist(arr, arr[i*10:(i+1)*10], "cosine") for i in range(10)]), squareform(tmp))
     if dissim_measure in ["cosine", "norm_ang_dist"]:
@@ -47,14 +48,18 @@ def _create_dissim_mat(arr, dissim_measure, force_singlethread=False, n_chunks=2
     else:
         dist_func = dissim_measure
     tmp = []
+    metainf = {}
     if not force_singlethread and get_ncpu(ram_per_core=10) > 1: # max. 1 thread per 10GB RAM
         if not silent: print(f"Running with {get_ncpu(ram_per_core=10)} Processes")
         with WorkerPool(get_ncpu(ram_per_core=10), arr, pgbar="Creating dissimilarity matrix" if not silent else None) as pool:
             tmp = pool.work(list(np.array_split(arr, n_chunks)), lambda arr, chunk: cdist(arr, chunk, dist_func))
     else:
-        iterable = np.array_split(arr, n_chunks) if silent else tqdm(np.array_split(arr, n_chunks), desc="Creating dissimilarity matrix")
-        for chunk in iterable:
-            tmp.append(cdist(arr, chunk, dist_func))
+        print("Running interruptible with one process")
+        with Interruptible(np.array_split(arr, n_chunks), tmp, metainf, continue_from=continue_from, pgbar=None if silent else "Creating dissimilarity matrix") as iter:
+            for chunk in iter:  #np.array_split(arr, n_chunks) if silent else tqdm(np.array_split(arr, n_chunks), desc="Creating dissimilarity matrix")
+                tmp.append(cdist(arr, chunk, dist_func))
+        if iter.interrupted:
+            return tmp, metainf
     assert np.allclose(np.hstack(tmp), np.hstack(tmp).T), "The matrix must be symmetric!"
     res = np.hstack(tmp)
     if dissim_measure == "norm_ang_dist":
@@ -62,7 +67,7 @@ def _create_dissim_mat(arr, dissim_measure, force_singlethread=False, n_chunks=2
         res = squareform(np.apply_along_axis(cos_to_normangdiff, 0, flat))
     assert np.allclose(np.diagonal(res), 0, atol=1e-10) or np.allclose(np.diagonal(res), 1, atol=1e-10), "Diagonal must be 1 or 0!"
     assert np.allclose(res, res.T), "The matrix must be symmetric!"
-    return res
+    return res, metainf
 
 
 def create_embedding(dissim_mat, embed_dimensions, embed_algo, verbose=False, pp_descriptions=None):
