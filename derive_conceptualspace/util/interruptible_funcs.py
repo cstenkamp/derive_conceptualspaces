@@ -188,7 +188,8 @@ class Interruptible():
             self.after_interrupt(kb=True)
             return True
         if not self.interrupted:
-            self.old_metainf["INTERRUPTED_AT"] = 0
+            if self.old_metainf is not None and self.old_metainf.get("INTERRUPTED_AT"):
+                self.old_metainf["INTERRUPTED_AT"] = 0
 
     def notify(self, results, exception):
         self.n = self.append_olds(results, with_assert=False)

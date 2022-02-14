@@ -66,7 +66,7 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
                 quants_s, interrupted = pool.work(iter.iterable, lambda dcm, term: dcm.term_quants(term))
             quants_s, _, _ = iter.notify([quants_s, None, None], exception=interrupted)
             if interrupted is not False:
-                return quants_s, None, None, metainf #TODO interrupted_at_step oder so zu metainf
+                return quants_s, None, None, metainf
         if skipped.args is not None:
             quants_s, _, _ = skipped.args
         assert len(quants_s) == len(terms)
