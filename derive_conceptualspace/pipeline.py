@@ -200,6 +200,8 @@ class CustomContext(ObjectWrapper):
             if silent:
                 return final_conf[0]
             self.used_configs[key] = final_conf[0]
+        if key == "MAX_NGRAM" and self.used_configs[key] not in ["None", None]:
+            raise Exception("ALÖKFÖSDLKFJÖLSDKJFÖLKSDJFÖLKJSD")
         return self.used_configs[key]
 
     def read_configfile(self):

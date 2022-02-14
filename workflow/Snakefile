@@ -175,6 +175,8 @@ rule preprocess_descriptions:
     output:
         generated_paths["pp_descriptions"]
     threads: 1
+    resources:
+        mem_mb = 2048
     run:
         autoload_context_inputs(ctx, {"raw_descriptions": input["raw_descriptions"]}, wildcards)
         languages, translations = load_lang_translate_files(ctx, ctx.p, ctx.get_config("pp_components"))
@@ -313,13 +315,14 @@ rule create_candidate_svm:
 def rule_by_name(name): # must be after all other rules!
     all_rules = {k: v for k, v in rules.__dict__.items() if k not in NONDEFAULT_RULES}
     return all_rules.get(name)
+    #we may call with `--allowed-rules " ".join(k for k in rules.__dict__ if k not in NONDEFAULT_RULES)` (there's also `--omit-from`)
 
-
-def expand_output(output, expand_all=False, overwriter_di=None):
+def expand_output(output, expand_all=False, overwriter_di=None, caller=None):
     if not (any(i in sys.argv for i in NONDEFAULT_RULES) or os.getenv(f"{ENV_PREFIX}_SMK_NONDEFAULTRULE")):
         return ["Not_An_Input"] #otherwise other rules want to checkout the rules with this
-    load_conffile = (not expand_all and overwriter_di is None and settings.SMK_DEFAULT_CONFIG) #the first two given for rule default
-    ctx.init_context(load_envfile=True, load_conffile=load_conffile)  #after this point, new env-vars are not considered
+    #so normally, if caller=="default" and settings.SMK_DEFAULT_CONFIG, we want load_conffile=True, HOWEVER in cluster-settings it may be caller=="default" even though it really shouldn't.
+    if os.getenv(f"{ENV_PREFIX}_SMK_NONDEFAULTRULE", caller) != caller: caller = os.getenv(f"{ENV_PREFIX}_SMK_NONDEFAULTRULE")
+    ctx.init_context(load_envfile=True, load_conffile=(caller=="default" and settings.SMK_DEFAULT_CONFIG))  #after this point, new env-vars are not considered
     set_val = bkp = (lambda name: settings.__dict__.get("ALL_"+standardize_config_name(name), ctx.get_config(standardize_config_name(name), silent=True))) \
                     if expand_all else (lambda name: ctx.get_config(standardize_config_name(name), silent=True))
     if overwriter_di:
@@ -356,7 +359,7 @@ rule all_for:
 
 rule default:
     input:
-        expand_output(rule_by_name(LAST_RULE).output)
+        expand_output(rule_by_name(LAST_RULE).output, caller="default")
     run:
         notify_done()
 
@@ -369,8 +372,9 @@ def set_envvars_generate_input_from_config(cnf):
     be equal for all combinations."""
     if os.getenv(f"{ENV_PREFIX}_SMK_NONDEFAULTRULE") != "by_config":
         return ["Not_An_Input"]
-    if config.get("__perdataset__",{}).get(ctx.get_config("dataset"),{}):
-        config.update(config.get("__perdataset__",{}).get(ctx.get_config("dataset"),{}))
+    if config.get("__perdataset__"):
+        if config["__perdataset__"].get(ctx.get_config("dataset"),{}):
+            config.update(config.get("__perdataset__",{}).get(ctx.get_config("dataset"),{}))
         del config["__perdataset__"]
     lkeys, lvals = zip(*[(k,v) for k,v in cnf.items() if isinstance(v, list)])
     othervals = {k: v for k,v in cnf.items() if k not in lkeys}

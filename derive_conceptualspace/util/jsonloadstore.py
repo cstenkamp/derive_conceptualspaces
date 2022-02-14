@@ -8,7 +8,7 @@ import sys
 import warnings
 from collections import ChainMap
 from datetime import datetime, timedelta
-from os.path import isfile, splitext, dirname, join, basename
+from os.path import isfile, splitext, dirname, join, basename, isdir
 
 import ijson
 import numpy as np
@@ -210,6 +210,10 @@ class JsonPersister():
         # self.forward_meta_inf = forward_meta_inf
         # self.loaded_relevant_metainf = {}
 
+    #TODO: function to create the exact how-to-create-certain-file-or-dependency
+    # " ".join(f"{settings.ENV_PREFIX}_{k}={v}" for k, v in file.get("loaded_files", {})["candidate_terms"]["metadata"]["used_influentials"].items())
+    # Das kann man sich dann in show_data_info erzeugen lassen!
+
     @property
     def loaded_influentials(self):
         loadeds = [i.get("metadata", {}).get("used_influentials", {}) for i in self.loaded_objects.values()]
@@ -244,28 +248,28 @@ class JsonPersister():
 
 
 
-    def get_file_by_config(self, subdir, save_basename, postfix=None):
+    def get_file_by_config(self, subdir, save_basename, postfix=None, extension=".json"):
         """If no filename specified, recursively search for files whose name startswith save_basename, and then for any candidates,
            check if there is a file with their config-keys and the config-values of this instance."""
         candidates = [join(path, name)[len(self.in_dir):] for path, subdirs, files in os.walk(join(self.in_dir, subdir)) for name in files if name.startswith(save_basename)]
-        if postfix:
-            candidates = [i for i in candidates if splitext(i)[0].endswith(postfix)]
+        if postfix: candidates = [i for i in candidates if splitext(i)[0].endswith(postfix)]
+        if extension: candidates = [i for i in candidates if splitext(i)[1] == extension]
         if not candidates: #TODO try best to get the required conf to tell in the exception
             raise FileNotFoundError(fmt(f"There is no candidate for {save_basename} with the current config."))
         correct_cands = set()
         for cand in candidates: #from the bad candidates I can even figure out the good ones
             demanded_config = {k: self.ctx.get_config(k, silent=True, default_false=True) for k in self.get_file_config(cand).keys()}
-            correct_cands.add(os.sep.join(self.get_filepath(demanded_config, save_basename)))
+            correct_cands.add(os.sep.join(self.get_filepath(demanded_config, save_basename))+extension)
             if self.ctx.get_config("DEBUG", silent=True): #if NOW debug=True, you may still load stuff for which debug=False
-                correct_cands.add(os.sep.join(self.get_filepath({**demanded_config, "DEBUG": False}, save_basename)))
-        correct_cands = flatten([[join(self.in_dir, dirname(i), j) for j in os.listdir(join(self.in_dir, dirname(i))) if j.startswith(basename(i))] for i in correct_cands])
-        if postfix:
-            correct_cands = [i for i in correct_cands if splitext(i)[0].endswith(postfix)]
+                correct_cands.add(os.sep.join(self.get_filepath({**demanded_config, "DEBUG": False}, save_basename))+extension)
+        correct_cands = flatten([[join(self.in_dir, dirname(i), j) for j in os.listdir(join(self.in_dir, dirname(i))) if j.startswith(basename(i))] for i in correct_cands if isdir(join(self.in_dir, dirname(i)))])
+        if postfix: correct_cands = [i for i in correct_cands if splitext(i)[0].endswith(postfix)]
+        if extension: correct_cands = [i for i in correct_cands if splitext(i)[1] == extension]
         if len(correct_cands) > 1: # if there are two files that are equal except `self.get_file_config(i).get("DEBUG")`, take the one from `self.ctx.get_config("DEP_PREFERS_NONDEBUG", silent=True)`
             by_dirnamevars = [(','.join(sorted([k for k, v in self.get_file_config(i).items() if k in [standardize_config_name(i) for i in self.dirname_vars()]])), (i, self.get_file_config(i).get("DEBUG"))) for i in correct_cands]
             correct_cands = [{i[1][1]: i[1][0] for i in by_dirnamevars if i[0] == k}[not self.ctx.get_config("DEP_PREFERS_NONDEBUG", silent=True)] for k in set(j[0] for j in by_dirnamevars) if len([i[1] for i in by_dirnamevars if i[0] == k]) == 2]
         elif not correct_cands:
-            possible_file = os.sep.join(self.get_filepath(demanded_config, save_basename))+".json"
+            possible_file = os.sep.join(self.get_filepath(demanded_config, save_basename))+extension
             #command is then `(export $(cat $MA_SELECT_ENV_FILE | xargs) && PYTHONPATH=$(realpath .):$PYTHONPATH snakemake --cores 1 -p --directory $MA_DATA_DIR filepath)`
             raise FileNotFoundError(fmt(f"There is no candidate for {save_basename} with the current config. You may need the file *b*{possible_file}*b*"))
         assert len(correct_cands) == 1, f"Multiple file candidates: {', '.join(i.replace(self.in_dir, '') for i in correct_cands)}"

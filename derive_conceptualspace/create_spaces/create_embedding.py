@@ -106,7 +106,7 @@ def create_mds(dissim_mat, embed_dimensions, metric=True, init_from_isomap=True)
         embedding = MDS(n_components=embed_dimensions, dissimilarity="precomputed", metric=metric,
                         n_jobs=get_ncpu(ignore_debug=True), verbose=1 if get_setting("VERBOSE") else 0, n_init=1, max_iter=max_iter)
         try:
-            isomap_init = create_isomap(dissim_mat, embed_dimensions, neighbor_factor=10).embedding_
+            isomap_init = create_isomap(dissim_mat, embed_dimensions, neighbor_factor=25).embedding_
         except ValueError: #There are significant negative eigenvalues...
             isomap_init = np.random.random((len(dissim_mat), embed_dimensions))*0.01
         mds = embedding.fit(dissim_mat, init=isomap_init)
