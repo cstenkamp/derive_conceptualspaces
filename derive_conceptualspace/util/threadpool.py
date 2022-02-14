@@ -40,8 +40,11 @@ class ThreadPool:
     KeyboardInterrupt can be caught and the pool can be continued.
     '''
     def __init__(self, n_procs=None, comqu=None):
-        signal.signal(signal.SIGINT, self.interrupt_event)
-        signal.signal(signal.SIGTERM, self.interrupt_event)
+        try:
+            signal.signal(signal.SIGINT, self.interrupt_event)
+            signal.signal(signal.SIGTERM, self.interrupt_event)
+        except:
+            print("I won't be able to handle Keyboard-Interrupt as we are not in the main-thread of the main-interpreter!")
         self.comqu = comqu
         self.tasks = queue.Queue()
         self.threads = []
