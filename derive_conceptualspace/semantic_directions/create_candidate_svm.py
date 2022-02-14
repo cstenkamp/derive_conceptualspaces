@@ -77,9 +77,11 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
             _, res, _ = iter.notify([None, res, None], exception=interrupted)
             if interrupted is not False:
                 return quants_s, res, None, metainf
-            for cand_mets, decision_plane, term in res:
-                metrics[term] = cand_mets
-                decision_planes[term] = decision_plane
+
+        assert set(terms) == set(metrics.keys())
+        for cand_mets, decision_plane, term in res:
+            metrics[term] = cand_mets
+            decision_planes[term] = decision_plane
     if (didnt_converge := len([1 for i in metrics.values() if i and not i["did_converge"]])):
         warnings.warn(f"{didnt_converge} of the {len(metrics)} SVMs did not converge!", sklearn.exceptions.ConvergenceWarning)
     if verbose:

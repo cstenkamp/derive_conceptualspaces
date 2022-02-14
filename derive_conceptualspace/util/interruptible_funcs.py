@@ -112,9 +112,12 @@ class Interruptible():
             self.old_metainf = None
         self.n_elems = len(self.iterable) if hasattr(self.iterable, "__len__") else (self.total - self.old_metainf.get('INTERRUPTED_AT', 0) if self.old_metainf else self.total)
         if self.contains_mp:
-            self.comqu = Queue()
-            self.interrupt_thread = Thread(target=self._interrupt_mainthread, daemon=True)
-            self.interrupt_thread.start()
+            if self.interrupt_time is None:
+                self.comqu = None
+            else:
+                self.comqu = Queue()
+                self.interrupt_thread = Thread(target=self._interrupt_mainthread, daemon=True)
+                self.interrupt_thread.start()
         return self
 
     def _interrupt_mainthread(self):
