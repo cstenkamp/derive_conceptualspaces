@@ -30,7 +30,8 @@ fi
 ########################## stuff you don't need to care about ##########################
 # set other env-vars
 export WALL_SECS=$(echo $WALLTIME | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }' )
-export RUN_NR=${RUN_NR:-1}
+export RUN_NR=${RUN_NR:-0}
+export RUN_NR=$((RUN_NR+1))
 echo "This is run nr $RUN_NR"
 
 # get the actual env-file and whatever else is in the MA_SELECT_ENV_FILE
@@ -53,11 +54,17 @@ source $MA_CONDAPATH/bin/activate ${MA_CONDA_ENVNAME:-derive_conceptualspaces}
 cd $MA_CODEPATH
 
 echo "Snakemake-Args: $SNAKEMAKE_ARGS"
-sleep 5 # give any previous instance time to die
+echo "Will kill in $WALL_SECS" seconds.
+
+while [[ "$(qstat | grep -o smk_runner | wc -l)" -ge 2 ]]; do
+    sleep 5;
+    echo "There is another instance still active, giving it time to die..."
+done
 
 ###################### actual runner stuff ######################
 snakemake --directory $MA_BASE_DIR $SNAKEMAKE_ARGS --unlock
-timeout -k 30 $(( $WALL_SECS-60 )) snakemake --directory $MA_BASE_DIR -p $SNAKEMAKE_ARGS --profile $MA_GRIDCONF
+timeout -k 30 $(( $WALL_SECS-90 )) snakemake --directory $MA_BASE_DIR -p $SNAKEMAKE_ARGS --profile $MA_GRIDCONF
+# `timeout -k x y` means `send shutdown after y seconds, and x seconds after that send SIGKILL`. The SIGKILL must be > config.latency-wait !!
 
 ###################### closing stuff ######################
 # restarting if not finished
@@ -66,10 +73,11 @@ echo "Main process ended. Return-value is $retval"
 if [ $retval -eq 124 ] || [ $retval -eq 137 ] ; then # if the timeout killed the program
   if (( $RUN_NR < 5 )); then # TODO calculate this from the walltime maybe?
     echo "COMMAND TO RUN: qsub -V -l h_rt=$WALLTIME -v WALLTIME=$WALLTIME -v SNAKEMAKE_ARGS=$SNAKEMAKE_ARGS -v MA_SELECT_ENV_FILE=$MA_SELECT_ENV_FILE
-    -v MA_BASE_DIR=$MA_BASE_DIR -v MA_CODEPATH=$MA_CODEPATH -v MA_CONDAPATH=$MA_CONDAPATH -v RUN_NR=$((RUN_NR+1)) -v MA_CUSTOM_ACCTFILE=$MA_CUSTOM_ACCTFILE
+    -v MA_BASE_DIR=$MA_BASE_DIR -v MA_CODEPATH=$MA_CODEPATH -v MA_CONDAPATH=$MA_CONDAPATH -v RUN_NR=$RUN_NR -v MA_CUSTOM_ACCTFILE=$MA_CUSTOM_ACCTFILE
     -v MA_CONFIGDIR=$MA_CONFIGDIR $MA_CODEPATH/workflow/sge/run_snakemake.sge"
+
     qsub -V -l h_rt=$WALLTIME -v WALLTIME=$WALLTIME -v SNAKEMAKE_ARGS="$SNAKEMAKE_ARGS" -v MA_SELECT_ENV_FILE="$MA_SELECT_ENV_FILE" \
-    -v MA_BASE_DIR="$MA_BASE_DIR" -v MA_CODEPATH="$MA_CODEPATH" -v MA_CONDAPATH="$MA_CONDAPATH" -v RUN_NR=$((RUN_NR+1)) \
+    -v MA_BASE_DIR="$MA_BASE_DIR" -v MA_CODEPATH="$MA_CODEPATH" -v MA_CONDAPATH="$MA_CONDAPATH" -v RUN_NR=$RUN_NR \
     -v MA_CUSTOM_ACCTFILE="$MA_CUSTOM_ACCTFILE" -v MA_CONFIGDIR="$MA_CONFIGDIR" \
     $MA_CODEPATH/workflow/sge/run_snakemake.sge
     sleep 2

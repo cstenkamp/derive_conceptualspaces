@@ -258,8 +258,12 @@ def submit_job(jobscript, qsub_settings):
     #replacement for the accounting-file
     if "MA_CUSTOM_ACCTFILE" in os.environ:
         if os.path.isfile(os.environ["MA_CUSTOM_ACCTFILE"]):
-            with open(os.environ["MA_CUSTOM_ACCTFILE"], "r") as rfile:
-                custom_acct = yaml.load(rfile, Loader=yaml.SafeLoader)
+            for _ in range(5):
+                with open(os.environ["MA_CUSTOM_ACCTFILE"], "r") as rfile:
+                    custom_acct = yaml.load(rfile, Loader=yaml.SafeLoader)
+                if custom_acct is not None:
+                    break
+                time.sleep(2)
         else:
             custom_acct = {}
         custom_acct[jobid] = {"envvars": {i.split("=")[0][len("SGE_SMK_"):]:i.split("=")[1] for i in options_as_envvars if i != "-v"},

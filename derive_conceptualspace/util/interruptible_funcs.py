@@ -38,7 +38,7 @@ class InterruptibleLoad():
         basename, ext = splitext(self.name_with_ending)
         self.loader = self.loader or (lambda **kw: kw[basename])
         try:
-            tmp = self.ctx.p.get_file_by_config("", basename, postfix="INTERRUPTED")
+            tmp = self.ctx.p.get_file_by_config("", basename, postfix="INTERRUPTED", check_other_debug=False)
             tmp2, self.old_metainf = self.ctx.p.load(tmp, f"{basename}_CONTINUE", silent=True, required_metainf=["INTERRUPTED_AT"], return_metainf=True, loader=self.loader)
             if "NEWLY_INTERRUPTED" in self.old_metainf:
                 del self.old_metainf["NEWLY_INTERRUPTED"]
@@ -185,7 +185,7 @@ class Interruptible():
             raise InterruptedError()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.comqu is not None:
+        if hasattr(self, "comqu") and self.comqu is not None:
             self.comqu.put("kill")
             if hasattr(self, "interrupt_thread"):
                 self.interrupt_thread.join()

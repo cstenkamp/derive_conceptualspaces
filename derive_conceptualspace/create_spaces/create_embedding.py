@@ -142,7 +142,7 @@ def show_close_descriptions(dissim_mat, descriptions, is_embedding=False, num=10
     # print(f"Closest Nonequal Descriptions: \n", "\n".join(["*b*"+("*b* & *b*".join([descriptions._descriptions[i].title for i in j]))+"*b*" for j in closest_entries]))
     print(f"Closest {num} Descriptions in {title}:")
     if is_embedding:
-        dissim_mat = _create_dissim_mat(dissim_mat, get_setting("DISSIM_MEASURE"), force_singlethread=len(dissim_mat)<500, silent=len(dissim_mat)<500)
+        dissim_mat = _create_dissim_mat(dissim_mat, get_setting("DISSIM_MEASURE"), force_singlethread=len(dissim_mat)<500, silent=len(dissim_mat)<500)[0]
     is_dissim = np.allclose(np.diagonal(dissim_mat), 0, atol=1e-10)
     assert is_dissim, "TODO now it's a similarity matrix"
     min_vals = sorted(squareform(dissim_mat))[:num]

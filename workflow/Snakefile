@@ -340,7 +340,8 @@ def input_all_for(wildcards, rule_name=None):
             print_multicol(inputs)
         return inputs
 
-def notify_done():
+def notify_done(inpt):
+    print(f"Created all of these: {inpt}")
     if int(os.getenv(f"{ENV_PREFIX}_SNAKEMAKE_TELEGRAM", "0")):
         if "TELEGRAM_MY_CHAT_ID" in os.environ and "TELEGRAM_BOT_TOKEN" in os.environ:
             send_message(f"Snakemake on {socket.gethostname()} finished.", os.environ["TELEGRAM_MY_CHAT_ID"])
@@ -349,20 +350,20 @@ rule all:
     input:
         partial(input_all_for, rule_name=LAST_RULE)
     run:
-        notify_done()
+        notify_done(input)
 
 
 rule all_for:
     input:
         input_all_for
     run:
-        notify_done()
+        notify_done(input)
 
 rule default:
     input:
         expand_output(rule_by_name(LAST_RULE).output, caller="default")
     run:
-        notify_done()
+        notify_done(input)
 
 
 def set_envvars_generate_input_from_config(cnf):
@@ -396,4 +397,4 @@ rule by_config:
     input:
         set_envvars_generate_input_from_config(config)
     run:
-        notify_done()
+        notify_done(input)
