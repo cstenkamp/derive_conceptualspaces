@@ -5,6 +5,7 @@ import random
 from datetime import datetime
 from os.path import join, dirname, abspath, isfile
 import inspect
+from socket import gethostname
 
 import click
 import numpy as np
@@ -52,8 +53,8 @@ def apply_dotenv_vars():
 def load_envfiles(for_dataset=None):
     # if for_dataset is not None it will set both the env-file and the dataset-variable from it
     # TODO the dataset may be siddata2022 for env-file siddata !
-    assert isfile(os.environ["MA_SELECT_ENV_FILE"])
-    load_dotenv(os.environ["MA_SELECT_ENV_FILE"])
+    if isfile(os.getenv("MA_SELECT_ENV_FILE", "")):
+        load_dotenv(os.environ["MA_SELECT_ENV_FILE"])
     if for_dataset is not None:
         os.environ["MA_ENV_FILE"] = f"{for_dataset}.env"
     apply_dotenv_vars()
@@ -176,6 +177,8 @@ class CustomContext(ObjectWrapper):
         params = dict(sorted(params.items(), key=lambda x:x[0]))
         default_params = {k[len("DEFAULT_"):]:v for k,v in settings.__dict__.items() if k in ["DEFAULT_"+i for i in params.keys()]}
         print(f"Running with the following settings [{self.settingshash}]: ", ", ".join([f"{k}: *{'b' if v==default_params.get(k) else 'r'}*{v}*{'b' if v==default_params.get(k) else 'r'}*" for k, v in params.items()]))
+        if gethostname() != settings.STANDARD_HOSTNAME:
+            print(f"Running on {gethostname()}")
 
     @property
     def settingshash(self):
@@ -201,8 +204,6 @@ class CustomContext(ObjectWrapper):
             if silent:
                 return final_conf[0]
             self.used_configs[key] = final_conf[0]
-        if key == "MAX_NGRAM" and self.used_configs[key] not in ["None", None]:
-            raise Exception("ALÖKFÖSDLKFJÖLSDKJFÖLKSDJFÖLKJSD")
         return self.used_configs[key]
 
     def read_configfile(self):

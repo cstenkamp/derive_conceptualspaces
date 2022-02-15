@@ -97,3 +97,17 @@ def check_levenshtein(course, rel_tolerance=0.003):
 
 def check_doubledot(course):  # there are SO MANY courses where the only difference in the descriptions are stupid ".." instead of "." at sentence end
     return [desc.strip().replace("...", "<TRIPLEDOT>").replace("..", ".").replace("<TRIPLEDOT>", "...") for desc in course]
+
+
+if __name__ == "__main__":
+    from os.path import join
+    import os
+    from derive_conceptualspace.pipeline import CustomContext, SnakeContext, load_envfiles
+    from derive_conceptualspace.settings import DEFAULT_BASE_DIR
+    from derive_conceptualspace.create_spaces.preprocess_descriptions import PPComponents
+
+    load_envfiles("placetypes")
+    ctx = SnakeContext.loader_context(silent=True)
+    obj = pd.read_csv(join(ctx.get_config("BASE_DIR"), "siddata2022", "raw_descriptions.csv"))
+    df = Dataset.preprocess_raw_file(obj, pp_components=PPComponents.from_str("mfacsd2"), min_ges_nwords=10)
+    print()

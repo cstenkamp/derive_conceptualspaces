@@ -434,7 +434,7 @@ class JsonPersister():
                     with open(filepath, "r") as rfile:
                         loaded = json.load(rfile).get(equalkey, {}) #TODO having to do this sucks.
             if equalkey == "loaded_files":
-                assert all(tuple((k2, v2) for k2, v2 in obj[equalkey][k].items() if k2 != "metadata") == tuple((k2, v2) for k2, v2 in loaded[k].items() if k2 != "metadata") for k in obj[equalkey].keys())
+                assert all(tuple((k2, v2) for k2, v2 in obj[equalkey][k].items() if k2 not in ["metadata", "path"]) == tuple((k2, v2) for k2, v2 in loaded[k].items() if k2 not in ["metadata", "path"]) for k in obj[equalkey].keys())
             elif equalkey == "used_config":
                 assert all(loaded[0][k]==obj[equalkey][0][k] or tuple(loaded[0][k])==tuple(obj[equalkey][0][k]) for k in (loaded[0].keys()|set(obj[equalkey][0].keys()))-set(settings.NON_INFLUENTIAL_CONFIGS))
             elif equalkey in ["obj_info", "created_plots", "runtime"]:

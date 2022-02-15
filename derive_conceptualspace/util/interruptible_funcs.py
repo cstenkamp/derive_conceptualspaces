@@ -70,7 +70,8 @@ class InterruptibleLoad():
 ########################################################################################################################
 
 class Interruptible():
-    def __init__(self, iterable, append_var, metainf_var, shutdown_time=70, timeavg_samples=10, continue_from=None, pgbar=None, total=None, exc=False, contains_mp=False, name=None):
+    def __init__(self, iterable, append_var, metainf_var, shutdown_time=120, timeavg_samples=10, continue_from=None, pgbar=None, total=None, exc=False, contains_mp=False, name=None):
+
         #pgbar is either None or a string. If it's not None, we will wrap in tqdm and use the var-value as desc
         self.iterable = iterable
         self.append_var = append_var
@@ -121,7 +122,7 @@ class Interruptible():
         return self
 
     def _interrupt_mainthread(self):
-        while datetime.now() < self.interrupt_time:
+        while datetime.now() < self.interrupt_time and self.comqu.empty():
             sleep(1)
         self.comqu.put("kill")
 
@@ -184,12 +185,17 @@ class Interruptible():
             raise InterruptedError()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.comqu is not None:
+            self.comqu.put("kill")
+            if hasattr(self, "interrupt_thread"):
+                self.interrupt_thread.join()
         if exc_type and issubclass(exc_type, KeyboardInterrupt):
             self.after_interrupt(kb=True)
-            return True
         if not self.interrupted:
             if self.old_metainf is not None and self.old_metainf.get("INTERRUPTED_AT"):
                 self.old_metainf["INTERRUPTED_AT"] = 0
+        if exc_type and issubclass(exc_type, KeyboardInterrupt):
+            return True
 
     def notify(self, results, exception):
         self.n = self.append_olds(results, with_assert=False)

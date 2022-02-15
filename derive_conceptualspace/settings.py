@@ -82,6 +82,7 @@ def set_noninfluentials():
 NON_INFLUENTIAL_CONFIGS = ["CONF_FILE", "GOOGLE_CREDENTIALS_FILE", "VERBOSE", "STARTUP_ENVVARS", "IS_INTERACTIVE", "ENV_PREFIX", "DEFAULT_SEED_ONLY_IN_DEBUG", "N_CPUS"]
 with set_noninfluentials(): #this context-manager adds all settings from here to the NON_INFLUENTIAL_CONFIGS variable
 
+    STANDARD_HOSTNAME = 'chris-ThinkPad-E480'
     DEFAULT_BASE_DIR = abspath(join(dirname(__file__), "..", "..", ENV_PREFIX+"_data"))
     DEFAULT_NOTIFY_TELEGRAM = False
 
