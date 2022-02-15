@@ -69,12 +69,9 @@ for i in range(STATUS_ATTEMPTS):
         else: # `qacct` doesn't work on the IKW-grid. I asked Marc, he said "Es wird kein accounting file auf den Knoten geschrieben. Nur auf dem Master und darauf hast du keinen Zugriff"
             job_status = "success"
             if os.path.isfile(os.environ["MA_CUSTOM_ACCTFILE"]):
-                for _ in range(5):
-                    with open(os.environ["MA_CUSTOM_ACCTFILE"], "r") as rfile:
-                        custom_acct = yaml.load(rfile, Loader=yaml.SafeLoader)
-                    if custom_acct is not None:
-                        break
-                    time.sleep(2)
+                with open(os.environ["MA_CUSTOM_ACCTFILE"], "r") as rfile:
+                    custom_acct = yaml.load(rfile, Loader=yaml.SafeLoader)
+                custom_acct = custom_acct if custom_acct is not None else {}
                 if str(jobid) not in custom_acct:
                     job_info = "failed"
                     break

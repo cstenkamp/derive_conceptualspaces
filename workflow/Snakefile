@@ -301,7 +301,7 @@ rule create_candidate_svm:
     threads: 4
     resources:
         mem_mb=16*1024,
-        h_rt="01:29:30", #TODO actually its longer!!
+        #h_rt="05:59:30",
         pe="4-16"
     run:
         autoload_context_inputs(ctx, input, wildcards, silents=["pp_descriptions"])

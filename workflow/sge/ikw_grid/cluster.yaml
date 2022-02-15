@@ -14,7 +14,7 @@ __default__:
   output: logs/sge/snakejob.{rulename}.{jobid}.log
   error: logs/sge/snakejob.{rulename}.{jobid}.log
   mem: 7 #the ikw grid requires the `-l mem` argument (and this cookiecutter requires it to be the GB-amount as int)
-  h_rt: "00:02:30"
+  h_rt: "00:30:30"
   queue: all.q #there is no ai.q because there are no machines for that, so I can only submit to all.q and training.q - training.q has less NSLOTS so waiting to be enqueued to all.q is advantagous.
 
 nonrequestables:

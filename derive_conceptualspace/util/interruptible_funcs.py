@@ -170,10 +170,10 @@ class Interruptible():
         if kb:
             self.metainf_var["KEYBORD_INTERRUPTED"] = True
         if self.continue_from is not None:
-            print(f"Interrupted at iteration {self.n}/{self.n_elems} ({self.old_metainf['INTERRUPTED_AT']+self.n}/{self.full_len})"+("" if kb else " because we will hit the wall-time!"))
+            print(f"Interrupted at iteration {self.n}/{self.n_elems} ({self.old_metainf['INTERRUPTED_AT']+self.n}/{self.full_len})"+("" if kb else " because we will hit the wall-time!")+" at "+datetime.now().strftime('%d.%m.%Y, %H:%M:%S'))
             self.metainf_var["INTERRUPTED_AT"] = self.n+self.old_metainf["INTERRUPTED_AT"]
         else:
-            print(f"Interrupted at iteration {self.n}/{self.n_elems}"+("" if kb else " because we will hit the wall-time!"))
+            print(f"Interrupted at iteration {self.n}/{self.n_elems}"+("" if kb else " because we will hit the wall-time!")+" at "+datetime.now().strftime('%d.%m.%Y, %H:%M:%S'))
             self.metainf_var["INTERRUPTED_AT"] = self.n
         if self.name is not None:
             self.metainf_var["INTERRUPTED_IN"] = self.name

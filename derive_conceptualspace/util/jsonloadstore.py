@@ -9,6 +9,7 @@ import warnings
 from collections import ChainMap
 from datetime import datetime, timedelta
 from os.path import isfile, splitext, dirname, join, basename, isdir
+import shutil
 
 import ijson
 import numpy as np
@@ -400,10 +401,19 @@ class JsonPersister():
                 oldname = filename + "_INTERRUPTED"
                 metainf["NOW_FINISHED"] = True
             obj = self.check_add_interrupted_overwrite_metas(obj, join(self.out_dir, subdir, oldname + ext), metainf["N_RUNS"]-1)
-            os.remove(join(self.out_dir, subdir, oldname + ext))
             obj["PREV_RUN_INFO"][str(metainf["N_RUNS"]-1)]["metainf"] = overwrite_old #overwrite_old is old_metainf
+            failsavename = filename+"_tmp"
+        else:
+            failsavename = filename
         obj["object"] = kwargs #object should be last for ijson-loading!
-        name = json_dump(obj, join(self.out_dir, subdir, filename+ext), forbid_overwrite=not force_overwrite)
+        name = json_dump(obj, join(self.out_dir, subdir, failsavename+ext), forbid_overwrite=not force_overwrite)
+        if bool(overwrite_old):
+            os.remove(join(self.out_dir, subdir, oldname + ext))
+            if isfile(join(self.out_dir, subdir, filename + ext)):
+                os.remove(join(self.out_dir, subdir, filename + ext))
+            shutil.move(name, join(self.out_dir, subdir, filename+ext))
+            name = join(self.out_dir, subdir, filename+ext)
+        #if now process gets killed in between here we don't remove the old one
         new_influentials = {k: v for k, v in used_influentials.items() if k not in self.loaded_influentials}
         print((f"Saved under {name}. \n"
                f"  Took {timedelta(seconds=runtime)}. \n"
