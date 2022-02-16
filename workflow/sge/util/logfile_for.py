@@ -8,6 +8,7 @@ from os.path import isfile, join
 import re
 import subprocess as sp
 import shlex
+import time
 
 def apply_dotenv_vars(ENV_PREFIX="MA"):
     if os.getenv(ENV_PREFIX+"_SELECT_ENV_FILE"):
@@ -27,14 +28,23 @@ def parse_command_line_args():
     parser.add_argument('--jobid', '-j')
     return parser.parse_args().jobid
 
-def check_joblog(jobid):
-    with open(os.getenv("MA_CUSTOM_ACCTFILE", join(os.getenv("HOME"), "custom_acctfile.yml")), "r") as rfile:
-        custom_acct = yaml.load(rfile, Loader=yaml.SafeLoader)
-    jobinfo = custom_acct.get(str(jobid))
+def load_acctfile():
+    for ntrial in range(1, 6):
+        try:
+            with open(os.getenv("MA_CUSTOM_ACCTFILE", join(os.getenv("HOME"), "custom_acctfile.yml")), "r") as rfile:
+                custom_acct = yaml.load(rfile, Loader=yaml.SafeLoader)
+            break
+        except:
+            time.sleep(ntrial)
+    custom_acct = custom_acct if custom_acct is not None else {}
+    return custom_acct
+
+def check_joblog(jobid, acctfile):
+    jobinfo = acctfile.get(str(jobid))
     if not jobinfo:
         return None
     error_file = jobinfo["envvars"]["e"].format(rulename=jobinfo["envvars"]["rulename"], jobid=jobinfo["envvars"]["jobid"])
-    error_file = os.path.join(os.environ["MA_BASE_DIR"], error_file)
+    error_file = join(os.environ["MA_BASE_DIR"], "..", "..", error_file) if isfile(join(os.environ["MA_BASE_DIR"], "..", "..", error_file)) else os.path.join(os.environ["MA_BASE_DIR"], error_file)
     # error_file = "/home/chris/deleteme/snakejob.preprocess_descriptions_notranslate.2.log"
     with open(error_file, "r", newline="\n") as rfile:
         txt = rfile.read()
@@ -51,16 +61,17 @@ def init():
 
 def main():
     jobid = init()
+    acctfile = load_acctfile()
     if jobid:
-        txt = check_joblog(jobid)
+        txt = check_joblog(jobid, acctfile)
         print("=="*50)
         print(txt)
         print()
         print("==" * 50)
     else:
-        for jobid in get_active_jobs():
+        for jobid in get_active_jobs(acctfile):
             try:
-                txt = check_joblog(jobid)
+                txt = check_joblog(jobid, acctfile)
             except FileNotFoundError:
                 print("Job " + str(jobid) + ": not started")
                 continue
@@ -82,11 +93,13 @@ def main():
                 string += "\n   progress: "+last_counter
             print(string)
 
-def get_active_jobs():
-    qstat_res = sp.check_output(shlex.split("qstat -s pr")).decode().strip()
+def get_active_jobs(acctfile):
+    try:
+        qstat_res = sp.check_output(shlex.split("qstat -s pr")).decode().strip()
+    except FileNotFoundError:
+        return list(acctfile.keys())
     res = {int(x.split()[0]) : x.split()[4] for x in qstat_res.splitlines()[2:]}
     return list(res.keys())
-
 
 if __name__ == '__main__':
     main()

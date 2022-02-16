@@ -14,8 +14,12 @@ def parse_command_line_args():
 
 def main():
     args = parse_command_line_args()
+    unmatched = []
     fname = splitext(basename(args.filename))[0]
     if re.match(r".*_[0-9]+", fname):
+        fname = fname[:fname.rfind("_")]
+    while fname not in generated_paths:
+        unmatched.append(fname[fname.rfind("_"):])
         fname = fname[:fname.rfind("_")]
     pattern = generated_paths[fname]
     conf = parse(pattern, args.filename).named

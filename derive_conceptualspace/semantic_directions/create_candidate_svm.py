@@ -50,7 +50,8 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
         # assert len([i for i in descriptions._descriptions if 'nature' in i]) == len([i for i in dcm.term_quants('nature') if i > 0])
     else:
         assert all(len([i for i in descriptions._descriptions if term in i]) == len([i for i in dcm.term_quants(term) if i > 0]) for term in random.sample(terms, 5))
-    if get_ncpu() == 1:
+    ncpu = get_ncpu(ram_per_core=3)
+    if ncpu == 1:
         quants_s = [dcm.term_quants(term) for term in tqdm(terms, desc="Counting Terms")]
         with Interruptible(zip(terms, quants_s), (decision_planes, metrics), metainf, continue_from=continue_from, pgbar="Creating Candidate SVMs", total=len(terms)) as iter:
             for term, quants in iter: #in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs", total=len(terms))
@@ -58,11 +59,11 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
                 metrics[term] = cand_mets
                 decision_planes[term] = decision_plane
     else:
-        print(f"Starting Multiprocessed with {get_ncpu()} CPUs")
+        print(f"Starting Multiprocessed with {ncpu} CPUs")
         # with WorkerPool(get_ncpu(), dcm, pgbar="Counting Terms") as pool:
         #     quants_s = pool.work(terms, lambda dcm, term: dcm.term_quants(term))  #TODO: the time when this will be interrupted must work also if I do another Interruptible below!
         with SkipContext() as skipped, Interruptible(terms, [[], None, None], metainf, continue_from=continue_from, contains_mp=True, name="Counting") as iter:
-            with WorkerPool(get_ncpu(), dcm, pgbar="Counting Terms", comqu=iter.comqu) as pool:
+            with WorkerPool(ncpu, dcm, pgbar="Counting Terms", comqu=iter.comqu) as pool:
                 quants_s, interrupted = pool.work(iter.iterable, lambda dcm, term: dcm.term_quants(term))
             quants_s, _, _ = iter.notify([quants_s, None, None], exception=interrupted)
             if interrupted is not False:
@@ -72,7 +73,7 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
         assert len(quants_s) == len(terms)
 
         with Interruptible(zip(terms, quants_s), [None, [], None], metainf, continue_from=continue_from, contains_mp=True, name="SMVs", total=len(quants_s)) as iter:
-            with tqdm(total=iter.n_elems, desc="Creating Candidate SVMs") as pgbar, ThreadPool(get_ncpu(), comqu=iter.comqu) as p:
+            with tqdm(total=iter.n_elems, desc="Creating Candidate SVMs") as pgbar, ThreadPool(ncpu, comqu=iter.comqu) as p:
                 res, interrupted = p.starmap(create_candidate_svm, zip(repeat(embedding.embedding_, iter.n_elems), repeat("next_0"), repeat("next_1"), repeat(False), repeat(None), repeat(dcm.quant_name), repeat(pgbar)), draw_from=iter.iterable)
             _, res, _ = iter.notify([None, res, None], exception=interrupted)
             if interrupted is not False:

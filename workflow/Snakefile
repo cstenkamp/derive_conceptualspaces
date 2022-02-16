@@ -294,8 +294,7 @@ rule create_candidate_svm:
         generated_paths["clusters"]
     threads: 4
     resources:
-        mem_mb=16*1024,
-        #h_rt="05:59:30",
+        mem_mb=32*1024,
         pe="4-16"
     run:
         autoload_context_inputs(ctx, input, wildcards, silents=["pp_descriptions"])

@@ -78,7 +78,7 @@ def npify_rek(di):
                 res[k] = Struct(**npify_rek(v[1]))
             elif isinstance(v, dict):
                 res[k] = npify_rek(v)
-            elif isinstance(v, list) and len(v) > 0 and isinstance(v[0], list) and all(i[0] == "np.ndarray" for i in v):
+            elif isinstance(v, list) and len(v) > 0 and isinstance(v[0], list) and all(len(i) > 1 and i[0] == "np.ndarray" for i in v):
                 res[k] = [np.array(i[1]) for i in v]
             else: #TODO also lists?
                 res[k] = v
