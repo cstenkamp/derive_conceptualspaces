@@ -250,7 +250,7 @@ def submit_job(jobscript, qsub_settings, simulate=False):
     if int(job_properties.get("threads", 1)) > 1:
         if not "pe" in qsub_settings["resources"]: # if, in a rule, you specify "threads" but not "resources/pe", it will set the pe from the threads.
             batch_resources.extend(["-pe", "default", str(job_properties['threads'])])
-            options_as_envvars += ["-v", f"SGE_SMK_pe_threads={job_properties['threads'].replace(' ', '_')}"]
+            options_as_envvars += ["-v", f"SGE_SMK_pe_threads={str(job_properties['threads']).replace(' ', '_')}"]
         #else you could check if it the threads fall between qsub_settings["resources"]["pe"][len("default "):] and warn accordingly but whatever
     if qsub_settings["resources"].get("h_rt"):
         wall_secs = sum(60**(2-i[0])*int(i[1]) for i in enumerate(qsub_settings["resources"]["h_rt"].split(":")))
@@ -270,8 +270,13 @@ def submit_job(jobscript, qsub_settings, simulate=False):
     #replacement for the accounting-file
     if "MA_CUSTOM_ACCTFILE" in os.environ:
         if os.path.isfile(os.environ["MA_CUSTOM_ACCTFILE"]):
-            with open(os.environ["MA_CUSTOM_ACCTFILE"], "r") as rfile:
-                custom_acct = yaml.load(rfile, Loader=yaml.SafeLoader)
+            for ntrial in range(1, 6):
+                try:
+                    with open(os.environ["MA_CUSTOM_ACCTFILE"], "r") as rfile:
+                        custom_acct = yaml.load(rfile, Loader=yaml.SafeLoader)
+                    break
+                except:
+                    time.sleep(ntrial)
             custom_acct = custom_acct if custom_acct is not None else {}
         else:
             custom_acct = {}

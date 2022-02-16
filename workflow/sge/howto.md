@@ -61,5 +61,6 @@ export SCR=/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/
 alias qdelall="~/derive_conceptualspaces/workflow/sge/util/qdel_all.py"
 alias submit="~/derive_conceptualspaces/workflow/sge/submit.sh"
 alias run="~/derive_conceptualspaces/workflow/sge/run_manually.sh"
+alias check="~/derive_conceptualspaces/workflow/sge/util/logfile_for.py"
 export MA_SELECT_ENV_FILE=/home/student/c/cstenkamp/derive_conceptualspaces/config/_select_env_grid.env
 ```

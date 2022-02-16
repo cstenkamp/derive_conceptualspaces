@@ -78,7 +78,7 @@ def load_envfiles(for_dataset=None):
 
 
 class CustomContext(ObjectWrapper):
-    def __init__(self, orig_ctx):
+    def __init__(self, orig_ctx, silent=False):
         assert isinstance(orig_ctx, (click.Context, SnakeContext))
         super(CustomContext, self).__init__(orig_ctx)
         self.toset_configs = []
@@ -86,7 +86,7 @@ class CustomContext(ObjectWrapper):
         self.forbidden_configs = []
         self._initialized = False
         self._given_warnings = []
-        self.silent = False
+        self.silent = silent
         if hasattr(orig_ctx, "post_init"):
             type(orig_ctx).post_init(self)
 
@@ -293,7 +293,7 @@ class SnakeContext():
 
     @staticmethod
     def loader_context(load_envfile=True, config=None, load_conffile=True, **kwargs): #for jupyter
-        ctx = CustomContext(SnakeContext(**kwargs))
+        ctx = CustomContext(SnakeContext(**kwargs), silent=kwargs.get("silent", False))
         for k, v in (config or {}).items():
             ctx.set_config(k, v, "force")
         ctx.init_context(load_envfile=load_envfile, load_conffile=load_conffile)
