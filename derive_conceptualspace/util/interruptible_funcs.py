@@ -144,9 +144,9 @@ class Interruptible():
             return max(len(i) for i in enum if i)
         else:
             for elem in old_results:
-                self.append_var.append(elem)
+                self.append_var[0].append(elem)
             if with_assert:
-                assert len(self.append_var) == self.old_metainf["INTERRUPTED_AT"]
+                assert len(self.append_var[0]) == self.old_metainf["INTERRUPTED_AT"]
             return len(old_results)
 
     def __iter__(self):
@@ -182,7 +182,7 @@ class Interruptible():
             self.tqdm.close()
         self.interrupted = True
         if self.exc:
-            raise InterruptedError()
+            raise Interrupt<edError()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if hasattr(self, "comqu") and self.comqu is not None:
@@ -197,7 +197,7 @@ class Interruptible():
         if exc_type and issubclass(exc_type, KeyboardInterrupt):
             return True
 
-    def notify(self, results, exception):
+    def notify(self, results, exception, enum_start=0):
         self.n = self.append_olds(results, with_assert=False)
         if exception is not False:
             self.after_interrupt(kb=isinstance(exception, KeyboardInterrupt))

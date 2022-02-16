@@ -437,16 +437,24 @@ class JsonPersister():
     def check_add_interrupted_overwrite_metas(self, obj, filepath, last_run_nr):
         assert isfile(filepath)
         obj["PREV_RUN_INFO"] = {}
-        for equalkey in ["loaded_files", "used_influentials", "used_config", "forbidden_configs", "obj_info", "created_plots", "runtime", "PREV_RUN_INFO"]:
+        TEST_KEYS = ["loaded_files", "used_influentials", "used_config", "forbidden_configs", "obj_info", "created_plots", "runtime", "PREV_RUN_INFO"]
+        try:
             with open(filepath, "rb") as rfile:
-                try:
-                    if equalkey in ["used_config", "runtime"]:
-                        loaded = [i for i in ijson.items(rfile, equalkey)][0]
-                    else:
-                        loaded = {k: tuple(v) if isinstance(v, list) else v for k,v in ijson.kvitems(rfile, equalkey)}
-                except ijson.common.IncompleteJSONError:
-                    with open(filepath, "r") as rfile:
-                        loaded = json.load(rfile).get(equalkey, {}) #TODO having to do this sucks.
+                loadeds = {}
+                for equalkey in TEST_KEYS:
+                    try:
+                        loadeds[equalkey] = next(ijson.items(rfile, equalkey))
+                    except StopIteration:
+                        loadeds[equalkey] = None
+                    rfile.seek(0)
+        except ijson.common.IncompleteJSONError:
+            with open(filepath, "r") as rfile:
+                tmpfile = json.load(rfile)
+            loadeds = {k: tmpfile[k] for k in TEST_KEYS}
+        loadeds["PREV_RUN_INFO"] = loadeds["PREV_RUN_INFO"] or {}
+        for equalkey in TEST_KEYS:
+            #TODO rather than this have a list of strings to compare, like ["loaded_files.*.0"]
+            loaded = loadeds[equalkey]
             if equalkey == "loaded_files":
                 assert all(tuple((k2, v2) for k2, v2 in obj[equalkey][k].items() if k2 not in ["metadata", "path"]) == tuple((k2, v2) for k2, v2 in loaded[k].items() if k2 not in ["metadata", "path"]) for k in obj[equalkey].keys())
             elif equalkey == "used_config":

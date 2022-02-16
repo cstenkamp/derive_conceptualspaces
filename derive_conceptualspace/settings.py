@@ -105,7 +105,7 @@ with set_noninfluentials(): #this context-manager adds all settings from here to
     #note that snakemake reads the conf_file differently and sets env-vars (that however apply force) from the configurations
     MAY_DIFFER_IN_DEPENDENCIES = ["DEBUG", "RANDOM_SEED", "CANDIDATE_MIN_TERM_COUNT", "BASE_DIR", "DEBUG_N_ITEMS", "CONF_FILE"]+NON_INFLUENTIAL_CONFIGS
     DEFAULT_DEP_PREFERS_NONDEBUG = False
-    DEFAULT_DO_SANITYCHECKS = True  #sanity-checks check for code-correctness and can increase code-runtime by a lot. Running them once on each dataset&parameter-combination after changes is recommended.
+    DEFAULT_DO_SANITYCHECKS = False  #sanity-checks check for code-correctness and can increase code-runtime by a lot. Running them once on each dataset&parameter-combination after changes is recommended.
 
 ########################################################################################################################
 ######################################## set and get settings/env-vars #################################################

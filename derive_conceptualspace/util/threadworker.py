@@ -6,8 +6,9 @@ from tqdm import tqdm
 class WorkerPool():
     def __init__(self, n_workers, workerobj, pgbar=None, comqu=None):
         self.qu = JoinableQueue()
+        self.prioqu = JoinableQueue()
         self.donequ = JoinableQueue()
-        self.workers = [Worker(self.qu, self.donequ, workerobj, num) for num in range(n_workers)]
+        self.workers = [Worker(self.qu, self.prioqu, self.donequ, workerobj, num) for num in range(n_workers)]
         self.pgbar = pgbar
         self.known_deaths = []
         self.comqu = comqu
@@ -15,8 +16,8 @@ class WorkerPool():
     def __enter__(self):
         return self
 
-    def work(self, iterable, func):
-        iterable = list(enumerate(iterable))
+    def work(self, iterable, func, enum_start=0):
+        iterable = list(enumerate(iterable, start=enum_start))
         self.iterable = iterable
         for elem in iterable:
             self.qu.put(elem)
@@ -27,19 +28,36 @@ class WorkerPool():
         try:
             if self.pgbar:
                 with tqdm(total=len(iterable), desc=self.pgbar) as pgbar:
+                    last_dead_workers = set()
+                    died_at = -1
                     while len(results) < len(iterable):
+
+                        dead_workers = set(i.name for i in self.workers if i.exitcode is not None)
+                        if len(dead_workers) == len(self.workers):
+                            raise InterruptedError()
+                        if dead_workers > last_dead_workers:
+                            died_at = pgbar.n
+                            last_dead_workers = dead_workers
+                        if died_at >= 0 and pgbar.n > died_at + (len(self.workers)-len(dead_workers))*2:
+                            undone_elems = set(range(pgbar.n-died_at))-set(i[0] for i in results)
+                            for elem in undone_elems:
+                                self.prioqu.put((elem, dict(iterable)[elem]))
+                            died_at = -1
+
                         self.bookkeep()
                         while not self.donequ.empty():
                             results.append(self.donequ.get())
                             pgbar.update(1)
                         if self.comqu is not None and not self.comqu.empty():
                             raise InterruptedError()
+                        time.sleep(0.1)
             else:
-                while len(results) < len(iterable):
-                    self.bookkeep()
-                    time.sleep(0.05)
-                    if self.comqu is not None and not self.comqu.empty():
-                        raise InterruptedError()
+                raise NotImplementedError("TODO - Do this if needed")
+                # while len(results) < len(iterable):
+                #     self.bookkeep()
+                #     time.sleep(0.05)
+                #     if self.comqu is not None and not self.comqu.empty():
+                #         raise InterruptedError()
         except (KeyboardInterrupt, InterruptedError) as e:
             while not self.qu.empty():
                 self.qu.get()
@@ -69,9 +87,10 @@ class WorkerPool():
 
 
 class Worker(Process):
-    def __init__(self, queue, donequ, obj, num):
+    def __init__(self, queue, prioqu, donequ, obj, num):
         Process.__init__(self)
         self.queue = queue
+        self.prioqu = prioqu
         self.donequ = donequ
         self.obj = obj
         self.num = num
@@ -80,7 +99,11 @@ class Worker(Process):
     def run(self):
         while True:
             try:
-                self.item = self.queue.get()
+                if not self.prioqu.empty():
+                    self.item = self.prioqu.get()
+                    print(f"A dropped job (number {self.item[0]}) was caught up")
+                else:
+                    self.item = self.queue.get()
                 self.donequ.put((self.item[0], self.func(self.obj, self.item[1])))
                 self.queue.task_done()
             except KeyboardInterrupt:
