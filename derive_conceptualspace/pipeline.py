@@ -36,6 +36,19 @@ from misc_util.pretty_print import pretty_print as print, fmt, TRANSLATOR, isnot
 ########################################################################################################################
 ########################################################################################################################
 
+generated_paths = dict(
+    pp_descriptions =          "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/pp_descriptions.json",
+    dissim_mat =               "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/dissim_mat.json",
+    embedding =                "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/embedding.json",
+    candidate_terms =          "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/candidate_terms_{extraction_method}.json",
+    postprocessed_candidates = "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/postprocessed_candidates_{extraction_method}.json",
+    filtered_dcm =             "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json",
+    clusters =                 "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}_{classifier_compareto_ranking}/clusters.json"
+)
+#TODO can I auto-generate these from jsonpersister?!
+
+########################################################################################################################
+
 def apply_dotenv_vars():
     """I want to be able to have env-vars in env-files (like `MA_DATA_BASE = $HOME/data`), and even nested env-vars (like `OTHER_VAR = {MA_DATA_BASE}/config`, so
     variables that refer to other variables defined im the same file. This does that."""

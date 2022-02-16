@@ -206,7 +206,7 @@ def create_spaces(ctx, json_persister):
 @click_pass_add_context
 def create_dissim_mat(ctx, json_persister):
     pp_descriptions = json_persister.load(None, "pp_descriptions", loader=DescriptionList.from_json)
-    with InterruptibleLoad(ctx, "dissim_mat.json", metainf_ignorevarnames=["is_dissim"]) as mgr:
+    with InterruptibleLoad(ctx, "dissim_mat.json", metainf_ignorevarnames=["is_dissim"], loader=(lambda **kw: [kw["dissim_mat"]])) as mgr:
         quant_dtm, dissim_mat, metainf = create_dissim_mat_base(pp_descriptions, ctx.get_config("quantification_measure"), ctx.get_config("verbose"), **mgr.kwargs)
     mgr.save(quant_dtm=quant_dtm, dissim_mat=dissim_mat, metainf=metainf)
 

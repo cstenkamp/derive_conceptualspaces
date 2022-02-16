@@ -143,11 +143,11 @@ class Interruptible():
                     assert len(self.append_var[n]) == self.old_metainf["INTERRUPTED_AT"]
             return max(len(i) for i in enum if i)
         else:
-            for elem in old_results:
+            for elem in old_results[0]:
                 self.append_var[0].append(elem)
             if with_assert:
                 assert len(self.append_var[0]) == self.old_metainf["INTERRUPTED_AT"]
-            return len(old_results)
+            return len(old_results[0])
 
     def __iter__(self):
         self.last_times = deque([datetime.now()], maxlen=self.timeavg_samples)
@@ -182,7 +182,7 @@ class Interruptible():
             self.tqdm.close()
         self.interrupted = True
         if self.exc:
-            raise Interrupt<edError()
+            raise InterruptedError()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if hasattr(self, "comqu") and self.comqu is not None:

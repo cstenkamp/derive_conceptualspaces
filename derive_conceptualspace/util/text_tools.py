@@ -5,11 +5,11 @@ from math import log
 from os.path import join, dirname, basename
 import re
 
-import nltk
 import numpy as np
 import unidecode
 from HanTa import HanoverTagger as ht
 from nltk.corpus import stopwords as nlstopwords
+from nltk import sent_tokenize as nltk_sent_tokenize, WordNetLemmatizer as nltk_WordNetLemmatizer, pos_tag as nltk_pos_tag
 from tqdm import tqdm
 import scipy.sparse.csr
 from sklearn.feature_extraction.text import strip_accents_unicode
@@ -61,7 +61,7 @@ def run_preprocessing_funcs(descriptions:DescriptionList, components, word_token
     if components.remove_htmltags:
         descriptions.process_all(lambda data: re.compile(r'<.*?>').sub('', data), "remove_htmltags")
     if components.sent_tokenize:
-        descriptions.process_all(nltk.sent_tokenize, "sent_tokenize", indiv_kwargs=dict(language=lambda desc: NLTK_LAN_TRANSLATOR[desc.lang]))
+        descriptions.process_all(nltk_sent_tokenize, "sent_tokenize", indiv_kwargs=dict(language=lambda desc: NLTK_LAN_TRANSLATOR[desc.lang]))
     if components.convert_lower:
         convert_lower_all(descriptions)
     #tokenization will happen anyway!
@@ -106,7 +106,7 @@ def word_tokenize_all(descriptions, word_tokenizer=None, remove_stopwords=False)
 def lemmatize_all(descriptions, use_better_german_tagger=False):
     # see https://textmining.wp.hs-hannover.de/Preprocessing.html#Lemmatisierung
     german_tagger = ht.HanoverTagger('morphmodel_ger.pgz')
-    lemmatizer = nltk.WordNetLemmatizer()
+    lemmatizer = nltk_WordNetLemmatizer()
     assert "sent_tokenize" in descriptions.proc_steps
     assert not "removestopwords" in descriptions.proc_steps  # taggers work best on sentences
     def lemmatize(txt, language):
@@ -119,7 +119,7 @@ def lemmatize_all(descriptions, use_better_german_tagger=False):
                 lemmatized.append([i[1].casefold() for i in tags if i[1] != "--"]) #TODO: not sure if I should remove the non-word-tokens completely..?
                 raise NotImplementedError()
             else:
-                tags = nltk.pos_tag(sent)
+                tags = nltk_pos_tag(sent)
                 lemmatized.append([lemmatizer.lemmatize(word, wntag(pos)) if wntag(pos) else word for word, pos in tags])
         return lemmatized
     descriptions.process_all(lemmatize, "lemmatize", indiv_kwargs=dict(language=lambda desc: desc.lang), pgbar="Lemmatizing Descriptions    ")

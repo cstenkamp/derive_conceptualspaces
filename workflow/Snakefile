@@ -52,7 +52,7 @@ from derive_conceptualspace.extract_keywords.keywords_main import (
 from derive_conceptualspace.extract_keywords.postprocess_candidates import (
     postprocess_candidateterms as postprocess_candidateterms_base,
 )
-from derive_conceptualspace.pipeline import CustomContext, SnakeContext, load_lang_translate_files, apply_dotenv_vars
+from derive_conceptualspace.pipeline import CustomContext, SnakeContext, load_lang_translate_files, apply_dotenv_vars, generated_paths
 from derive_conceptualspace.semantic_directions.create_candidate_svm import (
     create_candidate_svms as create_candidate_svms_base
 )
@@ -115,16 +115,7 @@ def autoload_context_inputs(ctx, inputs, wildcards, params=None, input_kwargs=No
 
 ctx = initialize_snakemake()
 
-generated_paths = dict(
-    pp_descriptions =          "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/pp_descriptions.json",
-    dissim_mat =               "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/dissim_mat.json",
-    embedding =                "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/embedding.json",
-    candidate_terms =          "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/candidate_terms_{extraction_method}.json",
-    postprocessed_candidates = "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/postprocessed_candidates_{extraction_method}.json",
-    filtered_dcm =             "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json",
-    clusters =                 "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}_{classifier_compareto_ranking}/clusters.json"
-)
-#TODO can I auto-generate these from jsonpersister?!
+
 
 ########################################################################################################################
 ########################################################################################################################
@@ -231,8 +222,11 @@ rule create_dissim_mat:
         pe = "3"   #I want this to run with 2 processes
     run:
         autoload_context_inputs(ctx, input, wildcards)
-        quant_dtm, dissim_mat, metainf = create_dissim_mat_base(ctx.obj["pp_descriptions"], ctx.get_config("quantification_measure"), verbose=ctx.get_config("verbose"))
-        ctx.p.save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat, metainf=metainf)
+        with InterruptibleLoad(ctx, "dissim_mat.json", metainf_ignorevarnames=["is_dissim"], loader=(lambda **kw: [kw["dissim_mat"]])) as mgr:
+            quant_dtm, dissim_mat, metainf = create_dissim_mat_base(ctx.obj["pp_descriptions"], ctx.get_config("quantification_measure"), ctx.get_config("verbose"), **mgr.kwargs)
+        mgr.save(quant_dtm=quant_dtm, dissim_mat=dissim_mat, metainf=metainf)
+        # quant_dtm, dissim_mat, metainf = create_dissim_mat_base(ctx.obj["pp_descriptions"], ctx.get_config("quantification_measure"), verbose=ctx.get_config("verbose"))
+        # ctx.p.save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat, metainf=metainf)
 
 
 rule create_embedding:
