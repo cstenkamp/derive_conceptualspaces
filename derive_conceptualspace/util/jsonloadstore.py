@@ -403,6 +403,7 @@ class JsonPersister():
             obj = self.check_add_interrupted_overwrite_metas(obj, join(self.out_dir, subdir, oldname + ext), metainf["N_RUNS"]-1)
             obj["PREV_RUN_INFO"][str(metainf["N_RUNS"]-1)]["metainf"] = overwrite_old #overwrite_old is old_metainf
             failsavename = filename+"_tmp"
+            force_overwrite = True
         else:
             failsavename = filename
         obj["object"] = kwargs #object should be last for ijson-loading!

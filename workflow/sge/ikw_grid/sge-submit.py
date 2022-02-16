@@ -7,6 +7,7 @@ import argparse
 import subprocess
 import yaml
 import sys
+import random
 
 # use warnings.warn() rather than print() to output info in this script
 # because snakemake expects the jobid to be the only output
@@ -55,7 +56,7 @@ OPTION_MAPPING = {
 RESOURCE_MAPPING = {
     # default queue resources
     "qname"            : ("qname",),
-    "hostname"         : ("hostname",),
+    "h"                : ("hostname", "h"),
     # "notify" -- conflicts with OPTION_MAPPING
     "calendar"         : ("calendar",),
     "min_cpu_interval" : ("min_cpu_interval",),
@@ -130,7 +131,8 @@ def parse_jobscript():
     """Minimal CLI to require/only accept single positional argument."""
     p = argparse.ArgumentParser(description="SGE snakemake submit script")
     p.add_argument("jobscript", help="Snakemake jobscript with job properties.")
-    return p.parse_args().jobscript
+    p.add_argument("-s", "--simulate", help="If you just want to simulate", default=False, action="store_true")
+    return p.parse_args().jobscript, p.parse_args().simulate
 
 def parse_qsub_defaults(parsed):
     """Unpack QSUB_DEFAULTS."""
@@ -227,9 +229,15 @@ def sge_resource_string(key, val):
         val = str(round(int(val)/1024))+"G"
     if "mem" in key and str(val).isnumeric(): #when qsub-ing, you HAVE TO specify if it's G or not!
         val = str(val)+"G"
+    if isinstance(val, list):
+        random.shuffle(val) #use this for "-l h cippy01 -l h cippy02" etc (see https://doc.ikw.uni-osnabrueck.de/content/using-grid-cheat-sheet), but the ikw-grid seems to only consider the last one
+        return " ".join([f"-l {key}={v}" for v in val])
     return f"-l {key}={val}"
 
-def submit_job(jobscript, qsub_settings):
+slugify_pre = lambda txt: str(txt).replace(' ','_').replace("'","").replace('"', "")
+slugify = lambda txt: ('"'+",".join(slugify_pre(i) for i in txt)+'"') if isinstance(txt, list) else slugify_pre(txt)
+
+def submit_job(jobscript, qsub_settings, simulate=False):
     """Submit jobscript and return jobid."""
     if not qsub_settings["resources"].get("pe", "default 1").startswith("default "):
         qsub_settings["resources"]["pe"] = "default "+qsub_settings["resources"]["pe"]
@@ -237,7 +245,7 @@ def submit_job(jobscript, qsub_settings):
     batch_options = flatten([sge_option_string(k,v).split() for k, v in qsub_settings["options"].items()])
     batch_resources = flatten([sge_resource_string(k, v).split() for k, v in qsub_settings["resources"].items()])
     #I'll provide everything I know as env-vars to the script
-    options_as_envvars = flatten([["-v", f"SGE_SMK_{k}={str(v).replace(' ','_')}"] for k, v in list(qsub_settings["options"].items())+list(qsub_settings["resources"].items()) if bool(v) or v == False])
+    options_as_envvars = flatten([["-v", f"SGE_SMK_{k}={slugify(v)}"] for k, v in list(qsub_settings["options"].items())+list(qsub_settings["resources"].items()) if bool(v) or v == False])
     options_as_envvars += ["-v", f"SGE_SMK_rulename={job_properties['rule']}", "-v", f"SGE_SMK_jobid={job_properties['jobid']}"]
     if int(job_properties.get("threads", 1)) > 1:
         if not "pe" in qsub_settings["resources"]: # if, in a rule, you specify "threads" but not "resources/pe", it will set the pe from the threads.
@@ -251,7 +259,10 @@ def submit_job(jobscript, qsub_settings):
         # -terse means only the jobid is returned rather than the normal 'Your job...' string
         print(f'Will submit the following: `{" ".join(["qsub", "-terse"] + batch_options + options_as_envvars + batch_resources + [jobscript])}`', file=sys.stderr)
         print(f'Error-File can be found at `{os.path.join(os.getenv("MA_BASE_DIR", ""), qsub_settings["options"].get("e", "").format(rulename=job_properties["rule"], jobid=job_properties["jobid"]))}`', file=sys.stderr)
-        jobid = subprocess.check_output(["qsub", "-terse"] + batch_options + options_as_envvars + batch_resources + [jobscript]).decode().rstrip()
+        if simulate:
+            jobid = None
+        else:
+            jobid = subprocess.check_output(["qsub", "-terse"] + batch_options + options_as_envvars + batch_resources + [jobscript]).decode().rstrip()
     except subprocess.CalledProcessError as e:
         raise e
     except Exception as e:
@@ -272,7 +283,7 @@ def submit_job(jobscript, qsub_settings):
 
 qsub_settings = { "options" : {}, "resources" : {}}
 
-jobscript = parse_jobscript()
+jobscript, simulate = parse_jobscript()
 
 # get the job properties dictionary from snakemake 
 job_properties = read_job_properties(jobscript)
@@ -306,5 +317,5 @@ for o in ("o", "e"):
     ensure_directory_exists(qsub_settings["options"][o]) if o in qsub_settings["options"] else None
 
 # submit job and echo id back to Snakemake (must be the only stdout)
-print(submit_job(jobscript, qsub_settings))
+print(submit_job(jobscript, qsub_settings, simulate=simulate))
 

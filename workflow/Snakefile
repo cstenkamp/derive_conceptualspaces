@@ -225,10 +225,10 @@ rule create_dissim_mat:
         pp_descriptions = generated_paths["pp_descriptions"]
     output:
         generated_paths["dissim_mat"]
-    threads: 4
+    threads: 3
     resources:
-        mem_mb = 32*1024, #TODO make also dependent on the size of the dataset ("input" is also allowed as arg)
-        pe = "4-16"
+        mem_mb = 29*1024, #TODO make also dependent on the size of the dataset ("input" is also allowed as arg)
+        pe = "3"   #I want this to run with 2 processes
     run:
         autoload_context_inputs(ctx, input, wildcards)
         quant_dtm, dissim_mat, metainf = create_dissim_mat_base(ctx.obj["pp_descriptions"], ctx.get_config("quantification_measure"), verbose=ctx.get_config("verbose"))

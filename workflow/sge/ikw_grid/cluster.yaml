@@ -14,8 +14,9 @@ __default__:
   output: logs/sge/snakejob.{rulename}.{jobid}.log
   error: logs/sge/snakejob.{rulename}.{jobid}.log
   mem: 7 #the ikw grid requires the `-l mem` argument (and this cookiecutter requires it to be the GB-amount as int)
-  h_rt: "00:30:30"
+  h_rt: "01:29:30"
   queue: all.q #there is no ai.q because there are no machines for that, so I can only submit to all.q and training.q - training.q has less NSLOTS so waiting to be enqueued to all.q is advantagous.
+  h: ["cippy01", "cippy02", "cippy03", "cippy04", "cippy05", "cippy06", "cippy07", "cippy08", "cippy09", "cippy10", "cippy11", "cippy12", "cippy13", "cippy14"]
 
 nonrequestables:
   - "tmpdir" #the ikw grid doesn't allow to request a tmpdir
