@@ -17,9 +17,9 @@ extraction_method:            tfidf
 max_ngram:                    5                   # not explicitly, but it takes adjective phrases so it's something >=3
 
 classifier_compareto_ranking: [count, ppmi, tfidf]
-classifier_succmetric:        kappa_rank2rank_onlypos_min
-prim_lambda:                  0.5
-sec_lambda:                   0.1
+classifier_succmetric:        kappa_digitized_onlypos_2
+prim_lambda:                  0.4
+sec_lambda:                   0.2
 __perdataset__:
   placetypes:
     extraction_method: "all" #in the placetypes-dataset, ALL words are candidates (21.8k)

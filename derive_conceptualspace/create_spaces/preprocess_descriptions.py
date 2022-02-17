@@ -82,6 +82,8 @@ def preprocess_descriptions_full(raw_descriptions, dataset_class, pp_components,
     else:
         if get_setting("DEBUG"):
             descriptions = descriptions[:get_setting("DEBUG_N_ITEMS")] #pd.DataFrame([descriptions.iloc[key] for key in random.sample(range(len(descriptions)), k=get_setting("DEBUG_N_ITEMS"))])
+        if isinstance(languages, str):
+            languages = {k: {k2:languages for k2 in descriptions[k]} if set(descriptions[k]) != {''} else None for k in descriptions.keys()}
         descriptions = create_bare_desclist(languages, translations, for_language, list(descriptions["title"]), list(descriptions["description"]),
                             [i if str(i) != "nan" else None for i in descriptions["subtitle"]], translate_policy, pp_components=pp_components, assert_all_translated=False,
                              additionals={i: [j if not (isinstance(j, float) and math.isnan(j)) else None for j in descriptions[i]] for i in dataset_class.additionals} if pp_components.add_additionals else None)
@@ -111,6 +113,7 @@ def create_bare_desclist(languages, translations, for_language, names, descripti
                          assert_all_translated=True, additionals=None):
     """Creates the Bare Descriptions-List. This function handles the *translate_policy* and the pp_components *add_coursetitle* and *add_subtitle*.
     All Other Preprocessing-steps must be done after this step. After this step the Raw Descriptions are not needed anymore."""
+    additionals = additionals or {}
     desc_list = DescriptionList(add_title=pp_components.add_title, add_subtitle=pp_components.add_subtitle, translate_policy=translate_policy, additionals_names=list(additionals.keys()))
 
     if translate_policy == "origlang":

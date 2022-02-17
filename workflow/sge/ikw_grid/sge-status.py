@@ -10,6 +10,7 @@ from os.path import dirname, join
 import yaml
 import os
 
+from .sge_util import load_acctfile
 
 logger = logging.getLogger("__name__")
 logger.setLevel(40)
@@ -69,14 +70,7 @@ for i in range(STATUS_ATTEMPTS):
         else: # `qacct` doesn't work on the IKW-grid. I asked Marc, he said "Es wird kein accounting file auf den Knoten geschrieben. Nur auf dem Master und darauf hast du keinen Zugriff"
             job_status = "success"
             if os.path.isfile(os.environ["MA_CUSTOM_ACCTFILE"]):
-                for ntrial in range(1, 6):
-                    try:
-                        with open(os.environ["MA_CUSTOM_ACCTFILE"], "r") as rfile:
-                            custom_acct = yaml.load(rfile, Loader=yaml.SafeLoader)
-                        break
-                    except:
-                        time.sleep(ntrial)
-                custom_acct = custom_acct if custom_acct is not None else {}
+                custom_acct = load_acctfile()
                 if str(jobid) not in custom_acct:
                     job_info = "failed"
                     break

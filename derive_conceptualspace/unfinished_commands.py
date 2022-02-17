@@ -104,7 +104,6 @@ def show_data_info(ctx):
 
 def rank_saldirs(pp_descriptions, embedding, clusters, filtered_dcm, prim_lambda, sec_lambda, metricname):
     from derive_conceptualspace.semantic_directions.create_candidate_svm import select_salient_terms
-    select_salient_terms(clusters["metrics"], clusters["decision_planes"], prim_lambda, sec_lambda, metricname)
     pp_descriptions.add_embeddings(embedding.embedding_)
     decision_planes, metrics = clusters.values()
     existinds = {k: set(v) for k, v in filtered_dcm.term_existinds(use_index=False).items()}
@@ -113,8 +112,7 @@ def rank_saldirs(pp_descriptions, embedding, clusters, filtered_dcm, prim_lambda
         metrics[k]["decision_plane"] = decision_planes[k]
     n_items = len(pp_descriptions)
 
-    from derive_conceptualspace.semantic_directions.create_candidate_svm import select_salient_terms
-    select_salient_terms(metrics, decision_planes, prim_lambda=prim_lambda, sec_lambda=sec_lambda, metricname=metricname)
+    clusters, directions = select_salient_terms(metrics, decision_planes, prim_lambda=prim_lambda, sec_lambda=sec_lambda, metricname=metricname)
 
     # TODO this is only bc in debug i set the min_existinds to 1
     metrics = {k: v for k, v in metrics.items() if len(v["existinds"]) >= 25}

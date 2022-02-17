@@ -15,7 +15,8 @@ import warnings
 
 from snakemake import io
 from snakemake.utils import read_job_properties
-import time
+
+from .sge_util import load_acctfile, get_active_jobs
 
 DEFAULT_JOB_NAME = "snakemake_job"
 QSUB_DEFAULTS = "-cwd -V"
@@ -237,6 +238,17 @@ def sge_resource_string(key, val):
 slugify_pre = lambda txt: str(txt).replace(' ','_').replace("'","").replace('"', "")
 slugify = lambda txt: ('"'+",".join(slugify_pre(i) for i in txt)+'"') if isinstance(txt, list) else slugify_pre(txt)
 
+
+def check_if_alreadyscheduled(job_properties):
+    to_compare = ["input", "jobid", "output", "rule", "wildcards"]
+    jobs = get_active_jobs()
+    acctfile = load_acctfile()
+    job_infos = {job: acctfile[job] for job in jobs}
+    for id, inf in job_infos.items():
+        if all(inf[i] == job_properties[i] for i in to_compare):
+            return id
+
+
 def submit_job(jobscript, qsub_settings, simulate=False):
     """Submit jobscript and return jobid."""
     if not qsub_settings["resources"].get("pe", "default 1").startswith("default "):
@@ -256,12 +268,15 @@ def submit_job(jobscript, qsub_settings, simulate=False):
         wall_secs = sum(60**(2-i[0])*int(i[1]) for i in enumerate(qsub_settings["resources"]["h_rt"].split(":")))
         batch_options += ["-v", f"WALL_SECS={wall_secs}"]
     try:
-        # -terse means only the jobid is returned rather than the normal 'Your job...' string
+        if check_if_alreadyscheduled(job_properties):
+            print("This job is already scheduled under external job-id", check_if_alreadyscheduled(job_properties))
         print(f'Will submit the following: `{" ".join(["qsub", "-terse"] + batch_options + options_as_envvars + batch_resources + [jobscript])}`', file=sys.stderr)
         print(f'Error-File can be found at `{os.path.join(os.getenv("MA_BASE_DIR", ""), qsub_settings["options"].get("e", "").format(rulename=job_properties["rule"], jobid=job_properties["jobid"]))}`', file=sys.stderr)
         if simulate:
             jobid = None
         else:
+            #TODO check qstat and if it exists just return job-id
+            # -terse means only the jobid is returned rather than the normal 'Your job...' string
             jobid = subprocess.check_output(["qsub", "-terse"] + batch_options + options_as_envvars + batch_resources + [jobscript]).decode().rstrip()
     except subprocess.CalledProcessError as e:
         raise e
@@ -269,17 +284,7 @@ def submit_job(jobscript, qsub_settings, simulate=False):
         raise e
     #replacement for the accounting-file
     if "MA_CUSTOM_ACCTFILE" in os.environ:
-        if os.path.isfile(os.environ["MA_CUSTOM_ACCTFILE"]):
-            for ntrial in range(1, 6):
-                try:
-                    with open(os.environ["MA_CUSTOM_ACCTFILE"], "r") as rfile:
-                        custom_acct = yaml.load(rfile, Loader=yaml.SafeLoader)
-                    break
-                except:
-                    time.sleep(ntrial)
-            custom_acct = custom_acct if custom_acct is not None else {}
-        else:
-            custom_acct = {}
+        custom_acct = load_acctfile()
         custom_acct[jobid] = {"envvars": {i.split("=")[0][len("SGE_SMK_"):]:i.split("=")[1] for i in options_as_envvars if i != "-v"},
                               "batch_options": " ".join(batch_options), "batch_resources": " ".join(batch_resources), "job_properties": job_properties}
         with open(os.environ["MA_CUSTOM_ACCTFILE"], "w") as wfile:
