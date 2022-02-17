@@ -16,10 +16,10 @@ ENV_PREFIX = "MA"
 # remove_stopwords = "s", lemmatize = "l", remove_diacritics = "d", remove_punctuation = "p", use_skcountvec = "2",
 # m,f,a,u,h,c should be default for now -> mfauhc
 # if not sk-countvec then t             -> mfauhc2 & mfauhtc
-# d & p make for more merging of kw's   -> mfauhcdp2 & mfauhtcdp
+# d & p make for more merging of kw's   -> mfauhcd2 & mfauhtcdp (d not possible with sklearn)
 # TODO: maybe try without remove-stopwords eventually? TODO: better german stopwords?
-# left are: lemmatize                   -> mfauhcsdp2, mfauhtcdp, mfauhtcldp
-# maybe we try without title once       -> mfhcsdp2, mfauhcsdp2, mfauhtcsdp, mfauhtcsldp
+# left are: lemmatize                   -> mfauhcsd2, mfauhtcdp, mfauhtcldp
+# maybe we try without title once       -> mfhcsd2, mfauhcsd2, mfauhtcsdp, mfauhtcsldp
 # TODO: synsetisize as soon as GermaNet
 # old candidates were: mfacsd2  (sentwisemerge, add-additionals, add-title, convert-lower, remove-stopwords, remove-diacritics, use-skcount)
 #                      autcsldp (add-title, add-subtitle, sent-tokenize, convert-lower, remove-stopwords, lemmatize, remove-diacritics, remove-punctuation)
@@ -27,8 +27,8 @@ ENV_PREFIX = "MA"
 
 
 #!! use singular for these (bzw the form you'd use if there wasn't the "ALL_" before)
-ALL_PP_COMPONENTS = ["mfhcsdp2", "mfauhcsdp2", "mfauhtcsdp", "mfauhtcsldp"]     # If in preprocessing it should add title, lemmatize, etc
-ALL_TRANSLATE_POLICY = ["onlyorig", "translate", "origlang"]                    # If non-english/non-german/... descriptions should be translated
+ALL_PP_COMPONENTS = ["mfhcsd2", "mfauhcsd2", "mfauhtcsdp", "mfauhtcsldp"]     # If in preprocessing it should add title, lemmatize, etc
+ALL_TRANSLATE_POLICY = ["onlyorig"] #["onlyorig", "translate", "origlang"]                    # If non-english/non-german/... descriptions should be translated
 ALL_EMBED_ALGO = ["mds", "tsne", "isomap"]                                      # Actual Embedding of the Descriptions
 ALL_EMBED_DIMENSIONS = [100, 3, 20, 50, 200]                                    # Actual Embedding of the Descriptions
 ALL_QUANTIFICATION_MEASURE = ["count", "tfidf", "ppmi", "binary", "tf"]         # For the dissimiliarity Matrix of the Descripts

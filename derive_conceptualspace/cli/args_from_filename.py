@@ -24,6 +24,12 @@ def main():
         print_envvars(args.filename)
     elif args.variables:
         get_filename(args.variables)
+    else:
+        inpt = input("What: ")
+        if not " " in inpt:
+            print_envvars(inpt)
+        else:
+            get_filename(inpt)
 
 
 def apply_dotenv_vars(ENV_PREFIX="MA"):

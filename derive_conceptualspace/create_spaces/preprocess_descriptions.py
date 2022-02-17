@@ -126,7 +126,8 @@ def create_bare_desclist(languages, translations, for_language, names, descripti
         print(f"Dropped {len(names)-len(indices)} out of {len(names)} descriptions because I will take only the ones of language {for_language} ({len(indices)} left)")
         for i in indices:
             desc_list.add(Description(lang=for_language, text=descriptions[i], title=names[i], subtitle=subtitles[i], orig_textlang=for_language,
-                                      orig_titlelang=languages["title"][names[i]], orig_subtitlelang=(languages["subtitle"] or {}).get(subtitles[i]),
+                                      orig_titlelang=languages["title"][names[i]] if languages["title"] is not None else "unk",
+                                      orig_subtitlelang=(languages["subtitle"] or {}).get(subtitles[i]) if languages["subtitle"] is not None else "unk",
                                       additionals={k: v[i] for k, v in additionals.items()}))
     elif translate_policy == "translate":
         missing_translations = set()

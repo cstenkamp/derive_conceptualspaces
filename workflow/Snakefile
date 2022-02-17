@@ -60,7 +60,7 @@ from derive_conceptualspace.settings import (
     ENV_PREFIX,
     standardize_config,
     standardize_config_name,
-    FORBIDDEN_COMBIS, IS_INTERACTIVE,
+    FORBIDDEN_COMBIS,
 )
 from derive_conceptualspace.util.interruptible_funcs import InterruptibleLoad
 from misc_util.pretty_print import pretty_print as print, print_multicol
@@ -297,7 +297,7 @@ rule create_candidate_svm:
     threads: 4
     resources:
         mem_mb=32*1024,
-        pe="4-16"
+        pe="4-8"
     run:
         autoload_context_inputs(ctx, input, wildcards, silents=["pp_descriptions"])
         with InterruptibleLoad(ctx, "clusters.json", loader=lambda x:x) as mgr:

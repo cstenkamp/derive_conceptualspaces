@@ -4,7 +4,7 @@
 # Cand-Filter:   binary linear SVM with pos/neg-count-ratio as instance cost, then select all for which kappa(svm_rank, count(t,e)) >= 0.1
 # Cand-Merging:  Custom
 
-pp_components:                [mfhcsdp2, mfauhcsdp2, mfauhtcsdp, mfauhtcsldp]
+pp_components:                [mfhcsd2, mfauhcsd2, mfauhtcsdp, mfauhtcsldp]
 translate_policy:             onlyorig
 quantification_measure:       [ppmi, tfidf]
 dissim_measure:               norm_ang_dist
