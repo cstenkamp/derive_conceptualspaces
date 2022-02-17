@@ -11,13 +11,28 @@ ENV_PREFIX = "MA"
 ############################################## the important parameters ################################################
 ########################################################################################################################
 
+# PP-Components:
+# sentwise_merge = "m",  add_additionals = "f", add_title = "a", add_subtitle = "u", remove_htmltags = "h", sent_tokenize = "t", convert_lower = "c",
+# remove_stopwords = "s", lemmatize = "l", remove_diacritics = "d", remove_punctuation = "p", use_skcountvec = "2",
+# m,f,a,u,h,c should be default for now -> mfauhc
+# if not sk-countvec then t             -> mfauhc2 & mfauhtc
+# d & p make for more merging of kw's   -> mfauhcdp2 & mfauhtcdp
+# TODO: maybe try without remove-stopwords eventually? TODO: better german stopwords?
+# left are: lemmatize                   -> mfauhcsdp2, mfauhtcdp, mfauhtcldp
+# maybe we try without title once       -> mfhcsdp2, mfauhcsdp2, mfauhtcsdp, mfauhtcsldp
+# TODO: synsetisize as soon as GermaNet
+# old candidates were: mfacsd2  (sentwisemerge, add-additionals, add-title, convert-lower, remove-stopwords, remove-diacritics, use-skcount)
+#                      autcsldp (add-title, add-subtitle, sent-tokenize, convert-lower, remove-stopwords, lemmatize, remove-diacritics, remove-punctuation)
+#                      tcsdp    (sent-tokenize, convert-lower, remove-stopwords, remove-diacritics, remove-punctuation)
+
+
 #!! use singular for these (bzw the form you'd use if there wasn't the "ALL_" before)
-ALL_PP_COMPONENTS = ["mfacsd2"]#, "autcsldp"] #,"tcsdp"    # If in preprocessing it should add title, lemmatize, etc #TODO "autcsldp", "tcsldp" (gehen gerade nicht weil die nicht mit ngrams klarkommen)
+ALL_PP_COMPONENTS = ["mfhcsdp2", "mfauhcsdp2", "mfauhtcsdp", "mfauhtcsldp"]     # If in preprocessing it should add title, lemmatize, etc
 ALL_TRANSLATE_POLICY = ["onlyorig", "translate", "origlang"]                    # If non-english/non-german/... descriptions should be translated
 ALL_EMBED_ALGO = ["mds", "tsne", "isomap"]                                      # Actual Embedding of the Descriptions
 ALL_EMBED_DIMENSIONS = [100, 3, 20, 50, 200]                                    # Actual Embedding of the Descriptions
 ALL_QUANTIFICATION_MEASURE = ["count", "tfidf", "ppmi", "binary", "tf"]         # For the dissimiliarity Matrix of the Descripts
-ALL_EXTRACTION_METHOD = ["keybert", "pp_keybert", "tfidf", "tf", "all", "ppmi"] # How candidate-terms are getting extracted         #TODO keybert
+ALL_EXTRACTION_METHOD = ["keybert", "pp_keybert", "tfidf", "tf", "all", "ppmi"] # How candidate-terms are getting extracted
 ALL_DCM_QUANT_MEASURE = ["count", "tfidf", "ppmi", "binary", "tf"]              # Quantification for the Doc-Keyphrase-Matrix       #TODO tag-share
 #TODO do I even need the distinction between DCM_QUANT_MEASURE and CLASSIFIER_COMPARETO_RANKING ???
 

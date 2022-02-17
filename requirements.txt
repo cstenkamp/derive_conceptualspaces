@@ -36,7 +36,7 @@ git+https://github.com/cstenkamp/python-seafile.git@v0.1.2#egg=python_seafile #o
 plotly==4.14.3
 #to render in jupyterlab install jupyterlab extension: conda run -n Derive_Conceptualspace python -m jupyter labextension uninstall jupyterlab-plotly@5.3.1
 
-snakemake==6.9.1
+snakemake==6.15.5
 gensim==4.1.2
 
 psutil

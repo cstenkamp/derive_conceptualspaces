@@ -62,6 +62,9 @@ class InterruptibleLoad():
                 metainf["N_RUNS"] = 1
             overwrite_old = False
         self.ctx.p.save(self.name_with_ending, metainf=metainf, overwrite_old=overwrite_old, **kwargs)
+        if metainf.get("NEWLY_INTERRUPTED"):
+            return 1 #see https://github.com/snakemake/snakemake/issues/1244#issuecomment-1012985395
+        return 0
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass

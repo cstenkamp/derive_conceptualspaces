@@ -8,6 +8,9 @@ import subprocess
 import yaml
 import sys
 import random
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+from util.sge_util import load_acctfile, get_active_jobs
 
 # use warnings.warn() rather than print() to output info in this script
 # because snakemake expects the jobid to be the only output
@@ -15,8 +18,6 @@ import warnings
 
 from snakemake import io
 from snakemake.utils import read_job_properties
-
-from .sge_util import load_acctfile, get_active_jobs
 
 DEFAULT_JOB_NAME = "snakemake_job"
 QSUB_DEFAULTS = "-cwd -V"
@@ -241,11 +242,11 @@ slugify = lambda txt: ('"'+",".join(slugify_pre(i) for i in txt)+'"') if isinsta
 
 def check_if_alreadyscheduled(job_properties):
     to_compare = ["input", "jobid", "output", "rule", "wildcards"]
-    jobs = get_active_jobs()
+    jobs = [str(i) for i in get_active_jobs()]
     acctfile = load_acctfile()
-    job_infos = {job: acctfile[job] for job in jobs}
+    job_infos = {job: acctfile[job] for job in jobs if job in acctfile}
     for id, inf in job_infos.items():
-        if all(inf[i] == job_properties[i] for i in to_compare):
+        if all(inf.get(i) == job_properties.get(i) for i in to_compare):
             return id
 
 
@@ -268,14 +269,15 @@ def submit_job(jobscript, qsub_settings, simulate=False):
         wall_secs = sum(60**(2-i[0])*int(i[1]) for i in enumerate(qsub_settings["resources"]["h_rt"].split(":")))
         batch_options += ["-v", f"WALL_SECS={wall_secs}"]
     try:
-        if check_if_alreadyscheduled(job_properties):
-            print("This job is already scheduled under external job-id", check_if_alreadyscheduled(job_properties))
+        old_jobid = check_if_alreadyscheduled(job_properties)
+        if old_jobid:
+            print("This job is already scheduled under external job-id", old_jobid, file=sys.stderr)
+            return old_jobid
         print(f'Will submit the following: `{" ".join(["qsub", "-terse"] + batch_options + options_as_envvars + batch_resources + [jobscript])}`', file=sys.stderr)
         print(f'Error-File can be found at `{os.path.join(os.getenv("MA_BASE_DIR", ""), qsub_settings["options"].get("e", "").format(rulename=job_properties["rule"], jobid=job_properties["jobid"]))}`', file=sys.stderr)
         if simulate:
             jobid = None
         else:
-            #TODO check qstat and if it exists just return job-id
             # -terse means only the jobid is returned rather than the normal 'Your job...' string
             jobid = subprocess.check_output(["qsub", "-terse"] + batch_options + options_as_envvars + batch_resources + [jobscript]).decode().rstrip()
     except subprocess.CalledProcessError as e:

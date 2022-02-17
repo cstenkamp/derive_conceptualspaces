@@ -93,7 +93,7 @@ def extract_candidateterms_quantific(descriptions, max_ngram, quantific, verbose
     dtm, mta = descriptions.generate_DocTermMatrix(min_df=get_setting("CANDIDATE_MIN_TERM_COUNT"), max_ngram=max_ngram, do_tfidf=quantific if quantific in ["tfidf", "tf"] else None)
     #Now I'm filtering here, I originally didn't want to do that but it makes the processing incredibly much faster
     if quantific in ["tfidf", "tf"]:
-        quant = dtm.dtm if not mta.get("sklearn_tfidf") else csr_to_list(TfidfTransformer(use_idf=(quantific=="tfidf")).fit_transform(dtm.as_csr().T)) # tf_idf(dtm, verbose=verbose, descriptions=descriptions)
+        quant = dtm.dtm if mta.get("sklearn_tfidf") else csr_to_list(TfidfTransformer(use_idf=(quantific=="tfidf")).fit_transform(dtm.as_csr().T)) # tf_idf(dtm, verbose=verbose, descriptions=descriptions)
     elif quantific == "ppmi":
         quant = ppmi(dtm, verbose=verbose, descriptions=descriptions)
     elif quantific == "all":
