@@ -16,7 +16,7 @@ extraction_method:            tfidf
 #TODO this should be part of the dataset-config!
 max_ngram:                    5                   # not explicitly, but it takes adjective phrases so it's something >=3
 
-classifier_compareto_ranking: [count, ppmi, tfidf]
+dcm_quant_measure:            [count, ppmi, tfidf]
 classifier_succmetric:        kappa_digitized_onlypos_2
 prim_lambda:                  0.4
 sec_lambda:                   0.2

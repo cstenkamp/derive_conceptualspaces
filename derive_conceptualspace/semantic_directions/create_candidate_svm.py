@@ -30,36 +30,27 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
     #TODO I am still not sure about if I am calculating with vectors somewhere where when I should be working with points
     decision_planes = {}
     metrics = {}
-    compareto_ranking = get_setting("classifier_compareto_ranking")
-    if dcm.quant_name != compareto_ranking and dcm.quant_name == "count":
-        dcm = dcm.apply_quant(compareto_ranking, descriptions=descriptions, verbose=verbose)
-    elif dcm.quant_name != compareto_ranking:
-        # Ensure that regardless of quant_measure `np.array(quants, dtype=bool)` are correct binary classification labels
-        raise NotImplementedError()
     terms = list(dcm.all_terms.values())
     metainf = {}
-    if get_setting("DEBUG"):
-        maxlen = min(len(terms), len(embedding.embedding_), get_setting("DEBUG_N_ITEMS"), len(dcm.dtm))
-        working_inds = [nterm for nterm, term in enumerate(terms[:maxlen]) if np.array(dcm.term_quants(term)[:maxlen], dtype=bool).std()] #those with >1 class
-        term_inds = unique(flatten([j[0] for j in dcm.dtm[i]] for i in working_inds))
-        terms = [dcm.all_terms[i] for i in term_inds]
-        embedding.embedding_ = embedding.embedding_[working_inds]
-        dcm = DocTermMatrix([dcm.dtm[i] for i in working_inds], {i: dcm.all_terms[i] for i in term_inds}, dcm.quant_name)
-        print(f"Debug-Mode: Running for {len(working_inds)} Items and {len(terms)} Terms.")
-    else:
-        assert all(len([i for i in descriptions._descriptions if term in i]) == len([i for i in dcm.term_quants(term) if i > 0]) for term in random.sample(terms, 5))
-
-    #TODO #PRECOMMIT comment in!!
+    # if get_setting("DEBUG"):
+    #     maxlen = min(len(terms), len(embedding.embedding_), get_setting("DEBUG_N_ITEMS"), len(dcm.dtm))
+    #     working_inds = [nterm for nterm, term in enumerate(terms[:maxlen]) if np.array(dcm.term_quants(term)[:maxlen], dtype=bool).std()] #those with >1 class
+    #     term_inds = unique(flatten([j[0] for j in dcm.dtm[i]] for i in working_inds))
+    #     terms = [dcm.all_terms[i] for i in term_inds]
+    #     embedding.embedding_ = embedding.embedding_[working_inds]
+    #     dcm = DocTermMatrix([dcm.dtm[i] for i in working_inds], {i: dcm.all_terms[i] for i in term_inds}, dcm.quant_name)
+    #     print(f"Debug-Mode: Running for {len(working_inds)} Items and {len(terms)} Terms.")
+    # else:
+    #     assert all(len([i for i in descriptions._descriptions if term in i]) == len([i for i in dcm.term_quants(term) if i > 0]) for term in random.sample(terms, 5))
+    # TODO #FIXPRECOMMIT #PRECOMMIT comment in
+    warnings.warn("PRECOMMIT there's stuff here!")
     assert all(i in terms for i in ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze'])
     terms = ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze']
     assert len([i for i in descriptions._descriptions if 'nature' in i]) == len([i for i in dcm.term_quants('nature') if i > 0])
     print(f"Running only for the terms {terms}")
 
-    # ncpu = get_ncpu(ram_per_core=3)
-    ncpu = 1 #TODO #PRECOMMIT remove
-
-    if ncpu == 1:
-        #TODO for ncpu==1, I'm adding direct key-value-pairs, in the ncpu>1 version I'm appending to a list -> they are incompatible!
+    ncpu = get_ncpu(ram_per_core=3)
+    if ncpu == 1:  #TODO Interruptible: for ncpu==1, I'm adding direct key-value-pairs, in the ncpu>1 version I'm appending to a list -> they are incompatible!
         quants_s = [dcm.term_quants(term) for term in tqdm(terms, desc="Counting Terms")]
         with Interruptible(zip(terms, quants_s), ([], decision_planes, metrics), metainf, continue_from=continue_from, pgbar="Creating Candidate SVMs", total=len(terms), name="SVMs") as iter:
             for term, quants in iter: #in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs", total=len(terms))

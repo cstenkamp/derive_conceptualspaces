@@ -34,8 +34,7 @@ ALL_EMBED_DIMENSIONS = [100, 3, 20, 50, 200]                                    
 ALL_QUANTIFICATION_MEASURE = ["count", "tfidf", "ppmi", "binary", "tf"]         # For the dissimiliarity Matrix of the Descripts
 ALL_EXTRACTION_METHOD = ["keybert", "pp_keybert", "tfidf", "tf", "all", "ppmi"] # How candidate-terms are getting extracted
 ALL_DCM_QUANT_MEASURE = ["count", "tfidf", "ppmi", "binary", "tf"]              # Quantification for the Doc-Keyphrase-Matrix       #TODO tag-share
-#TODO do I even need the distinction between DCM_QUANT_MEASURE and CLASSIFIER_COMPARETO_RANKING ???
-
+# = CLASSIFIER_COMPARETO_RANKING
 
 #set default-values for the ALL_... variables (always the first one) `DEFAULT_PP_COMPONENTS = ALL_PP_COMPONENTS[0] \n ...`
 for k, v in {k[4:]: v[0] for k,v in dict(locals()).items() if isinstance(v, list) and k.startswith("ALL_")}.items():
@@ -79,7 +78,6 @@ DEFAULT_QUANTEXTRACT_MINPERDOC = 0
 DEFAULT_QUANTEXTRACT_FORCETAKE_PERC = 0.99
 #TODO statt dieser settings kann ich auch ne number an demanded candidateterms vorgeben, und die candidates kriegen alle einn wert wie gut sie sind und der standard wird so lange gelowert bis die #demandedterms ungefähr erreicht sind
 
-DEFAULT_CLASSIFIER_COMPARETO_RANKING = "count"  #so far: one of ["count", "ppmi"]
 DEFAULT_CLASSIFIER_SUCCMETRIC = "cohen_kappa"
 
 ########################################################################################################################
@@ -112,10 +110,10 @@ with set_noninfluentials(): #this context-manager adds all settings from here to
                   "{pp_components}_{translate_policy}_minwords{min_words_per_desc}",
                   "embedding_{quantification_measure}",
                   "{embed_algo}_{embed_dimensions}d",
-                  "{extraction_method}_{dcm_quant_measure}_{classifier_compareto_ranking}"]
+                  "{extraction_method}_{dcm_quant_measure}"]
 
     FORBIDDEN_COMBIS = ["tsne_50d", "tsne_100d"]
-    NORMALIFY_PARAMS = ["QUANTIFICATION_MEASURE", "EXTRACTON_METHOD", "EMBED_ALGO", "DCM_QUANT_MEASURE", "CLASSIFIER_COMPARETO_RANKING"]  #for all params that are in this, eg `Tf-IdF` will become `tfidf`
+    NORMALIFY_PARAMS = ["QUANTIFICATION_MEASURE", "EXTRACTON_METHOD", "EMBED_ALGO", "DCM_QUANT_MEASURE"]  #for all params that are in this, eg `Tf-IdF` will become `tfidf`
     CONF_PRIORITY = ["force", "smk_wildcard", "dependency", "cmd_args", "env_vars", "smk_args", "conf_file", "dataset_class", "defaults"] #no distinction between env_file and env_var bc load_dotenv is executed eagerly and just overwrites envvars from envfile
     #note that snakemake reads the conf_file differently and sets env-vars (that however apply force) from the configurations
     MAY_DIFFER_IN_DEPENDENCIES = ["DEBUG", "RANDOM_SEED", "CANDIDATE_MIN_TERM_COUNT", "BASE_DIR", "DEBUG_N_ITEMS", "CONF_FILE"]+NON_INFLUENTIAL_CONFIGS

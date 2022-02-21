@@ -8,6 +8,6 @@
 
 max_ngram:                    1
 classifier_succmetric:        ["cohen_kappa", "accuracy", "ndcg"]
-classifier_compareto_ranking: ppmi
+dcm_quant_measure:            ppmi
 
 #TODO finish up

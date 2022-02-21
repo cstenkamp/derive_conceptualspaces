@@ -15,8 +15,8 @@ extraction_method:            pp_keybert
 #candidate_min_term_count:     25 #movies has samples-to-threshold value of 100, placetypes has 35, 20newsgrups has 614, so for 8000 courses any threshold from 2 to 25 seems reasonable (BUT see above, I get too little)!!
 #TODO this should be part of the dataset-config!
 max_ngram:                    5                   # not explicitly, but it takes adjective phrases so it's something >=3
+dcm_quant_measure:            count
 
-classifier_compareto_ranking: count
 # classifier_succmetric:        [kappa_count2rank_onlypos, kappa_rank2rank_onlypos_min]  #unclear if the ranking induced by count, or the baremetal count
 # TODO add back as soon as clusters work #PRECOMMIT #FIXPRECOMMIT
 prim_lambda:                  0.5
