@@ -155,7 +155,6 @@ def raw_descriptions_input(wildcards):
     except StopIteration as err:
         raise Exception("No raw_descriptions file found") from err
 
-
 rule preprocess_descriptions:
     input:
         raw_descriptions         = raw_descriptions_input,
@@ -176,6 +175,7 @@ rule preprocess_descriptions:
         descriptions, metainf = preprocess_descriptions_base(ctx.obj["raw_descriptions"], ctx.obj["dataset_class"], ctx.get_config("pp_components"),
                                                              ctx.get_config("language"), ctx.get_config("translate_policy"), languages, translations)
         ctx.p.save("pp_descriptions.json", descriptions=descriptions, metainf=metainf)
+
 
 
 rule preprocess_descriptions_notranslate:

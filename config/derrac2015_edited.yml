@@ -24,7 +24,7 @@ prim_lambda:                  0.4
 sec_lambda:                   0.2
 __perdataset__:
   placetypes:
-    extraction_method: "all" #in the placetypes-dataset, ALL words are candidates (21.8k)
-
+    extraction_method: all #in the placetypes-dataset, ALL words are candidates (21.8k)
+    pp_components: none
 #TODO alles ab cand-filter fehlt noch...
 

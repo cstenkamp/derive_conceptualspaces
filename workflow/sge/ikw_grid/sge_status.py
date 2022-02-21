@@ -42,7 +42,7 @@ def get_status(jobid, STATUS_ATTEMPTS=20, silent=False):
         except sp.CalledProcessError as e:
             logger.error("qstat process error")
             logger.error(e)
-        except KeyError as e:
+        except (KeyError, FileNotFoundError) as e:
             if os.path.isfile("/var/lib/gridengine/ikwgrid/common/accounting"):
                 # if the job has finished it won't appear in qstat and we should check qacct
                 # this will also provide the exit status (0 on success, 128 + exit_status on fail)
@@ -75,6 +75,8 @@ def get_status(jobid, STATUS_ATTEMPTS=20, silent=False):
                     job_info = custom_acct[str(jobid)]
                     error_file = job_info["envvars"]["e"].format(rulename=job_info["job_properties"]["rule"], jobid=job_info["job_properties"]["jobid"])
                     error_file = os.path.join(os.environ["MA_BASE_DIR"], error_file) #set in the run_snakemake.sge file ($PWD and $MA_BASE_DIR are the same)
+                    if not os.path.isfile(error_file) and os.path.isfile(os.path.join(os.environ["MA_BASE_DIR"], os.path.basename(error_file))):
+                        error_file = os.path.join(os.environ["MA_BASE_DIR"], os.path.basename(error_file))
                     if not os.path.isfile(error_file):
                         job_status = "failed"
                         break
