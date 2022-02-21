@@ -8,7 +8,7 @@ pp_components:                [mfhcsd2, mfauhcsd2, mfauhtcsdp, mfauhtcsldp]
 translate_policy:             onlyorig
 quantification_measure:       [ppmi, tfidf]
 dissim_measure:               norm_ang_dist
-embed_algo:                   "mds"
+embed_algo:                   mds
 embed_dimensions:             [3, 50, 100, 200]
 extraction_method:            tfidf
 #TODO: DESC15 hat darauf abgezielt ~22k keywords zu haben => mit meinen params dafür sorgen dass ich auch auf sowas komme, mit den aktuellen ists nur 2402!
@@ -17,6 +17,8 @@ extraction_method:            tfidf
 max_ngram:                    5                   # not explicitly, but it takes adjective phrases so it's something >=3
 
 dcm_quant_measure:            [count, ppmi, tfidf]
+classifier:                   SVM
+kappa_weights:                quadratic
 classifier_succmetric:        kappa_digitized_onlypos_2
 prim_lambda:                  0.4
 sec_lambda:                   0.2

@@ -1,3 +1,4 @@
+import json
 import sys
 import os
 from os.path import splitext
@@ -43,7 +44,7 @@ class InterruptibleLoad():
             if "NEWLY_INTERRUPTED" in self.old_metainf:
                 del self.old_metainf["NEWLY_INTERRUPTED"]
             self.kwargs = dict(continue_from=(tmp2, self.old_metainf, self.metainf_countervarnames, self.metainf_ignorevarnames))
-        except (FileNotFoundError, DependencyError):
+        except (FileNotFoundError, DependencyError, json.decoder.JSONDecodeError):
             self.kwargs = {}
         return self
 

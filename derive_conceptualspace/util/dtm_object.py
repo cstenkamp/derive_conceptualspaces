@@ -175,8 +175,9 @@ class DocTermMatrix():
             dtm.show_info(descriptions=kwargs.get("descriptions"))
         return dtm
 
-
     def term_quants(self, term): #returns a list of the quantification (count or whatever it is) for the term
+        """Note that is only useful if you do it for 1-3 terms. If you want to do it for ALL, note that
+           `dcm.term_quants(terms[0]) == list(dcm.as_csr()[0,:].toarray().squeeze())`"""
         existinds = self.term_existinds(use_index=False)[term]
         return [0 if i not in existinds else dict(self.dtm[i])[self.reverse_term_dict[term]] for i in range(len(self.dtm))]
 

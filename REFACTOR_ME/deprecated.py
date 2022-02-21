@@ -135,3 +135,22 @@ def json_load(fname, **kwargs): #assert_meta=(), return_meta=False,
     #         return npify_rek(tmp["content"]), meta
     #     return npify_rek(tmp["content"])
     return npify_rek(tmp)
+
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
+# calculating first quants_s and from that the SVMs in create-candidate-svm-step:
+
+# print(f"Starting Multiprocessed with {ncpu} CPUs")
+# # with WorkerPool(get_ncpu(), dcm, pgbar="Counting Terms") as pool:
+# #     quants_s = pool.work(terms, lambda dcm, term: dcm.term_quants(term))
+# with SkipContext() as skipped, Interruptible(terms, [[], None, None], metainf, continue_from=continue_from,
+#                                              contains_mp=True, name="Counting") as iter:
+#     with WorkerPool(ncpu, dcm, pgbar="Counting Terms", comqu=iter.comqu) as pool:
+#         quants_s, interrupted = pool.work(iter.iterable, lambda dcm, term: dcm.term_quants(term))
+#     quants_s, _, _ = iter.notify([quants_s, None, None], exception=interrupted)
+#     if interrupted is not False:
+#         return quants_s, None, None, metainf
+# if skipped.args is not None:
+#     quants_s, _, _ = skipped.args
+# assert len(quants_s) == len(terms)

@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from itertools import repeat
 import warnings
 from textwrap import shorten
@@ -32,52 +33,41 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
     metrics = {}
     terms = list(dcm.all_terms.values())
     metainf = {}
-    # if get_setting("DEBUG"):
-    #     maxlen = min(len(terms), len(embedding.embedding_), get_setting("DEBUG_N_ITEMS"), len(dcm.dtm))
-    #     working_inds = [nterm for nterm, term in enumerate(terms[:maxlen]) if np.array(dcm.term_quants(term)[:maxlen], dtype=bool).std()] #those with >1 class
-    #     term_inds = unique(flatten([j[0] for j in dcm.dtm[i]] for i in working_inds))
-    #     terms = [dcm.all_terms[i] for i in term_inds]
-    #     embedding.embedding_ = embedding.embedding_[working_inds]
-    #     dcm = DocTermMatrix([dcm.dtm[i] for i in working_inds], {i: dcm.all_terms[i] for i in term_inds}, dcm.quant_name)
-    #     print(f"Debug-Mode: Running for {len(working_inds)} Items and {len(terms)} Terms.")
-    # else:
-    #     assert all(len([i for i in descriptions._descriptions if term in i]) == len([i for i in dcm.term_quants(term) if i > 0]) for term in random.sample(terms, 5))
-    # TODO #FIXPRECOMMIT #PRECOMMIT comment in
-    warnings.warn("PRECOMMIT there's stuff here!")
-    assert all(i in terms for i in ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze'])
-    terms = ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze']
-    assert len([i for i in descriptions._descriptions if 'nature' in i]) == len([i for i in dcm.term_quants('nature') if i > 0])
-    print(f"Running only for the terms {terms}")
+    if get_setting("DEBUG"):
+        # maxlen = min(len(terms), len(embedding.embedding_), get_setting("DEBUG_N_ITEMS"), len(dcm.dtm))
+        # working_inds = [nterm for nterm, term in enumerate(terms[:maxlen]) if np.array(dcm.term_quants(term)[:maxlen], dtype=bool).std()] #those with >1 class
+        # term_inds = unique(flatten([j[0] for j in dcm.dtm[i]] for i in working_inds))
+        # terms = [dcm.all_terms[i] for i in term_inds]
+        # embedding.embedding_ = embedding.embedding_[working_inds]
+        # dcm = DocTermMatrix([dcm.dtm[i] for i in working_inds], {i: dcm.all_terms[i] for i in term_inds}, dcm.quant_name)
+        # print(f"Debug-Mode: Running for {len(working_inds)} Items and {len(terms)} Terms.")
+        # TODO #FIXPRECOMMIT #PRECOMMIT comment in
+        warnings.warn("PRECOMMIT there's stuff here!")
+        assert all(i in terms for i in ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze'])
+        terms = ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze']
+        assert len([i for i in descriptions._descriptions if 'nature' in i]) == len([i for i in dcm.term_quants('nature') if i > 0])
+        print(f"Running only for the terms {terms}")
+    else:
+        assert all(len([i for i in descriptions._descriptions if term in i]) == len([i for i in dcm.term_quants(term) if i > 0]) for term in random.sample(terms, 5))
+    if get_setting("DO_SANITYCHECKS"):
+        assert all(dcm.term_quants(terms[i]) == list(dcm.as_csr()[i,:].toarray().squeeze()) for i in random.sample(range(len(terms)), 5))
 
-    ncpu = get_ncpu(ram_per_core=3)
+    quants_s = dcm.as_csr().toarray().tolist()  # [dcm.term_quants(term) for term in tqdm(terms, desc="Counting Terms")]
+    ncpu = 1# #TODO #PRECOMMIT #FIXPRECOMMIT get_ncpu(ram_per_core=3)
     if ncpu == 1:  #TODO Interruptible: for ncpu==1, I'm adding direct key-value-pairs, in the ncpu>1 version I'm appending to a list -> they are incompatible!
-        quants_s = [dcm.term_quants(term) for term in tqdm(terms, desc="Counting Terms")]
         with Interruptible(zip(terms, quants_s), ([], decision_planes, metrics), metainf, continue_from=continue_from, pgbar="Creating Candidate SVMs", total=len(terms), name="SVMs") as iter:
             for term, quants in iter: #in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs", total=len(terms))
-                cand_mets, decision_plane, term = create_candidate_svm(embedding.embedding_, term, quants, descriptions=descriptions, quant_name=dcm.quant_name)
+                cand_mets, decision_plane, term = create_candidate_svm(embedding.embedding_, term, quants, classifier=get_setting("CLASSIFIER"), descriptions=descriptions, quant_name=dcm.quant_name)
                 metrics[term] = cand_mets
                 decision_planes[term] = decision_plane
     else:
         print(f"Starting Multiprocessed with {ncpu} CPUs")
-        # with WorkerPool(get_ncpu(), dcm, pgbar="Counting Terms") as pool:
-        #     quants_s = pool.work(terms, lambda dcm, term: dcm.term_quants(term))
-        with SkipContext() as skipped, Interruptible(terms, [[], None, None], metainf, continue_from=continue_from, contains_mp=True, name="Counting") as iter:
-            with WorkerPool(ncpu, dcm, pgbar="Counting Terms", comqu=iter.comqu) as pool:
-                quants_s, interrupted = pool.work(iter.iterable, lambda dcm, term: dcm.term_quants(term))
-            quants_s, _, _ = iter.notify([quants_s, None, None], exception=interrupted)
-            if interrupted is not False:
-                return quants_s, None, None, metainf
-        if skipped.args is not None:
-            quants_s, _, _ = skipped.args
-        assert len(quants_s) == len(terms)
-
         with Interruptible(zip(terms, quants_s), [None, [], None], metainf, continue_from=continue_from, contains_mp=True, name="SVMs", total=len(quants_s)) as iter:
             with tqdm(total=iter.n_elems, desc="Creating Candidate SVMs") as pgbar, ThreadPool(ncpu, comqu=iter.comqu) as p:
                 res, interrupted = p.starmap(create_candidate_svm, zip(repeat(embedding.embedding_, iter.n_elems), repeat("next_0"), repeat("next_1"), repeat(False), repeat(None), repeat(dcm.quant_name), repeat(pgbar)), draw_from=iter.iterable)
             _, res, _ = iter.notify([None, res, None], exception=interrupted)
             if interrupted is not False:
                 return quants_s, res, None, metainf
-
         for cand_mets, decision_plane, term in res:
             metrics[term] = cand_mets
             decision_planes[term] = decision_plane
@@ -145,50 +135,55 @@ def select_salient_terms(metrics, decision_planes, prim_lambda, sec_lambda, metr
     return clusters, cluster_directions
 
 
-def create_candidate_svm(embedding, term, quants, plot_svm=False, descriptions=None, quant_name=None, pgbar=None, **kwargs):
+def create_candidate_svm(embedding, term, quants, classifier, plot_svm=False, descriptions=None, quant_name=None, pgbar=None, **kwargs):
     bin_labels = np.array(quants, dtype=bool) # Ensure that regardless of quant_measure this is correct binary classification labels
     # (tmp := len(quants)/(2*np.bincount(bin_labels)))[0]/tmp[1] is roughly equal to bin_labels.mean() so balancing is good
     # see https://stackoverflow.com/q/33843981/5122790, https://stackoverflow.com/q/35076586/5122790
-    # svm = sklearn.svm.SVC(kernel="linear", class_weight="balanced")  #slow as fuck
-    # svm = sklearn.svm.LinearSVC(dual=False, class_weight="balanced") #squared-hinge instead of hinge (but fastest!)
-    svm = sklearn.svm.LinearSVC(class_weight="balanced", loss="hinge", max_iter=20000)
+    if classifier == "SVM":
+        svm = sklearn.svm.LinearSVC(class_weight="balanced", loss="hinge", max_iter=20000)
+    elif classifier == "SVM_square":
+        svm = sklearn.svm.LinearSVC(dual=False, class_weight="balanced") #squared-hinge instead of hinge (but fastest!)
+    elif classifier == "SVM2":
+        warnings.warn("Using SVM Implementation that's slower for this kind of data!")
+        svm = sklearn.svm.SVC(kernel="linear", class_weight="balanced", decision_function_shape="ovo")  #slow as fuck, don't use
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         svm.fit(embedding, bin_labels)
         if w: assert len(w) == 1 and issubclass(w[0].category, sklearn.exceptions.ConvergenceWarning)
         no_converge = bool(w)
-    svm_results = svm.decision_function(embedding)
-    tn, fp, fn, tp = confusion_matrix(bin_labels, [i > 0 for i in svm_results]).ravel()
-    precision = tp / (tp + fp); recall = tp / (tp + fn); accuracy = (tp + tn) / len(quants)
-    f_one = 2*(precision*recall)/(precision+recall)
-    res = {"accuracy": accuracy, "precision": precision, "recall": recall, "f_one": f_one, "did_converge": not no_converge}
-    # print(f"accuracy: {accuracy:.2f} | precision: {precision:.2f} | recall: {recall:.2f}")
+    tn, fp, fn, tp = confusion_matrix(bin_labels, svm.predict(embedding)).ravel()
+    res = {"accuracy": (tp + tn) / len(quants), "precision": tp / (tp + fp), "recall": tp / (tp + fn), "did_converge": not no_converge}
+    res["f_one"] = 2 * (res["precision"] * res["recall"]) / (res["precision"] + res["recall"])
     #now, in [DESC15:4.2.1], they compare the "ranking induced by \vec{v_t} with the number of times the term occurs in the entity's documents" with Cohen's Kappa.
 
     #see notebooks/proof_of_concept/get_svm_decisionboundary.ipynb#Checking-projection-methods-&-distance-measures-from-point-to-projection for the ranking
     decision_plane = NDPlane(svm.coef_[0], svm.intercept_[0])  #don't even need the plane class here
     dist = lambda x, plane: np.dot(plane.normal, x) + plane.intercept
     distances = [dist(point, decision_plane) for point in embedding]
+    assert np.allclose(distances, svm.decision_function(embedding)) #see https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html#sklearn.svm.SVC.decision_function, https://stats.stackexchange.com/a/14881
+    distances /= np.linalg.norm(svm.coef_[0]) #TODO: add the links and this normalification to the distances-notebook
     #sanity check: do most of the points with label=0 have the same sign `np.count_nonzero(np.sign(np.array(distances)[bin_labels])+1)
     # bin_labels, np.array((np.sign(np.array(distances))+1)/2, dtype=bool)
     # quant_ranking = np.zeros(quants.shape); quant_ranking[np.where(quants > 0)] = np.argsort(quants[quants > 0])
     #TODO cohen's kappa hat nen sample_weight parameter!! DESC15 write they select Kappa "due to its tolerance to class imbalance." -> Does that mean I have to set the weight?!
-    res["kappa_rank2rank_dense"]  = cohen_kappa_score(rankdata(quants, method="dense"), rankdata(distances, method="dense")) #if there are 14.900 zeros, the next is a 1
-    res["kappa_rank2rank_min"] = cohen_kappa_score(rankdata(quants, method="min"), rankdata(distances, method="dense")) #if there are 14.900 zeros, the next one is a 14.901
-    res["kappa_bin2bin"]    = cohen_kappa_score(bin_labels, [i > 0 for i in distances])
-    res["kappa_digitized"]  = cohen_kappa_score(np.digitize(quants, np.histogram_bin_edges(quants)[1:]), np.digitize(distances, np.histogram_bin_edges(distances)[1:]))
+    kappa_weights = get_setting("KAPPA_WEIGHTS")
+    res["kappa_rank2rank_dense"]  = cohen_kappa_score(rankdata(quants, method="dense"), rankdata(distances, method="dense"), weights=kappa_weights) #if there are 14.900 zeros, the next is a 1
+    res["kappa_rank2rank_min"] = cohen_kappa_score(rankdata(quants, method="min"), rankdata(distances, method="dense"), weights=kappa_weights) #if there are 14.900 zeros, the next one is a 14.901
+    res["kappa_bin2bin"]    = cohen_kappa_score(bin_labels, [i > 0 for i in distances], weights=kappa_weights)
+    res["kappa_digitized"]  = cohen_kappa_score(np.digitize(quants, np.histogram_bin_edges(quants)[1:]), np.digitize(distances, np.histogram_bin_edges(distances)[1:]), weights=kappa_weights)
     nonzero_indices = np.where(np.array(quants) > 0)[0]
     q2, d2 = np.array(quants)[nonzero_indices], np.array(distances)[nonzero_indices]
-    with warnings.catch_warnings(): #TODO get rid of what cuases the nans here!!!
-        warnings.filterwarnings('ignore', r'invalid value encountered in true_divide')
+    with nullcontext(): #warnings.catch_warnings(): #TODO get rid of what cuases the nans here!!!
+        # warnings.filterwarnings('ignore', r'invalid value encountered in true_divide')
         if quant_name == "count":  # in DESC15 they write "measure the correlation between the ranking induced by \vec{vt} and the number of times t appears in the documents associated with each entity", so maybe compare ranking to count?!
-            res["kappa_count2rank"] = cohen_kappa_score(quants, rankdata(distances, method="dense"))
-            res["kappa_count2rank_onlypos"] = cohen_kappa_score(q2, rankdata(d2, method="dense"))
-        res["kappa_rank2rank_onlypos_dense"] = cohen_kappa_score(rankdata(q2, method="dense"), rankdata(d2, method="dense"))
-        res["kappa_rank2rank_onlypos_min"] = cohen_kappa_score(rankdata(q2, method="min"), rankdata(d2, method="min"))
-        res["kappa_digitized_onlypos_1"] = cohen_kappa_score(np.digitize(q2, np.histogram_bin_edges(quants)[1:]), np.digitize(d2, np.histogram_bin_edges(distances)[1:]))
+            res["kappa_count2rank"] = cohen_kappa_score(quants, rankdata(distances, method="dense"), weights=kappa_weights)
+            res["kappa_count2rank_onlypos"] = cohen_kappa_score(q2, rankdata(d2, method="dense"), weights=kappa_weights)
+        res["kappa_rank2rank_onlypos_dense"] = cohen_kappa_score(rankdata(q2, method="dense"), rankdata(d2, method="dense"), weights=kappa_weights)
+        res["kappa_rank2rank_onlypos_min"] = cohen_kappa_score(rankdata(q2, method="min"), rankdata(d2, method="min"), weights=kappa_weights)
+        res["kappa_rank2rank_onlypos_max"] = cohen_kappa_score(rankdata(q2, method="max"), rankdata(d2, method="max"), weights=kappa_weights)
+        res["kappa_digitized_onlypos_1"] = cohen_kappa_score(np.digitize(q2, np.histogram_bin_edges(quants)[1:]), np.digitize(d2, np.histogram_bin_edges(distances)[1:]), weights=kappa_weights)
         #one ^ has as histogram-bins what it would be for ALL data, two only for the nonzero-ones
-        res["kappa_digitized_onlypos_2"] = cohen_kappa_score(np.digitize(q2, np.histogram_bin_edges(q2)[1:]), np.digitize(d2, np.histogram_bin_edges(d2)[1:]))
+        res["kappa_digitized_onlypos_2"] = cohen_kappa_score(np.digitize(q2, np.histogram_bin_edges(q2)[1:]), np.digitize(d2, np.histogram_bin_edges(d2)[1:]), weights=kappa_weights)
     if plot_svm and descriptions is not None:
         display_svm(embedding, np.array(bin_labels, dtype=int), svm, term=term, descriptions=descriptions, name=term+" "+(", ".join(f"{k}: {round(v, 3)}" for k, v in res.items())), quants=quants, distances=distances, **kwargs)
     if pgbar is not None:

@@ -33,8 +33,9 @@ ALL_EMBED_ALGO = ["mds", "tsne", "isomap"]                                      
 ALL_EMBED_DIMENSIONS = [100, 3, 20, 50, 200]                                    # Actual Embedding of the Descriptions
 ALL_QUANTIFICATION_MEASURE = ["count", "tfidf", "ppmi", "binary", "tf"]         # For the dissimiliarity Matrix of the Descripts
 ALL_EXTRACTION_METHOD = ["keybert", "pp_keybert", "tfidf", "tf", "all", "ppmi"] # How candidate-terms are getting extracted
-ALL_DCM_QUANT_MEASURE = ["count", "tfidf", "ppmi", "binary", "tf"]              # Quantification for the Doc-Keyphrase-Matrix       #TODO tag-share
-# = CLASSIFIER_COMPARETO_RANKING
+ALL_DCM_QUANT_MEASURE = ["count", "tfidf", "ppmi", "binary", "tf"]              # Quantification for the Doc-Keyphrase-Matrix (=CLASSIFIER_COMPARETO_RANKING)    #TODO tag-share
+ALL_CLASSIFIER = ["SVM", "SVM_square", "SVM"]
+ALL_KAPPA_WEIGHTS = ["quadratic", "linear", None]
 
 #set default-values for the ALL_... variables (always the first one) `DEFAULT_PP_COMPONENTS = ALL_PP_COMPONENTS[0] \n ...`
 for k, v in {k[4:]: v[0] for k,v in dict(locals()).items() if isinstance(v, list) and k.startswith("ALL_")}.items():
@@ -117,7 +118,7 @@ with set_noninfluentials(): #this context-manager adds all settings from here to
     CONF_PRIORITY = ["force", "smk_wildcard", "dependency", "cmd_args", "env_vars", "smk_args", "conf_file", "dataset_class", "defaults"] #no distinction between env_file and env_var bc load_dotenv is executed eagerly and just overwrites envvars from envfile
     #note that snakemake reads the conf_file differently and sets env-vars (that however apply force) from the configurations
     MAY_DIFFER_IN_DEPENDENCIES = ["DEBUG", "RANDOM_SEED", "CANDIDATE_MIN_TERM_COUNT", "BASE_DIR", "DEBUG_N_ITEMS", "CONF_FILE"]+NON_INFLUENTIAL_CONFIGS
-    DEFAULT_DEP_PREFERS_NONDEBUG = False
+    DEFAULT_DEP_PREFERS_NONDEBUG = True
     DEFAULT_DO_SANITYCHECKS = False  #sanity-checks check for code-correctness and can increase code-runtime by a lot. Running them once on each dataset&parameter-combination after changes is recommended.
 
 ########################################################################################################################
