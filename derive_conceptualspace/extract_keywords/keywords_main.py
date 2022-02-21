@@ -1,3 +1,4 @@
+import re
 import sys
 from collections import Counter
 from os.path import join, basename
@@ -116,8 +117,27 @@ def extract_candidateterms_quantific(descriptions, max_ngram, quantific, verbose
     all_candidates = [set([k[0] for k in i[0][:get_setting("QUANTEXTRACT_MINPERDOC")]])|set([j[0] for j in i[0] if j[1] >= min_val][:i[1]])|i[2] for i in candidates]
     if len(set(flatten(all_candidates))) == len(dtm.all_terms):
         metainf["all_terms_are_candidates"] = True
+    if verbose:
+        samples = random.sample([(desc.processed_as_string(), [dtm.all_terms[j] for j in cands]) for cands, desc in zip(all_candidates, descriptions._descriptions)], 5)
+        all_cands = set(flatten([[dtm.all_terms[j] for j in i] for i in all_candidates]))
+        all_words = set(dtm.all_terms.values())
+        print("Sample Descriptions, their *r*extracted keywords*r*, the *y*occuring keywords*y*, and the *b*not-too-seldom-terms*b*")
+        print("==" * 50)
+        for samp, reps in samples:
+            samp = " "+samp+" "
+            for k, v in {k: f"*r*{k}*r*" for k in reps}.items():
+                samp = samp.replace(f" {k} ", f" {v} ")
+            for k, v in {k: f"*y*{k}*y*" for k in all_cands}.items():
+                samp = samp.replace(f" {k} ", f" {v} ")
+            for k, v in {k: f"*b*{k}*b*" for k in all_words}.items():
+                samp = samp.replace(f" {k} ", f" {v} ")
+            print(samp)
+            print("Not displayable:", ", ".join([f"*r*{i}*r*" for i in reps if not f"*r*{i}*r*" in samp]))
+            print("=="*50)
     return [[dtm.all_terms[j] for j in i] for i in all_candidates], metainf
 
+#TODO alternatively to this ^ I can only have one variable of the demanded number of keywords to extract in sum
+# and save a score per-possible-keyword and threshold set the threshold for these scores such that I get the correct number
 
 ########################################################################################################################
 ########################################################################################################################
@@ -149,7 +169,7 @@ def create_doc_cand_matrix(postprocessed_candidates, descriptions, verbose=False
     doc_term_matrix = DocTermMatrix(dtm=dtm, all_terms=all_phrases, verbose=verbose, quant_name="count")
     assert all(len([i for i in descriptions._descriptions if term in i]) == len([i for i in doc_term_matrix.term_quants(term) if i > 0]) for term in random.sample(all_phrases, 5))
     #TODO why do I even need to filter this uhm err
-    if verbose:
+    if verbose and get_setting("EXTRACTION_METHOD") != "all":
         print("The 25 terms that are most often detected as candidate terms (incl. their #detections):",
               ", ".join(f"{k} ({v})" for k, v in sorted(dict(Counter(flatten(postprocessed_candidates))).items(), key=lambda x: x[1], reverse=True)[:25]))
     return doc_term_matrix
@@ -158,10 +178,11 @@ def create_doc_cand_matrix(postprocessed_candidates, descriptions, verbose=False
 def filter_keyphrases(doc_cand_matrix, descriptions, min_term_count, dcm_quant_measure, verbose=False, use_n_docs_count=True):
     """name is a bit wrong, this first filters the doc-keyphrase-matrix and afterwards applies a quantification-measure on the dcm"""
     assert len(doc_cand_matrix.dtm) == len(descriptions)
-    assert all(cand in desc for ndesc, desc in enumerate(descriptions._descriptions) for cand in doc_cand_matrix.terms_per_doc()[ndesc])
-    assert all(i[1] > 0 for doc in doc_cand_matrix.dtm for i in doc)
+    if get_setting("DO_SANITYCHECKS"):
+        assert all(cand in desc for ndesc, desc in enumerate(descriptions._descriptions) for cand in doc_cand_matrix.terms_per_doc()[ndesc])
+        assert all(i[1] > 0 for doc in doc_cand_matrix.dtm for i in doc)
     filtered_dcm = DocTermMatrix.filter(doc_cand_matrix, min_count=min_term_count, use_n_docs_count=use_n_docs_count, verbose=verbose, descriptions=descriptions)
     #TODO: drop those documents without any keyphrase?!
     assert all([n for n, i in enumerate(descriptions._descriptions) if term in i] == [n for n, i in enumerate(filtered_dcm.term_quants(term)) if i > 0] for term in random.sample(list(filtered_dcm.all_terms.values()), 5))
-    filtered_dcm = filtered_dcm.apply_quant(dcm_quant_measure)
+    filtered_dcm = filtered_dcm.apply_quant(dcm_quant_measure, verbose=verbose, descriptions=descriptions)
     return filtered_dcm

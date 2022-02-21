@@ -273,7 +273,6 @@ def postprocess_candidateterms(ctx, json_persister):
 # @telegram_notify(only_terminal=True, only_on_fail=False, log_start=True)
 def create_filtered_doc_cand_matrix(ctx, candidate_min_term_count, cands_use_ndocs_count):
     # TODO missing options here: `tag-share` (chap. 4.2.1 of [VISR12])
-    # TODO Do I need pp_descriptions except for verbosity? -> if not, make loading silent
     ctx.obj["postprocessed_candidates"] = ctx.obj["json_persister"].load(None, "postprocessed_candidates")
     filtered_dcm = create_filtered_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], min_term_count=candidate_min_term_count,
                                                     dcm_quant_measure=ctx.get_config("dcm_quant_measure"), use_n_docs_count=cands_use_ndocs_count, verbose=ctx.get_config("verbose"))

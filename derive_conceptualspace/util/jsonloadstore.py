@@ -245,10 +245,14 @@ class JsonPersister():
     def get_file_config(self, filepath):
         if not isfile(filepath) and isfile(join(self.in_dir, filepath)):
             filepath = join(self.in_dir, filepath)
-        with open(filepath) as rfile:
-            used_conf = next(ijson.items(rfile, "used_influentials")) #next(ijson.items(rfile, "used_config"))[0]
-            rfile.seek(0)
-            used_files = next(ijson.items(rfile, "loaded_files"))
+        try:
+            with open(filepath) as rfile:
+                used_conf = next(ijson.items(rfile, "used_influentials")) #next(ijson.items(rfile, "used_config"))[0]
+                rfile.seek(0)
+                used_files = next(ijson.items(rfile, "loaded_files"))
+        except Exception as e:
+            print(f"Error for {filepath}")
+            raise e
         used_conf = {k: v for k, v in used_conf.items() if k not in set(settings.MAY_DIFFER_IN_DEPENDENCIES)-set(standardize_config_name(i) for i in self.dirname_vars())}
         all_used_conf = dict(ChainMap(*(i["metadata"].get("used_influentials", {}) for i in used_files.values()), used_conf))
         return all_used_conf

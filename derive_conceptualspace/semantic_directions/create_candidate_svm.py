@@ -27,6 +27,7 @@ unique = lambda iterable: list({i:None for i in iterable}.keys())
 
 
 def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=None):
+    #TODO I am still not sure about if I am calculating with vectors somewhere where when I should be working with points
     decision_planes = {}
     metrics = {}
     compareto_ranking = get_setting("classifier_compareto_ranking")
@@ -45,23 +46,30 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
         embedding.embedding_ = embedding.embedding_[working_inds]
         dcm = DocTermMatrix([dcm.dtm[i] for i in working_inds], {i: dcm.all_terms[i] for i in term_inds}, dcm.quant_name)
         print(f"Debug-Mode: Running for {len(working_inds)} Items and {len(terms)} Terms.")
-        # assert all(i in terms for i in ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze'])
-        # terms = ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze']
-        # assert len([i for i in descriptions._descriptions if 'nature' in i]) == len([i for i in dcm.term_quants('nature') if i > 0])
     else:
         assert all(len([i for i in descriptions._descriptions if term in i]) == len([i for i in dcm.term_quants(term) if i > 0]) for term in random.sample(terms, 5))
-    ncpu = get_ncpu(ram_per_core=3)
+
+    #TODO #PRECOMMIT comment in!!
+    assert all(i in terms for i in ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze'])
+    terms = ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze']
+    assert len([i for i in descriptions._descriptions if 'nature' in i]) == len([i for i in dcm.term_quants('nature') if i > 0])
+    print(f"Running only for the terms {terms}")
+
+    # ncpu = get_ncpu(ram_per_core=3)
+    ncpu = 1 #TODO #PRECOMMIT remove
+
     if ncpu == 1:
+        #TODO for ncpu==1, I'm adding direct key-value-pairs, in the ncpu>1 version I'm appending to a list -> they are incompatible!
         quants_s = [dcm.term_quants(term) for term in tqdm(terms, desc="Counting Terms")]
-        with Interruptible(zip(terms, quants_s), (decision_planes, metrics), metainf, continue_from=continue_from, pgbar="Creating Candidate SVMs", total=len(terms)) as iter:
+        with Interruptible(zip(terms, quants_s), ([], decision_planes, metrics), metainf, continue_from=continue_from, pgbar="Creating Candidate SVMs", total=len(terms), name="SVMs") as iter:
             for term, quants in iter: #in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs", total=len(terms))
-                cand_mets, decision_plane, term = create_candidate_svm(embedding.embedding_, term, quants, quant_name=dcm.quant_name)
+                cand_mets, decision_plane, term = create_candidate_svm(embedding.embedding_, term, quants, descriptions=descriptions, quant_name=dcm.quant_name)
                 metrics[term] = cand_mets
                 decision_planes[term] = decision_plane
     else:
         print(f"Starting Multiprocessed with {ncpu} CPUs")
         # with WorkerPool(get_ncpu(), dcm, pgbar="Counting Terms") as pool:
-        #     quants_s = pool.work(terms, lambda dcm, term: dcm.term_quants(term))  #TODO: the time when this will be interrupted must work also if I do another Interruptible below!
+        #     quants_s = pool.work(terms, lambda dcm, term: dcm.term_quants(term))
         with SkipContext() as skipped, Interruptible(terms, [[], None, None], metainf, continue_from=continue_from, contains_mp=True, name="Counting") as iter:
             with WorkerPool(ncpu, dcm, pgbar="Counting Terms", comqu=iter.comqu) as pool:
                 quants_s, interrupted = pool.work(iter.iterable, lambda dcm, term: dcm.term_quants(term))
@@ -72,7 +80,7 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
             quants_s, _, _ = skipped.args
         assert len(quants_s) == len(terms)
 
-        with Interruptible(zip(terms, quants_s), [None, [], None], metainf, continue_from=continue_from, contains_mp=True, name="SMVs", total=len(quants_s)) as iter:
+        with Interruptible(zip(terms, quants_s), [None, [], None], metainf, continue_from=continue_from, contains_mp=True, name="SVMs", total=len(quants_s)) as iter:
             with tqdm(total=iter.n_elems, desc="Creating Candidate SVMs") as pgbar, ThreadPool(ncpu, comqu=iter.comqu) as p:
                 res, interrupted = p.starmap(create_candidate_svm, zip(repeat(embedding.embedding_, iter.n_elems), repeat("next_0"), repeat("next_1"), repeat(False), repeat(None), repeat(dcm.quant_name), repeat(pgbar)), draw_from=iter.iterable)
             _, res, _ = iter.notify([None, res, None], exception=interrupted)
@@ -156,11 +164,8 @@ def create_candidate_svm(embedding, term, quants, plot_svm=False, descriptions=N
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         svm.fit(embedding, bin_labels)
-        no_converge = False
-        if w:
-            assert len(w) == 1
-            assert issubclass(w[0].category, sklearn.exceptions.ConvergenceWarning)
-            no_converge = True
+        if w: assert len(w) == 1 and issubclass(w[0].category, sklearn.exceptions.ConvergenceWarning)
+        no_converge = bool(w)
     svm_results = svm.decision_function(embedding)
     tn, fp, fn, tp = confusion_matrix(bin_labels, [i > 0 for i in svm_results]).ravel()
     precision = tp / (tp + fp); recall = tp / (tp + fn); accuracy = (tp + tn) / len(quants)
@@ -173,7 +178,8 @@ def create_candidate_svm(embedding, term, quants, plot_svm=False, descriptions=N
     decision_plane = NDPlane(svm.coef_[0], svm.intercept_[0])  #don't even need the plane class here
     dist = lambda x, plane: np.dot(plane.normal, x) + plane.intercept
     distances = [dist(point, decision_plane) for point in embedding]
-    #sanity check: do most of the points with label=0 have the same sign `np.count_nonzero(np.sign(np.array(distances)[bin_labels])+1)`
+    #sanity check: do most of the points with label=0 have the same sign `np.count_nonzero(np.sign(np.array(distances)[bin_labels])+1)
+    # bin_labels, np.array((np.sign(np.array(distances))+1)/2, dtype=bool)
     # quant_ranking = np.zeros(quants.shape); quant_ranking[np.where(quants > 0)] = np.argsort(quants[quants > 0])
     #TODO cohen's kappa hat nen sample_weight parameter!! DESC15 write they select Kappa "due to its tolerance to class imbalance." -> Does that mean I have to set the weight?!
     res["kappa_rank2rank_dense"]  = cohen_kappa_score(rankdata(quants, method="dense"), rankdata(distances, method="dense")) #if there are 14.900 zeros, the next is a 1
@@ -193,22 +199,22 @@ def create_candidate_svm(embedding, term, quants, plot_svm=False, descriptions=N
         #one ^ has as histogram-bins what it would be for ALL data, two only for the nonzero-ones
         res["kappa_digitized_onlypos_2"] = cohen_kappa_score(np.digitize(q2, np.histogram_bin_edges(q2)[1:]), np.digitize(d2, np.histogram_bin_edges(d2)[1:]))
     if plot_svm and descriptions is not None:
-        display_svm(embedding, np.array(bin_labels, dtype=int), svm, term=term, descriptions=descriptions, name=term+" "+(", ".join(f"{k}: {round(v, 3)}" for k, v in res.items())), **kwargs)
+        display_svm(embedding, np.array(bin_labels, dtype=int), svm, term=term, descriptions=descriptions, name=term+" "+(", ".join(f"{k}: {round(v, 3)}" for k, v in res.items())), quants=quants, distances=distances, **kwargs)
     if pgbar is not None:
         pgbar.update(1)
     return res, decision_plane, term
 
 
 
-def display_svm(X, y, svm, term=None, name=None, descriptions=None, highlight=None):
+def display_svm(X, y, svm, term=None, name=None, descriptions=None, quants=None, distances=None, highlight=None):
     assert X.shape[1] == 3
     decision_plane = ThreeDPlane(svm.coef_[0], svm.intercept_[0])
     occurences = [descriptions._descriptions[i].count_phrase(term) for i in range(len(X))]
     percentile = lambda percentage: np.percentile(np.array([i for i in occurences if i]), percentage)
     if descriptions._descriptions[0].text is not None:
-        extras = [{"Name": descriptions._descriptions[i].title, "Occurences": occurences[i], "extra": {"Description": shorten(descriptions._descriptions[i].text, 200)}} for i in range(len(X))]
+        extras = [{"Name": descriptions._descriptions[i].title, "Quants": quants[i], "Distance": distances[i], "Occurences": occurences[i], "extra": {"Description": shorten(descriptions._descriptions[i].text, 200)}} for i in range(len(X))]
     else:
-        extras = [{"Name": descriptions._descriptions[i].title, "Occurences": occurences[i], "extra": {"BoW": ", ".join([f"{k}: {v}" for k, v in sorted(descriptions._descriptions[i].bow().items(), key=lambda x:x[1], reverse=True)[:10]])}} for i in range(len(X))]
+        extras = [{"Name": descriptions._descriptions[i].title, "Quants": quants[i], "Distance": distances[i], "Occurences": occurences[i], "extra": {"BoW": ", ".join([f"{k}: {v}" for k, v in sorted(descriptions._descriptions[i].bow().items(), key=lambda x:x[1], reverse=True)[:10]])}} for i in range(len(X))]
     highlight_inds = [n for n, i in enumerate(descriptions._descriptions) if i.title in highlight] if highlight else []
     with ThreeDFigure(name=name) as fig:
         fig.add_markers(X[np.where(np.logical_not(y))], color="blue", size=2, custom_data=[extras[i] for i in np.where(np.logical_not(y))[0]], linelen_right=50, name="negative samples")

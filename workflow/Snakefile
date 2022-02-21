@@ -226,7 +226,8 @@ rule create_dissim_mat:
         autoload_context_inputs(ctx, input, wildcards)
         with InterruptibleLoad(ctx, "dissim_mat.json", metainf_ignorevarnames=["is_dissim"], loader=(lambda **kw: [kw["dissim_mat"]])) as mgr:
             quant_dtm, dissim_mat, metainf = create_dissim_mat_base(ctx.obj["pp_descriptions"], ctx.get_config("quantification_measure"), ctx.get_config("verbose"), **mgr.kwargs)
-        exit(mgr.save(quant_dtm=quant_dtm, dissim_mat=dissim_mat, metainf=metainf))
+        res = mgr.save(quant_dtm=quant_dtm, dissim_mat=dissim_mat, metainf=metainf)
+        if res == 1: exit(1)
         # quant_dtm, dissim_mat, metainf = create_dissim_mat_base(ctx.obj["pp_descriptions"], ctx.get_config("quantification_measure"), verbose=ctx.get_config("verbose"))
         # ctx.p.save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat, metainf=metainf)
 
@@ -255,7 +256,8 @@ rule extract_candidate_terms:
         autoload_context_inputs(ctx, input, wildcards)
         with InterruptibleLoad(ctx, "candidate_terms.json", metainf_countervarnames=["n_candidateterms", "n_immediateworking", "n_fixed", "n_errs"]) as mgr:
             candidate_terms, metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.get_config("extraction_method"), ctx.get_config("max_ngram"), verbose=ctx.get_config("verbose"), **mgr.kwargs)
-        exit(mgr.save(candidate_terms=candidate_terms, metainf=metainf))
+        res = mgr.save(candidate_terms=candidate_terms, metainf=metainf)
+        if res == 1: exit(1)
 
 
 rule postprocess_candidateterms:
@@ -297,12 +299,13 @@ rule create_candidate_svm:
     threads: 4
     resources:
         mem_mb=32*1024,
-        pe="4-8"
+        pe="4-6"
     run:
         autoload_context_inputs(ctx, input, wildcards, silents=["pp_descriptions"])
         with InterruptibleLoad(ctx, "clusters.json", loader=lambda x:x) as mgr:
             quants_s, decision_planes, metrics, metainf = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"), **mgr.kwargs)
-        exit(mgr.save(quants_s=quants_s, decision_planes=decision_planes, metrics=metrics, metainf=metainf))
+        res = mgr.save(quants_s=quants_s, decision_planes=decision_planes, metrics=metrics, metainf=metainf)
+        if res == 1: exit(1)
 
 ########################################################################################################################
 ########################################################################################################################

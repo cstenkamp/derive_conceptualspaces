@@ -325,3 +325,6 @@ class DescriptionList():
         print(f"Removed {len(self)-len(tmp)} of {len(self)} Descriptions because they are less than {min_words} words ({len(tmp)} left)")
         self._descriptions = tmp
         return self
+
+    def __getitem__(self, item):
+        return next(i for i in self._descriptions if i.title == item)

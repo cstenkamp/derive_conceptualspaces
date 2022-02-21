@@ -42,38 +42,13 @@ class DocTermMatrix():
             return DocTermMatrix.filter(dtm, min_df, use_n_docs_count=True, verbose=verbose, descriptions=descriptions, all_terms=all_terms) #TODO make use_n_docs_count an arg
         return DocTermMatrix(dtm, all_terms, quant_name="count")
 
-    def __init__(self, dtm, all_terms, quant_name, verbose=False, **kwargs): #TODO overhaul 16.01.2022: much to delete here?!
+    def __init__(self, dtm, all_terms, quant_name, verbose=False):
         self.includes_pseudodocs = False
         self.dtm = dtm
         self.all_terms = {n: elem for n, elem in enumerate(all_terms)} if isinstance(all_terms, list) else all_terms
         self.quant_name = quant_name
-        # if len(args) == 1 and isinstance(args[0], dict):
-        #     assert "doc_term_matrix" in args[0] and "all_terms" in args[0]
-        #     assert not kwargs
-        #     self.dtm = args[0]["doc_term_matrix"]
-        #     self.all_terms = args[0]["all_terms"]
-        #     if isinstance(next(iter(self.all_terms.keys())), str):
-        #         self.all_terms = {int(k): v for k, v in self.all_terms.items()}
-        #     #TODO store meta-info
-        #     #TODO assert dass len(self.dtm) == len(mds_obj.names)
-        # # elif "all_terms" in kwargs and "descriptions" in kwargs:
-        # #     # assert hasattr(kwargs["descriptions"][0], "bow")
-        # #     if isinstance(kwargs["all_terms"], dict):
-        # #         self.all_terms = kwargs["all_terms"]
-        # #     else:
-        # #         self.all_terms = {n: elem for n, elem in enumerate(kwargs["all_terms"])}
-        # #     self.dtm = []
-        # #     for desc in kwargs["descriptions"]:
-        # #         self.dtm.append([[self.reverse_term_dict[k], v] for k,v in desc.bow().items()])
-        # elif "all_phrases" in kwargs and "descriptions" in kwargs and "dtm" in kwargs:
-        #     if isinstance(kwargs["all_phrases"], dict):
-        #         self.all_terms = kwargs["all_phrases"]
-        #     else:
-        #         self.all_terms = {n: elem for n, elem in enumerate(kwargs["all_phrases"])}
-        #     self.dtm = kwargs["dtm"]
-        #     self.descriptions = kwargs["descriptions"]
-        # else:
-        #     assert False
+        # if "all_terms" in kwargs and "descriptions" in kwargs: assert hasattr(kwargs["descriptions"][0], "bow")
+        # for desc in kwargs["descriptions"]: self.dtm.append([[self.reverse_term_dict[k], v] for k,v in desc.bow().items()])
         assert set(self.all_terms) == set(flatten([[elem[0] for elem in row] for row in self.dtm]))
         if verbose:
             print(f"Loaded Doc-Term-Matrix with {len(self.dtm)} documents and {len(self.all_terms)} items.")
@@ -85,9 +60,9 @@ class DocTermMatrix():
     n_docs = property(lambda self: len(self.dtm))
 
     def show_info(self, descriptions=None):
-        occurs_in = [set(j[0] for j in i) if i else [] for i in self.dtm]
+        occurs_in = [set(j[0] for j in i) if i else set() for i in self.dtm]
         num_occurences = [sum([term_ind in i for i in occurs_in]) for term_ind in tqdm(range(len(self.all_terms)), desc="Counting Occurences [verbose]")]
-        show_hist(num_occurences, "Docs per Keyword", xlabel="# Documents the Keyword appears in", ylabel="Count (log scale)", cutoff_percentile=98, log=True)
+        show_hist(num_occurences, f"Docs per Keyword ({self.n_docs} docs, {len(self.all_terms)} terms)", xlabel="# Documents the Keyword appears in", ylabel="Count (log scale)", cutoff_percentile=98, log=True)
         above_threshold = len([i for i in num_occurences if i>= get_setting("CANDIDATE_MIN_TERM_COUNT", silent=True)])
         sorted_canditerms = sorted([[ind, elem] for ind, elem in enumerate(num_occurences)], key=lambda x:x[1], reverse=True)
         print(f"Found {len(self.all_terms)} candidate Terms, {above_threshold} ({round(above_threshold/len(self.all_terms)*100)}%) of which occur in at least {get_setting('CANDIDATE_MIN_TERM_COUNT', silent=True)} descriptions.")
@@ -165,7 +140,8 @@ class DocTermMatrix():
                                                         f"at least {min_count} times") + f", which are {len(used_terms)} of {len(term_counts)} terms.")
             most_used = sorted(list(used_terms.items()), key=lambda x: x[1], reverse=True)[:10]
             print("The most used terms are: " + ", ".join([f"{dtm.all_terms[ind]} ({count})" for ind, count in most_used]))
-            show_hist(list(used_terms.values()), "Occurences per Keyword", xlabel="Occurences per Keyword", cutoff_percentile=93)
+            # show_hist(list(used_terms.values()), f"{'Docs' if use_n_docs_count else 'Occurences'} per Keyword ({dtm.n_docs} docs, {len(used_terms)} terms)", xlabel="Occurences per Keyword", cutoff_percentile=93)
+            # showing hist here is the same as just having verbose=True in the DTM-Constructor in the last line of this func!
         used_terms_set = set(used_terms.keys())
         all_terms_new = dict(enumerate([v for k, v in dtm.all_terms.items() if k in used_terms_set]))
         all_terms_new_rev = {v: k for k, v in all_terms_new.items()}
@@ -184,17 +160,20 @@ class DocTermMatrix():
                     if items:
                         print(f"Documents with max {n_keyphrases} keyphrases ({len(items)}):\n  "+"\n  ".join(f"{i[0]}: {', '.join(i[1])}" for i in [j for j in items if j[0] not in shown][:5][:5]))
                         shown += [i[0] for i in items]
-        return DocTermMatrix(dtm=doc_term_matrix, all_terms=all_terms_new, quant_name="count")
+        return DocTermMatrix(dtm=doc_term_matrix, all_terms=all_terms_new, quant_name="count", verbose=verbose)
 
 
-    def doc_freq(self, keyword, rel=False, supress=False):
-        raise NotImplementedError("TODO I overhauled doc_freqs so I likely have to overhaul this as well!") #on 8.2.22 - is this even used?
-        if supress:
-            return len(self.term_existinds(use_index=False).get(keyword, [])) / (self.n_docs if rel else 1)
-        return len(self.term_existinds(use_index=False)[keyword]) / (self.n_docs if rel else 1)
+    # def doc_freq(self, keyword, rel=False, supress=False):
+    #     raise NotImplementedError("TODO I overhauled doc_freqs so I likely have to overhaul this as well!") #on 8.2.22 - is this even used?
+    #     if supress:
+    #         return len(self.term_existinds(use_index=False).get(keyword, [])) / (self.n_docs if rel else 1)
+    #     return len(self.term_existinds(use_index=False)[keyword]) / (self.n_docs if rel else 1)
 
     def apply_quant(self, quant_name, **kwargs):
-        return DocTermMatrix(dtm=apply_quant(quant_name, self, **kwargs), all_terms=self.all_terms, quant_name=quant_name)
+        dtm = DocTermMatrix(dtm=apply_quant(quant_name, self, **kwargs), all_terms=self.all_terms, quant_name=quant_name)
+        if kwargs.get("verbose"):
+            dtm.show_info(descriptions=kwargs.get("descriptions"))
+        return dtm
 
 
     def term_quants(self, term): #returns a list of the quantification (count or whatever it is) for the term
