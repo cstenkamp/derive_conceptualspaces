@@ -25,19 +25,21 @@ def main():
 
 def get_status(jobid, STATUS_ATTEMPTS=20, silent=False):
     job_status = "running"
+    jobid = int(jobid)
     for i in range(STATUS_ATTEMPTS):
         # first try qstat to see if job is running
         # we can use `qstat -s pr -u "*"` to check for all running and pending jobs
         try:
-            qstat_res = sp.check_output(shlex.split(f"qstat -s pr")).decode().strip()
+            qstat_res = sp.check_output(shlex.split("qstat -s pr")).decode().strip()
             # skip the header using [2:]
             res = {int(x.split()[0]) : x.split()[4] for x in qstat_res.splitlines()[2:]}
             # job is in an unspecified error state
             if "E" in res[jobid]:
-                job_status = "failed"
-                break
-            job_status = "running"
-            break
+                return "failed"
+            elif res[jobid] == "qw":
+                return "enqueued"
+            elif res[jobid] == "r":
+                return "running"
 
         except sp.CalledProcessError as e:
             logger.error("qstat process error")
@@ -48,7 +50,7 @@ def get_status(jobid, STATUS_ATTEMPTS=20, silent=False):
                 # this will also provide the exit status (0 on success, 128 + exit_status on fail)
                 # Try getting job with scontrol instead in case sacct is misconfigured
                 try:
-                    qacct_res = sp.check_output(shlex.split(f"qacct -j {jobid}"))
+                    qacct_res = sp.check_output(shlex.split("qacct -j {}".format(jobid)))
                     exit_code = int(re.search("exit_status  ([0-9]+)", qacct_res.decode()).group(1))
                     if exit_code == 0:
                         job_status = "success"
@@ -87,11 +89,11 @@ def get_status(jobid, STATUS_ATTEMPTS=20, silent=False):
                     if startlines:
                         txt = txt[max(startlines):] #take only the last try into account
                     if "Exiting because a job execution failed. Look above for error message" in txt:
-                        if not silent: print(f"Job {jobid} failed because of an error! Errorfile: {error_file}", file=sys.stderr)
+                        if not silent: print("Job "+str(jobid)+" failed because of an error! Errorfile: {error_file}", file=sys.stderr)
                         job_status = "failed"
                         break
                     elif any("Job killed after exceeding memory limits" in i for i in txt):
-                        if not silent: print(f"Job {jobid} failed because it reached the memory limit! Errorfile: {error_file}", file=sys.stderr)
+                        if not silent: print("Job "+str(jobid)+" failed because it reached the memory limit! Errorfile: {error_file}", file=sys.stderr)
                         job_status = "failed"
                         break
     return job_status

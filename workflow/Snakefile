@@ -228,8 +228,6 @@ rule create_dissim_mat:
             quant_dtm, dissim_mat, metainf = create_dissim_mat_base(ctx.obj["pp_descriptions"], ctx.get_config("quantification_measure"), ctx.get_config("verbose"), **mgr.kwargs)
         res = mgr.save(quant_dtm=quant_dtm, dissim_mat=dissim_mat, metainf=metainf)
         if res == 1: exit(1)
-        # quant_dtm, dissim_mat, metainf = create_dissim_mat_base(ctx.obj["pp_descriptions"], ctx.get_config("quantification_measure"), verbose=ctx.get_config("verbose"))
-        # ctx.p.save("dissim_mat.json", quant_dtm=quant_dtm, dissim_mat=dissim_mat, metainf=metainf)
 
 
 rule create_embedding:

@@ -11,7 +11,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from dotenv import load_dotenv
 
-from sge_util import load_acctfile, get_active_jobs, get_enqueued_detailed
+from util.sge_util import load_acctfile, get_active_jobs, get_enqueued_detailed
 from ikw_grid.sge_status import get_status
 
 

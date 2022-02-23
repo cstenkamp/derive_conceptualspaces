@@ -153,7 +153,7 @@ def get_ncpu(ram_per_core=None, ignore_debug=False):
     if "GOTO_NUM_THREADS" in os.environ:  # see https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html#threads
         print(f"Snakemake restricts the #Threads to {os.environ['GOTO_NUM_THREADS']}")
         ncpus = min(ncpus, int(os.environ["GOTO_NUM_THREADS"]))
-    if ram_per_core:
+    if ram_per_core: #TODO if I'm on the grid, I should have an env-var with the assigned ram and use that instead!!
         ncpus = min(ncpus, round(psutil.virtual_memory().total / 1024 / 1024 / 1024 / ram_per_core))
         if "SGE_SMK_mem" in os.environ and os.environ["SGE_SMK_mem"].endswith("G"):
             ncpus = min(ncpus, round(int(os.environ["SGE_SMK_mem"][:-1]) / ram_per_core)) # max. 1 thread per XGB RAM

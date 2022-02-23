@@ -10,6 +10,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from dotenv.main import load_dotenv
 
 from logfile_for import print_singlejob, load_acctfile, check_joblog, extract_error, read_errorfile, apply_dotenv_vars
+from ikw_grid.sge_status import get_status
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
@@ -87,11 +88,15 @@ def split_all(errorfiles):
             assert any(i.startswith("Resuming incomplete job") for i in rule)
             job_infos[-1]["external_id"] = [i for i in rule if i.startswith("Resuming incomplete job")][0].split("'")[1]
             job_infos[-1]["resuming"] = True
+    pure_resumes = []
     for resumed_job in [i for i in job_infos if i.get("resuming")]:
-        orig_job = [i for i in job_infos if i["external_id"] == resumed_job["external_id"] and not i.get("resuming")][0]
-        assert all(v == resumed_job[k] for k, v in orig_job.items() if k not in ["resuming", "submit_command", "errorfile", "resources", "timestamp", "resumed_at"])
-        orig_job.setdefault("resumed_at", []).append(resumed_job["timestamp"])
-    job_infos = [i for i in job_infos if not i.get("resuming")]
+        orig_job = [i for i in job_infos if i["external_id"] == resumed_job["external_id"] and not i.get("resuming")]
+        if len(orig_job) < 1:
+            pure_resumes.append(resumed_job["external_id"])
+        else:
+            assert all(v == resumed_job[k] for k, v in orig_job.items() if k not in ["resuming", "submit_command", "errorfile", "resources", "timestamp", "resumed_at"])
+            orig_job.setdefault("resumed_at", []).append(resumed_job["timestamp"])
+    job_infos = [i for i in job_infos if (not i.get("resuming") or i["external_id"] in pure_resumes)]
     return todo_jobs, dones, merge_job_infos(job_infos), leftover_text
 
 
@@ -125,17 +130,25 @@ def main():
     for info in job_infos:
         if info["jobid"] in dones.keys():
             info["finished_at"] = dones[info["jobid"]]
+        elif not "state" in info:
+            info["state"] = [get_status(i, silent=True) for i in info["external_id"]]
     # assert len([i for i in job_infos if not i.get("finished_at")]) == len(job_infos)-len(dones)
-    if (fails := sorted([i for i in job_infos if not i.get("finished_at")], key=lambda x:x["output"])):
+    #TODO nur weil sie nicht finished sind sind sie nicht failed...!!
+    if (runnings := [i for i in job_infos if all(j == "running" for j in i.get("state"))]):
+        print("The following runs are running:\n  "+"\n  ".join([f"  {r['output'].ljust(max(len(i['output']) for i in runnings))} (pid {','.join(r['external_id'])})" for r in runnings]))
+        job_infos = [i for i in job_infos if i["jobid"] not in [i["jobid"] for i in runnings]]
+    #TODO finished ones are not actually finished god damn it
+    if (dones := [i for i in job_infos if "finished_at" in i or all(j == "success" for j in i.get("state"))]):
+        print("The following ones are finished: \n   " + "\n   ".join([f"{i['output'].ljust(max(len(i['output']) for i in dones))}{('at '+str(i['finished_at'])) if 'finished_at' in i else ''}" for i in dones]))
+        job_infos = [i for i in job_infos if i["jobid"] not in [i["jobid"] for i in dones]]
+    #TODO there's also enqueued!
+    if (fails := sorted([i for i in job_infos if not i.get("finished_at")], key=lambda x: x["output"])):
         print("The following ones failed:")
         for fail in fails:
             print(f"  {fail['output'].ljust(max(len(i['output']) for i in fails))} (pid {','.join(fail['external_id'])})")
             if args.include_errors:
                 err = extract_error(read_errorfile(fail["errorfile"]))
-                print("     "+err.replace("\n", "\n     "))
-    dones = sorted([i for i in job_infos if "finished_at" in i], key=lambda x:x["finished_at"])
-    if dones:
-        print("The following ones are finished: \n   "+"\n   ".join([f"{i['output'].ljust(max(len(i['output']) for i in dones))} at {i['finished_at']}" for i in dones]))
+                if err is not False: print("     " + err.replace("\n", "\n     "))
     #TODO cross-check with `check -j` command
     #TODO parse the leftover_text as well, there may be more info about fails
     #TODO use the error-files to get the respective errors of the files

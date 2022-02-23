@@ -51,7 +51,7 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
         assert all(dcm.term_quants(terms[i]) == list(dcm.as_csr()[i,:].toarray().squeeze()) for i in random.sample(range(len(terms)), 5))
 
     quants_s = dcm.as_csr().toarray().tolist()  # [dcm.term_quants(term) for term in tqdm(terms, desc="Counting Terms")]
-    ncpu = get_ncpu(ram_per_core=3)
+    ncpu = get_ncpu(ram_per_core=5)
     if ncpu == 1:  #TODO Interruptible: for ncpu==1, I'm adding direct key-value-pairs, in the ncpu>1 version I'm appending to a list -> they are incompatible!
         with Interruptible(zip(terms, quants_s), ([], decision_planes, metrics), metainf, continue_from=continue_from, pgbar="Creating Candidate SVMs", total=len(terms), name="SVMs") as iter:
             for term, quants in iter: #in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs", total=len(terms))
