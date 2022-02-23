@@ -3,7 +3,7 @@
 import argparse
 import os
 import time
-from os.path import isfile, join
+from os.path import isfile, join, basename
 import re
 from datetime import datetime, timedelta
 import sys
@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 from sge_util import load_acctfile, get_active_jobs, get_enqueued_detailed
 from ikw_grid.sge_status import get_status
+
 
 def apply_dotenv_vars(ENV_PREFIX="MA"):
     if os.getenv(ENV_PREFIX+"_SELECT_ENV_FILE"):
@@ -29,8 +30,9 @@ def apply_dotenv_vars(ENV_PREFIX="MA"):
 
 def parse_command_line_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--jobid', '-j')
-    return parser.parse_args().jobid
+    parser.add_argument('--jobid', '-j', help="If you want to get the error-file of a job. If this arg is not given, mode will be continuously-updating checker for all jobs")
+    parser.add_argument('--error', '-e', default=False, action='store_true', help="If you only want to get the error, if any (onl in combination with -j)")
+    return parser.parse_args()
 
 
 def check_joblog(jobid, acctfile):
@@ -40,31 +42,45 @@ def check_joblog(jobid, acctfile):
     if not ("envvars" in jobinfo and all (i in jobinfo["envvars"] for i in ["e", "rulename", "jobid"])):
         return None, None
     error_file = jobinfo["envvars"]["e"].format(rulename=jobinfo["envvars"]["rulename"], jobid=jobinfo["envvars"]["jobid"])
+    txt = read_errorfile(error_file)
+    return txt, error_file
+
+def read_errorfile(error_file):
     error_file = join(os.environ["MA_BASE_DIR"], "..", "..", error_file) if isfile(join(os.environ["MA_BASE_DIR"], "..", "..", error_file)) else os.path.join(os.environ["MA_BASE_DIR"], error_file)
-    # error_file = "/home/chris/deleteme/snakejob.create_candidate_svm.29.log"
+    if not isfile(error_file) and isfile(join(os.environ["MA_BASE_DIR"], basename(error_file)) if isfile(join(os.environ["MA_BASE_DIR"], basename(error_file))) else os.path.join(os.environ["MA_BASE_DIR"], "logs", "sge", basename(error_file))):
+        error_file = join(os.environ["MA_BASE_DIR"], basename(error_file)) if isfile(join(os.environ["MA_BASE_DIR"], basename(error_file))) else os.path.join(os.environ["MA_BASE_DIR"], "logs", "sge", basename(error_file))
     try:
         with open(error_file, "r", newline="\n", errors="backslashreplace") as rfile:
             txt = rfile.read()
     except UnicodeDecodeError as e:
         print("Cannot read", error_file)
         raise e
-    return txt, error_file
+    return txt
 
 
-def init():
-    if isfile(os.getenv("MA_SELECT_ENV_FILE", "")):
-        load_dotenv(os.environ["MA_SELECT_ENV_FILE"])
-    apply_dotenv_vars()
-    jobid = parse_command_line_args()
-    return jobid
-
-def print_singlejob(jobid, acctfile):
+def print_singlejob(jobid, acctfile, onlyerr):
     txt, path = check_joblog(jobid, acctfile)
+    if onlyerr:
+        txt = extract_error(txt)
     print("Filepath:", path)
     print("==" * 50)
     print(txt)
     print()
     print("==" * 50)
+
+def extract_error(txt):
+    txt = txt.split("\n")
+    startlines = [lnum for lnum, line in enumerate(txt) if line == "Building DAG of jobs..."]
+    if startlines:
+        txt = txt[max(startlines):]  # take only the last try into account
+    if not 'Exiting because a job execution failed. Look above for error message' in txt:
+        return False #no error
+    txt = txt[:txt.index('Exiting because a job execution failed. Look above for error message')]
+    if "RuleException:" not in txt:
+        raise NotImplementedError()
+    txt = txt[txt.index("RuleException:")+1:]
+    txt = [i for i in txt if not any(j in i for j in ["in __rule_", "telegram_notifier.py", "Shutting down, this might take some time."])]
+    return "\n".join(txt)
 
 
 def get_info_detailed(acctfile):
@@ -152,13 +168,16 @@ def print_multijob():
 
         time.sleep(5)
 
-
+# TODO be able to get only the traceback from the failed ones
 
 def main():
-    jobid = init()
-    if jobid:
+    if isfile(os.getenv("MA_SELECT_ENV_FILE", "")):
+        load_dotenv(os.environ["MA_SELECT_ENV_FILE"])
+    apply_dotenv_vars()
+    args = parse_command_line_args()
+    if args.jobid:
         acctfile = load_acctfile()
-        print_singlejob(jobid, acctfile)
+        print_singlejob(args.jobid, acctfile, args.error)
     else:
         print_multijob()
 

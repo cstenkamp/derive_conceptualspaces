@@ -266,10 +266,12 @@ class DescriptionList():
         for desc in self._descriptions:
             yield desc.processed_text
 
-    @property
-    def unprocessed_texts(self):
+    def unprocessed_texts(self, remove_htmltags=False):
         for desc in self._descriptions:
-            yield desc.unprocessed_text
+            if remove_htmltags and desc.processing_steps[0][1] == "remove_htmltags":
+                yield desc.processing_steps[0][0]
+            else:
+                yield desc.unprocessed_text
 
     def all_words(self):
         if not hasattr(self, "_all_words"):
@@ -294,9 +296,10 @@ class DescriptionList():
             return dtm, {"ngrams_in_embedding": False}
         elif hasattr(self, "recover_settings"):
             from derive_conceptualspace.create_spaces.preprocess_descriptions import PPComponents, get_countvec
-            if PPComponents.from_str(self.recover_settings["pp_components"]).use_skcountvec:
+            pp_comps = PPComponents.from_str(self.recover_settings["pp_components"])
+            if pp_comps.use_skcountvec:
                 cnt = get_countvec(**self.recover_settings, max_ngram=(max_ngram or 1), min_df=min_df)
-                fit_base = lambda: self.unprocessed_texts
+                fit_base = lambda: self.unprocessed_texts(remove_htmltags=pp_comps.remove_htmltags)
             else: raise NotImplementedError()
         else:
             cnt = CountVectorizer(strip_accents=None, lowercase=False, stop_words=None, ngram_range=(1, (max_ngram or 1)), min_df=min_df)

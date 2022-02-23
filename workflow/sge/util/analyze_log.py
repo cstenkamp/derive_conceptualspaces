@@ -1,7 +1,15 @@
+#! /home/student/c/cstenkamp/miniconda/envs/derive_conceptualspaces/bin/python3
+
 import os
 import argparse
-from os.path import join
+from os.path import join, isfile
 from datetime import datetime
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+
+from dotenv.main import load_dotenv
+
+from logfile_for import print_singlejob, load_acctfile, check_joblog, extract_error, read_errorfile, apply_dotenv_vars
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
@@ -9,6 +17,7 @@ def parse_command_line_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('start_pid', help='ID of the first smk_runner that startet it all')
     parser.add_argument('--base_dir', '-b', help='Base-dir where the smk_runner logs are', default=os.environ["HOME"])
+    parser.add_argument('--include_errors', '-e', help="If you want the tracebacks to be shown", default=False, action="store_true")
     return parser.parse_args()
 
 def read_files(pid, base_dir):
@@ -57,6 +66,8 @@ def split_all(errorfiles):
         job_infos[-1]["timestamp"] = datetime.strptime(rule[0][1:-1], "%a %b %d %H:%M:%S %Y")
 
         #TODO the order of this may be messed up if eg. "Trying to restart job" comes before "Removing output files of"
+        #TODO on my local terminal, the "building dag of jobs..." until "select jobs to execute..." is yellow, the rules with their IO is green, (and other stuff I can't tell)
+        # - I may be able to use these colors to split what-it-belonged-to in cases where two logs were written simultaenously to the logfile!
         for other_txt in ["Removing output files of", "failed because of an error!", "Trying to restart job"]:
             if any(other_txt in i for i in rule):
                 tmpstr = rule[[n for n, i in enumerate(rule) if other_txt in i][0]:]
@@ -104,6 +115,9 @@ def merge_job_infos(job_infos):
     return newls
 
 def main():
+    if isfile(os.getenv("MA_SELECT_ENV_FILE", "")):
+        load_dotenv(os.environ["MA_SELECT_ENV_FILE"])
+    apply_dotenv_vars()
     args = parse_command_line_args()
     errorfiles, outputfiles = get_all_jobfiles(args.start_pid, args.base_dir)
     todo_jobs, dones, job_infos, leftover_text = split_all(errorfiles) #TODO consider todo_jobs and dones!
@@ -111,9 +125,17 @@ def main():
     for info in job_infos:
         if info["jobid"] in dones.keys():
             info["finished_at"] = dones[info["jobid"]]
-    assert len([i for i in job_infos if not i.get("finished_at")]) == len(job_infos)-len(dones)
-    if (fails := sorted([i["output"] for i in job_infos if not i.get("finished_at")])):
-        print("The following ones failed: \n  "+"\n  ".join(fails))
+    # assert len([i for i in job_infos if not i.get("finished_at")]) == len(job_infos)-len(dones)
+    if (fails := sorted([i for i in job_infos if not i.get("finished_at")], key=lambda x:x["output"])):
+        print("The following ones failed:")
+        for fail in fails:
+            print(f"  {fail['output'].ljust(max(len(i['output']) for i in fails))} (pid {','.join(fail['external_id'])})")
+            if args.include_errors:
+                err = extract_error(read_errorfile(fail["errorfile"]))
+                print("     "+err.replace("\n", "\n     "))
+    dones = sorted([i for i in job_infos if "finished_at" in i], key=lambda x:x["finished_at"])
+    if dones:
+        print("The following ones are finished: \n   "+"\n   ".join([f"{i['output'].ljust(max(len(i['output']) for i in dones))} at {i['finished_at']}" for i in dones]))
     #TODO cross-check with `check -j` command
     #TODO parse the leftover_text as well, there may be more info about fails
     #TODO use the error-files to get the respective errors of the files

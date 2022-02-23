@@ -51,7 +51,7 @@ def postprocess_candidateterms(candidate_terms, descriptions, extraction_method)
                 continue
             cond, ncand = check_cand(cand, desc, edit_fns=all_edit_fns)
             if cond:
-                assert term_counts[ncand] == desc.count_phrase(ncand)
+                assert term_counts[ncand] == desc.count_phrase(ncand) #!!this shows that the DTM contains exactly the bow!!
                 if extracted_literally():
                     assert cand == ncand
                 elif cand != ncand:

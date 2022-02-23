@@ -176,12 +176,12 @@ def create_candidate_svm(embedding, term, quants, classifier, plot_svm=False, de
     with nullcontext(): #warnings.catch_warnings(): #TODO get rid of what cuases the nans here!!!
         # warnings.filterwarnings('ignore', r'invalid value encountered in true_divide')
         if quant_name == "count":  # in DESC15 they write "measure the correlation between the ranking induced by \vec{vt} and the number of times t appears in the documents associated with each entity", so maybe compare ranking to count?!
-            res["kappa_count2rank"] = cohen_kappa_score(quants, rankdata(distances, method="dense"), weights=kappa_weights)
+            # res["kappa_count2rank"] = cohen_kappa_score(quants, rankdata(distances, method="dense"), weights=kappa_weights)
             res["kappa_count2rank_onlypos"] = cohen_kappa_score(q2, rankdata(d2, method="dense"), weights=kappa_weights)
         res["kappa_rank2rank_onlypos_dense"] = cohen_kappa_score(rankdata(q2, method="dense"), rankdata(d2, method="dense"), weights=kappa_weights)
         res["kappa_rank2rank_onlypos_min"] = cohen_kappa_score(rankdata(q2, method="min"), rankdata(d2, method="min"), weights=kappa_weights)
         res["kappa_rank2rank_onlypos_max"] = cohen_kappa_score(rankdata(q2, method="max"), rankdata(d2, method="max"), weights=kappa_weights)
-        res["kappa_digitized_onlypos_1"] = cohen_kappa_score(np.digitize(q2, np.histogram_bin_edges(quants)[1:]), np.digitize(d2, np.histogram_bin_edges(distances)[1:]), weights=kappa_weights)
+        # res["kappa_digitized_onlypos_1"] = cohen_kappa_score(np.digitize(q2, np.histogram_bin_edges(quants)[1:]), np.digitize(d2, np.histogram_bin_edges(distances)[1:]), weights=kappa_weights)
         #one ^ has as histogram-bins what it would be for ALL data, two only for the nonzero-ones
         res["kappa_digitized_onlypos_2"] = cohen_kappa_score(np.digitize(q2, np.histogram_bin_edges(q2)[1:]), np.digitize(d2, np.histogram_bin_edges(d2)[1:]), weights=kappa_weights)
     if plot_svm and descriptions is not None:
