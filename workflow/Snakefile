@@ -281,7 +281,7 @@ rule create_doc_cand_matrix:
         generated_paths["filtered_dcm"]
     threads: 1
     resources:
-        mem_mb=lambda wildcards: 24 * 1024 if wildcards.dcm_quant_measure == "ppmi" else 2*1024  #TODO make also dependent on the size of the dataset ("input" is also allowed as arg)
+        mem_mb=lambda wildcards: 24 * 1024 if wildcards.dcm_quant_measure == "ppmi" else 8*1024  #TODO make also dependent on the size of the dataset ("input" is also allowed as arg)
     run:
         autoload_context_inputs(ctx, input, wildcards)
         filtered_dcm = create_filtered_doc_cand_matrix_base(ctx.obj["postprocessed_candidates"], ctx.obj["pp_descriptions"], min_term_count=ctx.get_config("candidate_min_term_count"),

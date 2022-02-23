@@ -9,7 +9,7 @@ from os import sep
 from misc_util.object_wrapper import ObjectWrapper
 
 
-def setup_logging(loglevel=None, logfile=None):
+def setup_logging(loglevel="INFO", logfile=None):
     numeric_level = getattr(logging, loglevel.upper(), None)
     if not isinstance(numeric_level, int):
         raise ValueError('Invalid log level: %s' % loglevel)

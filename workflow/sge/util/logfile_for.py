@@ -37,6 +37,8 @@ def check_joblog(jobid, acctfile):
     jobinfo = acctfile.get(str(jobid))
     if not jobinfo:
         return None, None
+    if not ("envvars" in jobinfo and all (i in jobinfo["envvars"] for i in ["e", "rulename", "jobid"])):
+        return None, None
     error_file = jobinfo["envvars"]["e"].format(rulename=jobinfo["envvars"]["rulename"], jobid=jobinfo["envvars"]["jobid"])
     error_file = join(os.environ["MA_BASE_DIR"], "..", "..", error_file) if isfile(join(os.environ["MA_BASE_DIR"], "..", "..", error_file)) else os.path.join(os.environ["MA_BASE_DIR"], error_file)
     # error_file = "/home/chris/deleteme/snakejob.create_candidate_svm.29.log"
@@ -81,7 +83,7 @@ def get_info_detailed(acctfile):
             if len([line for line in txt.split("\n") if line.startswith("rule")]) == 1:
                 rule_str = txt.split("\n")[[lnum for lnum, line in enumerate(txt.split("\n")) if line.startswith("rule")][0]:]
                 info["rule"] = rule_str[0][len("rule "):-1]
-                info["output"] = dict([i.strip().split(":") for i in rule_str[1:7] if len(i.split(":")) == 2])["output"].strip()
+                info["output"] = dict([i.strip().split(":") for i in rule_str[1:7] if len(i.split(":")) == 2]).get("output", "").strip()
             final_lines = txt.split("\n")[-20:]
             if any("Saved under" in i for i in final_lines):
                 saved_unter = [line for line in final_lines if "Saved under" in line][0][len("Saved under "):]

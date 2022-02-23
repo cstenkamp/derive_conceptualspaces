@@ -16,7 +16,6 @@ from derive_conceptualspace.settings import get_setting, IS_INTERACTIVE, get_ncp
 from derive_conceptualspace.util.base_changer import NDPlane, ThreeDPlane
 from derive_conceptualspace.util.dtm_object import DocTermMatrix
 from derive_conceptualspace.util.interruptible_funcs import Interruptible, SkipContext
-from derive_conceptualspace.util.threadworker import WorkerPool
 from derive_conceptualspace.util.threedfigure import ThreeDFigure
 from derive_conceptualspace.util.threadpool import ThreadPool
 from misc_util.pretty_print import pretty_print as print
@@ -34,26 +33,25 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
     terms = list(dcm.all_terms.values())
     metainf = {}
     if get_setting("DEBUG"):
-        # maxlen = min(len(terms), len(embedding.embedding_), get_setting("DEBUG_N_ITEMS"), len(dcm.dtm))
-        # working_inds = [nterm for nterm, term in enumerate(terms[:maxlen]) if np.array(dcm.term_quants(term)[:maxlen], dtype=bool).std()] #those with >1 class
-        # term_inds = unique(flatten([j[0] for j in dcm.dtm[i]] for i in working_inds))
-        # terms = [dcm.all_terms[i] for i in term_inds]
-        # embedding.embedding_ = embedding.embedding_[working_inds]
-        # dcm = DocTermMatrix([dcm.dtm[i] for i in working_inds], {i: dcm.all_terms[i] for i in term_inds}, dcm.quant_name)
-        # print(f"Debug-Mode: Running for {len(working_inds)} Items and {len(terms)} Terms.")
-        # TODO #FIXPRECOMMIT #PRECOMMIT comment in
-        warnings.warn("PRECOMMIT there's stuff here!")
-        assert all(i in terms for i in ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze'])
-        terms = ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze']
-        assert len([i for i in descriptions._descriptions if 'nature' in i]) == len([i for i in dcm.term_quants('nature') if i > 0])
-        print(f"Running only for the terms {terms}")
+        maxlen = min(len(terms), len(embedding.embedding_), get_setting("DEBUG_N_ITEMS"), len(dcm.dtm))
+        working_inds = [nterm for nterm, term in enumerate(terms[:maxlen]) if np.array(dcm.term_quants(term)[:maxlen], dtype=bool).std()] #those with >1 class
+        term_inds = unique(flatten([j[0] for j in dcm.dtm[i]] for i in working_inds))
+        terms = [dcm.all_terms[i] for i in term_inds]
+        embedding.embedding_ = embedding.embedding_[working_inds]
+        dcm = DocTermMatrix([dcm.dtm[i] for i in working_inds], {i: dcm.all_terms[i] for i in term_inds}, dcm.quant_name)
+        print(f"Debug-Mode: Running for {len(working_inds)} Items and {len(terms)} Terms.")
+        # warnings.warn("PRECOMMIT there's stuff here!")
+        # assert all(i in terms for i in ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze'])
+        # terms = ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze']
+        # assert len([i for i in descriptions._descriptions if 'nature' in i]) == len([i for i in dcm.term_quants('nature') if i > 0])
+        # print(f"Running only for the terms {terms}")
     else:
         assert all(len([i for i in descriptions._descriptions if term in i]) == len([i for i in dcm.term_quants(term) if i > 0]) for term in random.sample(terms, 5))
     if get_setting("DO_SANITYCHECKS"):
         assert all(dcm.term_quants(terms[i]) == list(dcm.as_csr()[i,:].toarray().squeeze()) for i in random.sample(range(len(terms)), 5))
 
     quants_s = dcm.as_csr().toarray().tolist()  # [dcm.term_quants(term) for term in tqdm(terms, desc="Counting Terms")]
-    ncpu = 1# #TODO #PRECOMMIT #FIXPRECOMMIT get_ncpu(ram_per_core=3)
+    ncpu = get_ncpu(ram_per_core=3)
     if ncpu == 1:  #TODO Interruptible: for ncpu==1, I'm adding direct key-value-pairs, in the ncpu>1 version I'm appending to a list -> they are incompatible!
         with Interruptible(zip(terms, quants_s), ([], decision_planes, metrics), metainf, continue_from=continue_from, pgbar="Creating Candidate SVMs", total=len(terms), name="SVMs") as iter:
             for term, quants in iter: #in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs", total=len(terms))
@@ -64,7 +62,7 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
         print(f"Starting Multiprocessed with {ncpu} CPUs")
         with Interruptible(zip(terms, quants_s), [None, [], None], metainf, continue_from=continue_from, contains_mp=True, name="SVMs", total=len(quants_s)) as iter:
             with tqdm(total=iter.n_elems, desc="Creating Candidate SVMs") as pgbar, ThreadPool(ncpu, comqu=iter.comqu) as p:
-                res, interrupted = p.starmap(create_candidate_svm, zip(repeat(embedding.embedding_, iter.n_elems), repeat("next_0"), repeat("next_1"), repeat(False), repeat(None), repeat(dcm.quant_name), repeat(pgbar)), draw_from=iter.iterable)
+                res, interrupted = p.starmap(create_candidate_svm, zip(repeat(embedding.embedding_, iter.n_elems), repeat("next_0"), repeat("next_1"), repeat(get_setting("CLASSIFIER")), repeat(False), repeat(None), repeat(dcm.quant_name), repeat(pgbar)), draw_from=iter.iterable)
             _, res, _ = iter.notify([None, res, None], exception=interrupted)
             if interrupted is not False:
                 return quants_s, res, None, metainf
@@ -138,14 +136,16 @@ def select_salient_terms(metrics, decision_planes, prim_lambda, sec_lambda, metr
 def create_candidate_svm(embedding, term, quants, classifier, plot_svm=False, descriptions=None, quant_name=None, pgbar=None, **kwargs):
     bin_labels = np.array(quants, dtype=bool) # Ensure that regardless of quant_measure this is correct binary classification labels
     # (tmp := len(quants)/(2*np.bincount(bin_labels)))[0]/tmp[1] is roughly equal to bin_labels.mean() so balancing is good
-    # see https://stackoverflow.com/q/33843981/5122790, https://stackoverflow.com/q/35076586/5122790
     if classifier == "SVM":
         svm = sklearn.svm.LinearSVC(class_weight="balanced", loss="hinge", max_iter=20000)
     elif classifier == "SVM_square":
         svm = sklearn.svm.LinearSVC(dual=False, class_weight="balanced") #squared-hinge instead of hinge (but fastest!)
     elif classifier == "SVM2":
-        warnings.warn("Using SVM Implementation that's slower for this kind of data!")
-        svm = sklearn.svm.SVC(kernel="linear", class_weight="balanced", decision_function_shape="ovo")  #slow as fuck, don't use
+        warnings.warn("Using an SVM Implementation that's slower for this kind of data!")
+        svm = sklearn.svm.SVC(kernel="linear", class_weight="balanced", decision_function_shape="ovo")  #slower than LinearSVC, don't use!
+        # see https://stackoverflow.com/q/33843981/5122790, https://stackoverflow.com/q/35076586/5122790
+    else:
+        raise NotImplementedError(f"Demanded classifier {classifier} not implemented!")
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         svm.fit(embedding, bin_labels)
@@ -166,7 +166,7 @@ def create_candidate_svm(embedding, term, quants, classifier, plot_svm=False, de
     # bin_labels, np.array((np.sign(np.array(distances))+1)/2, dtype=bool)
     # quant_ranking = np.zeros(quants.shape); quant_ranking[np.where(quants > 0)] = np.argsort(quants[quants > 0])
     #TODO cohen's kappa hat nen sample_weight parameter!! DESC15 write they select Kappa "due to its tolerance to class imbalance." -> Does that mean I have to set the weight?!
-    kappa_weights = get_setting("KAPPA_WEIGHTS")
+    kappa_weights = get_setting("KAPPA_WEIGHTS") if get_setting("KAPPA_WEIGHTS") != "None" else None
     res["kappa_rank2rank_dense"]  = cohen_kappa_score(rankdata(quants, method="dense"), rankdata(distances, method="dense"), weights=kappa_weights) #if there are 14.900 zeros, the next is a 1
     res["kappa_rank2rank_min"] = cohen_kappa_score(rankdata(quants, method="min"), rankdata(distances, method="dense"), weights=kappa_weights) #if there are 14.900 zeros, the next one is a 14.901
     res["kappa_bin2bin"]    = cohen_kappa_score(bin_labels, [i > 0 for i in distances], weights=kappa_weights)

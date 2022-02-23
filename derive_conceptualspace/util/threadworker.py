@@ -4,11 +4,11 @@ from multiprocessing import JoinableQueue, Process
 from tqdm import tqdm
 
 class WorkerPool():
-    def __init__(self, n_workers, workerobj, pgbar=None, comqu=None):
+    def __init__(self, n_workers, workerobj=None, pgbar=None, comqu=None):
         self.qu = JoinableQueue()
         self.prioqu = JoinableQueue()
         self.donequ = JoinableQueue()
-        self.workers = [Worker(self.qu, self.prioqu, self.donequ, workerobj, num) for num in range(n_workers)]
+        self.workers = [Worker(self.qu, self.prioqu, self.donequ, num, workerobj) for num in range(n_workers)]
         self.pgbar = pgbar
         self.known_deaths = []
         self.comqu = comqu
@@ -87,7 +87,7 @@ class WorkerPool():
 
 
 class Worker(Process):
-    def __init__(self, queue, prioqu, donequ, obj, num):
+    def __init__(self, queue, prioqu, donequ, num, obj=None):
         Process.__init__(self)
         self.queue = queue
         self.prioqu = prioqu
@@ -104,7 +104,10 @@ class Worker(Process):
                     print(f"A dropped job (number {self.item[0]}) was caught up")
                 else:
                     self.item = self.queue.get()
-                self.donequ.put((self.item[0], self.func(self.obj, self.item[1])))
+                if self.obj is not None:
+                    self.donequ.put((self.item[0], self.func(self.obj, self.item[1])))
+                else:
+                    self.donequ.put((self.item[0], self.func(self.item[1])))
                 self.queue.task_done()
             except KeyboardInterrupt:
                 break

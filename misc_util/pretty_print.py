@@ -1,4 +1,4 @@
-from IPython.display import Markdown, display
+from IPython.display import Markdown as iMarkdown, display as idisplay
 from IPython import get_ipython
 #TODO if importerror just dont try ipython stuff
 
@@ -55,10 +55,10 @@ def isnotebook():
         return False      # Probably standard Python interpreter
 
 
-def pretty_print(*args, fontsize=10, **kwargs):
+def pretty_print(*args, fontsize=11, **kwargs):
     """https://stackoverflow.com/questions/8924173/how-do-i-print-bold-text-in-python/8930747"""
     if isnotebook():
-        display(Markdown(f'<span style="font-size:{fontsize}pt">'+fmt(*args, isnotebook=True)+'</span>'))
+        idisplay(iMarkdown(f'<span style="font-size:{fontsize}pt">'+fmt(*args, isnotebook=True)+'</span>'))
     else:
         # TODO: check if os is linux else just remove ;)
         print(fmt(*args), **kwargs)
@@ -72,6 +72,8 @@ def fmt(*args, isnotebook=False):
         to_print = "".join(to_print)
     return to_print
 
+########################################################################################################################
+########################################################################################################################
 
 def print_multicol(lst, line_len=220):
     max_len = (max(len(i) for i in lst) + 1)
@@ -79,6 +81,17 @@ def print_multicol(lst, line_len=220):
     divisions = list(zip(*[lst[i::n_cols] for i in range(n_cols)]))
     for elems in zip(divisions):
         print("".join([i.ljust(max_len) for i in elems[0]]))
+
+
+if isnotebook():
+    from IPython.display import Markdown
+    display = lambda x: pretty_print(x) if isinstance(x, str) else idisplay(x)
+else:
+    import pprint
+    pp = pprint.PrettyPrinter(indent=2)
+    display = lambda x: pretty_print((pp.pformat(x) if not isinstance(x, str) else x).strip("'").strip('"'))
+    Markdown = lambda *args: " ".join([(i if not i.startswith("#") else "**"+i.strip("# ")+"**") for i in args])
+#such that I can do `from misc_util.pretty_print import Markdown, display`
 
 
 if __name__ == "__main__":
