@@ -81,6 +81,7 @@ def get_envvars(filename):
     return envvarstring, fname
 
 def print_envvars(filename):
+    #TODO instead of envvars, maybe give full click-command (for that I'd need to know at which point stuff becomes relevant)
     envvarstring, fname = get_envvars(filename)
     print(envvarstring)
     print(fname)

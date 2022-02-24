@@ -154,6 +154,7 @@ def create_bare_desclist(languages, translations, for_language, names, descripti
     else:
         assert False, f"You specified a wrong translate_policy: {translate_policy}"
     desc_list.confirm("translate_policy", language=for_language)
+    desc_list.languages = set(i.lang for i in desc_list._descriptions)
     return desc_list
 
 ########################################################################################################################

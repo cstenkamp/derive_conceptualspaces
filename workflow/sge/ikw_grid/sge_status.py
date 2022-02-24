@@ -14,6 +14,8 @@ from util.sge_util import load_acctfile
 logger = logging.getLogger("__name__")
 logger.setLevel(40)
 
+CUSTOM_ACCTFILE = os.getenv("MA_CUSTOM_ACCTFILE") or os.path.join(os.environ["HOME"], "custom_acctfile.yml")
+assert os.path.isfile(CUSTOM_ACCTFILE)
 
 # WARNING this currently has no support for task array jobs
 
@@ -37,7 +39,7 @@ def get_status(jobid, STATUS_ATTEMPTS=20, silent=False):
             if "E" in res[jobid]:
                 return "failed"
             elif res[jobid] == "qw":
-                return "enqueued"
+                return "running" #TODO have another command-line-arg to enable details, in which case this would return "enqueued"
             elif res[jobid] == "r":
                 return "running"
 
@@ -69,7 +71,7 @@ def get_status(jobid, STATUS_ATTEMPTS=20, silent=False):
                         time.sleep(5)
             else: # `qacct` doesn't work on the IKW-grid. I asked Marc, he said "Es wird kein accounting file auf den Knoten geschrieben. Nur auf dem Master und darauf hast du keinen Zugriff"
                 if i == 0: job_status = "success"
-                if os.path.isfile(os.environ["MA_CUSTOM_ACCTFILE"]):
+                if os.path.isfile(CUSTOM_ACCTFILE):
                     custom_acct = load_acctfile()
                     if str(jobid) not in custom_acct:
                         job_status = "failed"

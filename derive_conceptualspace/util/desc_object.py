@@ -6,6 +6,7 @@ from os.path import basename
 from typing import Optional, List
 import inspect
 import logging
+from types import FunctionType
 
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.pipeline import Pipeline
@@ -13,7 +14,8 @@ from tqdm import tqdm
 
 from .dtm_object import DocTermMatrix, csr_to_list
 from .jsonloadstore import Struct
-from ..settings import get_setting, forbid_setting
+from .threadworker import WorkerPool
+from derive_conceptualspace.settings import get_setting, forbid_setting, get_ncpu
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 logger = logging.getLogger(basename(__file__))
@@ -222,7 +224,7 @@ class DescriptionList():
         self._descriptions: List[Description] = []
 
     def json_serialize(self):
-        return Struct(**self.__dict__)
+        return Struct(**{k: v if not isinstance(v, set) else tuple(v) for k, v in self.__dict__.items()})
 
     @staticmethod
     def from_json(descriptions):
@@ -254,11 +256,22 @@ class DescriptionList():
         else:
             assert False, f"cannot confirm {confirmwhat}"
 
-    def process_all(self, proc_fn, proc_name, proc_base=None, indiv_kwargs=None, pgbar=""):
-        for desc in tqdm(self._descriptions, desc=pgbar if isinstance(pgbar, str) else None) if pgbar else self._descriptions:
-            kwargs = {k: v(desc) for k, v in indiv_kwargs.items()} if indiv_kwargs is not None else {}
-            base = desc.processed_text if proc_base is None else proc_base(desc)
-            desc.process(proc_fn(base, **kwargs), proc_name)
+    def process_all(self, proc_fn, proc_name, proc_base=None, indiv_kwargs=None, pgbar="", multiproc=False):
+        if not multiproc:
+            for desc in tqdm(self._descriptions, desc=pgbar if isinstance(pgbar, str) else None) if pgbar else self._descriptions:
+                kwargs = {k: v(desc) for k, v in indiv_kwargs.items()} if indiv_kwargs is not None else {}
+                base = desc.processed_text if proc_base is None else proc_base(desc)
+                desc.process(proc_fn(base, **kwargs), proc_name)
+        else:
+            # Times: lemmatization, german, i7octa, 445 elems, X procs: 1: 1:41, 1:38, 3: 0:48, 6: 0:36, 0:32, 12: 0:31, 0:35, 18: 0:30
+            if isinstance(proc_fn, FunctionType): raise NotImplementedError("So far only implemented for the case where proc_fn is a class with __call__")
+            if indiv_kwargs is not None: raise NotImplementedError()
+            bases = [desc.processed_text if proc_base is None else proc_base(desc) for desc in self._descriptions]
+            with WorkerPool(get_ncpu(ignore_debug=True), proc_fn, pgbar=pgbar) as pool:
+                res, interrupted = pool.work(bases, lambda proc_fn, elem: proc_fn(elem))
+            assert not interrupted
+            for n, desc in enumerate(self._descriptions):
+                desc.process(res[n], proc_name)
         self.proc_steps.append(proc_name)
 
     @property
@@ -302,8 +315,8 @@ class DescriptionList():
                 fit_base = lambda: self.unprocessed_texts(remove_htmltags=pp_comps.remove_htmltags)
             else: raise NotImplementedError()
         else:
-            cnt = CountVectorizer(strip_accents=None, lowercase=False, stop_words=None, ngram_range=(1, (max_ngram or 1)), min_df=min_df)
-            fit_base = lambda: self.iter("processed_as_string", no_dots=True)
+            cnt = CountVectorizer(strip_accents=None, lowercase=False, stop_words=None, ngram_range=(1, (max_ngram or 1)), min_df=min_df, token_pattern=r"(?u)(\b\w\w+\b|\b\d\b)") #this token_pattern allows for single-digit-numbers
+            fit_base = lambda: self.iter("processed_as_string", no_dots=("sent_tokenize" not in self.proc_steps))
             # TODO If I can do sent_tokenize for the CountVectorizer I need to update this here as well!
         if do_tfidf is not None:
             #https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfTransformer.html

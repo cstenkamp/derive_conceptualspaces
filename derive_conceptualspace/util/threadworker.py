@@ -9,7 +9,7 @@ class WorkerPool():
         self.prioqu = JoinableQueue()
         self.donequ = JoinableQueue()
         self.workers = [Worker(self.qu, self.prioqu, self.donequ, num, workerobj) for num in range(n_workers)]
-        self.pgbar = pgbar
+        self.pgbar = pgbar if pgbar is None else pgbar+f" [{n_workers} procs]"
         self.known_deaths = []
         self.comqu = comqu
 

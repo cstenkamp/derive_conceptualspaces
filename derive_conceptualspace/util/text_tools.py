@@ -61,7 +61,16 @@ def run_preprocessing_funcs(descriptions:DescriptionList, components, word_token
     if components.remove_htmltags:
         descriptions.process_all(lambda data: re.compile(r'<.*?>').sub('', data), "remove_htmltags")
     if components.sent_tokenize:
-        descriptions.process_all(nltk_sent_tokenize, "sent_tokenize", indiv_kwargs=dict(language=lambda desc: NLTK_LAN_TRANSLATOR[desc.lang]))
+        if not get_setting("USE_STANZA"):
+            descriptions.process_all(nltk_sent_tokenize, "sent_tokenize", indiv_kwargs=dict(language=lambda desc: NLTK_LAN_TRANSLATOR[desc.lang])) #nltk suuucks!! sent_tokenize(*, language=german) trennt sogar "...am Ende des 2. Semesters", oder, even worse, "Relevante Probleme wie z.B. Lautierungsregeln", but if there's no space after a dot it DOESN'T split obvious sentences! very visible in description "!! FÄLLT AB 15.11. AUS !! Lektürekurs Spanisch I (Gruppe A und B)." #TODO!
+            #TODO maybe write small rule-based-after-thingy that handles common stuff like... * "z.B." wird nicht getrennt * "\d+\. Nomen" (bspw "2. Semester") wird nicht getrennt * Kram wie "15.11." (also daten) wird nicht getrennt, ...
+        else:
+            logging.getLogger('stanza').setLevel(logging.ERROR)
+            import stanza
+            if len(descriptions.languages) > 1: raise NotImplementedError()
+            nlp = stanza.Pipeline(lang='de', processors='tokenize')
+            fn = lambda txt: [i._text for i in nlp(txt).sentences]
+            descriptions.process_all(fn, "sent_tokenize", pgbar="Stanza Sentence-Tokenizing")
     if components.convert_lower:
         convert_lower_all(descriptions)
     #tokenization will happen anyway!
@@ -69,7 +78,7 @@ def run_preprocessing_funcs(descriptions:DescriptionList, components, word_token
         word_tokenize_all(descriptions, word_tokenizer=word_tokenizer, remove_stopwords=components.remove_stopwords)
     else:
         word_tokenize_all(descriptions, word_tokenizer=word_tokenizer, remove_stopwords=False)
-        lemmatize_all(descriptions)
+        lemmatize_all(descriptions, components.convert_lower, components.remove_punctuation)
         if components.remove_stopwords:
             descriptions.process_all(lambda txt, stopwords: [[lemma for lemma in sent if lemma not in stopwords] for sent in txt], "remove_stopwords", indiv_kwargs=dict(stopwords=lambda desc: get_stopwords(desc.lang)))
     if components.remove_diacritics:
@@ -102,27 +111,44 @@ def word_tokenize_all(descriptions, word_tokenizer=None, remove_stopwords=False)
     descriptions.process_all(fn, tokenizer_fn_name, indiv_kwargs=indiv_kwargs, pgbar="Word-Tokenizing Descriptions")
 
 
-#TODO use_better_german_tagger should be True!!
-def lemmatize_all(descriptions, use_better_german_tagger=False):
-    # see https://textmining.wp.hs-hannover.de/Preprocessing.html#Lemmatisierung
-    german_tagger = ht.HanoverTagger('morphmodel_ger.pgz')
-    lemmatizer = nltk_WordNetLemmatizer()
-    assert "sent_tokenize" in descriptions.proc_steps
-    assert not "removestopwords" in descriptions.proc_steps  # taggers work best on sentences
-    def lemmatize(txt, language):
+
+class Lemmatizer():
+    def __init__(self, descriptions, convert_lower, remove_punctuation):
+        self.convert_lower = convert_lower
+        self.remove_punctuation = remove_punctuation
+        self.all_languages = descriptions.languages
+        assert "sent_tokenize" in descriptions.proc_steps
+        assert not "removestopwords" in descriptions.proc_steps  # taggers work best on sentences
+        if "de" in descriptions.languages:
+            self.german_tagger = ht.HanoverTagger('morphmodel_ger.pgz') # see https://textmining.wp.hs-hannover.de/Preprocessing.html#Lemmatisierung
+        if "en" in descriptions.languages:
+            self.english_lemmatizer = nltk_WordNetLemmatizer()
+
+    def __call__(self, txt, language=None):
+        if language is None:
+            assert len(self.all_languages) == 1
+            language = list(self.all_languages)[0]
         lemmatized = []
         for sent in txt:
-            if language == "de" and use_better_german_tagger:
-                if isinstance(sent, list):
-                    sent = " ".join(sent) #TODO really?!
-                tags = german_tagger.tag_sent(sent)
-                lemmatized.append([i[1].casefold() for i in tags if i[1] != "--"]) #TODO: not sure if I should remove the non-word-tokens completely..?
-                raise NotImplementedError()
-            else:
+            if language == "de":
+                assert isinstance(sent, list)
+                tags = self.german_tagger.tag_sent(sent)
+                fn = lambda x: x.casefold() if self.convert_lower else lambda x: x
+                if self.remove_punctuation:
+                    lemmatized.append([fn(i[1]) for i in tags if i[1] != "--"])
+                else:
+                    lemmatized.append([fn(i[1]) if i[1] != "--" else i[0] for i in tags])
+            elif language == "en":
                 tags = nltk_pos_tag(sent)
-                lemmatized.append([lemmatizer.lemmatize(word, wntag(pos)) if wntag(pos) else word for word, pos in tags])
-        return lemmatized
-    descriptions.process_all(lemmatize, "lemmatize", indiv_kwargs=dict(language=lambda desc: desc.lang), pgbar="Lemmatizing Descriptions    ")
+                lemmatized.append([self.english_lemmatizer.lemmatize(word, wntag(pos)) if wntag(pos) else word for word, pos in tags])
+        return [i for i in lemmatized if i]
+
+
+def lemmatize_all(descriptions, convert_lower, remove_punctuation):
+    lemmatizer = Lemmatizer(descriptions, convert_lower, remove_punctuation)
+    if len(descriptions.languages) > 1: raise NotImplementedError("Would be implemented for non-multilan")
+    # descriptions.process_all(lemmatizer, "lemmatize", pgbar="Lemmatizing Descriptions", indiv_kwargs=dict(language=lambda desc: desc.lang))
+    descriptions.process_all(lemmatizer, "lemmatize", pgbar="Lemmatizing Descriptions", multiproc=True)
 
 
 def remove_diacritics_all(descriptions):

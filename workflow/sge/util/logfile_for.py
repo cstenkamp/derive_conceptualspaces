@@ -61,7 +61,7 @@ def read_errorfile(error_file):
 def print_singlejob(jobid, acctfile, onlyerr):
     txt, path = check_joblog(jobid, acctfile)
     if onlyerr:
-        txt = extract_error(txt)
+        txt = extract_error(txt)[0]
     print("Filepath:", path)
     print("==" * 50)
     print(txt)
@@ -74,13 +74,20 @@ def extract_error(txt):
     if startlines:
         txt = txt[max(startlines):]  # take only the last try into account
     if not 'Exiting because a job execution failed. Look above for error message' in txt:
-        return False #no error
+        return False, "" #no error
+    if not any(i.startswith(j) for i in txt for j in ["RuleException:", "SystemExit in line", "Interrupted at iteration"]):
+        return "Unknown Exception", "Exception"
+    if "RuleException:" in txt:
+        txt = txt[txt.index("RuleException:")+1:]
+        kind = "Exception"
+    elif any(i.startswith("SystemExit in line") for i in txt):
+        txt = txt[[i for i, elem in enumerate(txt) if elem.startswith("SystemExit in line")][0]:]
+        kind = "SystemExit("+txt[1]+")"
+    elif any(i.startswith("Interrupted at iteration") for i in txt):
+        return "", "Interrupted"
     txt = txt[:txt.index('Exiting because a job execution failed. Look above for error message')]
-    if "RuleException:" not in txt:
-        raise NotImplementedError()
-    txt = txt[txt.index("RuleException:")+1:]
     txt = [i for i in txt if not any(j in i for j in ["in __rule_", "telegram_notifier.py", "Shutting down, this might take some time."])]
-    return "\n".join(txt)
+    return "\n".join(txt), kind
 
 
 def get_info_detailed(acctfile):

@@ -6,4 +6,5 @@ max-jobs-per-second: 1
 max-status-checks-per-second: 1
 latency-wait: 30
 local-cores: 1
-jobs: 12
+jobs: 24
+runner-restarts: 10

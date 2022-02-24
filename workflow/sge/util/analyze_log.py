@@ -94,8 +94,9 @@ def split_all(errorfiles):
         if len(orig_job) < 1:
             pure_resumes.append(resumed_job["external_id"])
         else:
-            assert all(v == resumed_job[k] for k, v in orig_job.items() if k not in ["resuming", "submit_command", "errorfile", "resources", "timestamp", "resumed_at"])
-            orig_job.setdefault("resumed_at", []).append(resumed_job["timestamp"])
+            assert len(orig_job) == 1
+            assert all(v == resumed_job[k] for k, v in orig_job[0].items() if k not in ["resuming", "submit_command", "errorfile", "resources", "timestamp", "resumed_at"])
+            orig_job[0].setdefault("resumed_at", []).append(resumed_job["timestamp"])
     job_infos = [i for i in job_infos if (not i.get("resuming") or i["external_id"] in pure_resumes)]
     return todo_jobs, dones, merge_job_infos(job_infos), leftover_text
 
@@ -134,21 +135,34 @@ def main():
             info["state"] = [get_status(i, silent=True) for i in info["external_id"]]
     # assert len([i for i in job_infos if not i.get("finished_at")]) == len(job_infos)-len(dones)
     #TODO nur weil sie nicht finished sind sind sie nicht failed...!!
-    if (runnings := [i for i in job_infos if all(j == "running" for j in i.get("state"))]):
+    if (runnings := [i for i in job_infos if all(j == "running" for j in i.get("state", ["not_running"]))]):
         print("The following runs are running:\n  "+"\n  ".join([f"  {r['output'].ljust(max(len(i['output']) for i in runnings))} (pid {','.join(r['external_id'])})" for r in runnings]))
         job_infos = [i for i in job_infos if i["jobid"] not in [i["jobid"] for i in runnings]]
     #TODO finished ones are not actually finished god damn it
     if (dones := [i for i in job_infos if "finished_at" in i or all(j == "success" for j in i.get("state"))]):
-        print("The following ones are finished: \n   " + "\n   ".join([f"{i['output'].ljust(max(len(i['output']) for i in dones))}{('at '+str(i['finished_at'])) if 'finished_at' in i else ''}" for i in dones]))
+        print("The following ones are finished: \n   " + "\n   ".join([f"{i['output'].ljust(max(len(j['output']) for j in dones))}(pid {','.join(i['external_id'])}){(' at '+str(i['finished_at'])) if 'finished_at' in i else ''}" for i in dones]))
         job_infos = [i for i in job_infos if i["jobid"] not in [i["jobid"] for i in dones]]
     #TODO there's also enqueued!
     if (fails := sorted([i for i in job_infos if not i.get("finished_at")], key=lambda x: x["output"])):
+        interrupteds = []
         print("The following ones failed:")
         for fail in fails:
-            print(f"  {fail['output'].ljust(max(len(i['output']) for i in fails))} (pid {','.join(fail['external_id'])})")
-            if args.include_errors:
-                err = extract_error(read_errorfile(fail["errorfile"]))
-                if err is not False: print("     " + err.replace("\n", "\n     "))
+            if not args.include_errors:
+                print(f"  {fail['output'].ljust(max(len(i['output']) for i in fails))} (pid {','.join(fail['external_id'])})")
+            else:
+                err, kind = extract_error(read_errorfile(fail["errorfile"]))
+                if kind == "Exception":
+                    print(f"  {fail['output'].ljust(max(len(i['output']) for i in fails))} (pid {','.join(fail['external_id'])})")
+                    print("     " + err.replace("\n", "\n     "))
+                elif kind.startswith("SystemExit") or kind == "Interrupted":
+                    interrupteds.append((fail, err, kind))
+                else:
+                    print(f"  {fail['output'].ljust(max(len(i['output']) for i in fails))} (pid {','.join(fail['external_id'])})")
+                    print("     "+"Error unknown")
+        if interrupteds:
+            print("The following ones were interrupted:")
+            for j in interrupteds:
+                print(f"  {j[0]['output'].ljust(max(len(i[0]['output']) for i in interrupteds))} (pid {','.join(j[0]['external_id'])})")
     #TODO cross-check with `check -j` command
     #TODO parse the leftover_text as well, there may be more info about fails
     #TODO use the error-files to get the respective errors of the files

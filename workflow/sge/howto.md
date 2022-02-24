@@ -46,6 +46,11 @@ For the .env-files for the grid-conf: env-vars you didn't define yet can be used
 
 Sobald das envvargedöns hier richtig ist auch empfehlungen in dieses file schreiben was man in die bashrc packen kann :)
 
+get stuff from grid:
+```
+crsync grid:/home/student/c/cstenkamp/custom_acctfile.yml "grid:/home/student/c/cstenkamp/smk_runner.*" /home/chris/Documents/UNI_neu/Masterarbeit/data_new/backups/grid_snakemake/curr/ && crsync grid:/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/./logs/sge/ --relative /home/chris/Documents/UNI_neu/Masterarbeit/data_new/backups/grid_snakemake/curr/
+```
+
 
 SOOO, commands:
 [for sample-env-file see sample-env-file]  

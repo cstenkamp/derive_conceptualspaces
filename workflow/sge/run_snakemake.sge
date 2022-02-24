@@ -71,14 +71,14 @@ timeout -k 30 $(( $WALL_SECS-90 )) snakemake --directory $MA_BASE_DIR -p $SNAKEM
 retval=$?
 echo "Main process ended. Return-value is $retval"
 if [ $retval -eq 124 ] || [ $retval -eq 137 ] ; then # if the timeout killed the program
-  if (( $RUN_NR < 5 )); then # TODO calculate this from the walltime maybe?
+  if (( $RUN_NR < $RUNNER_RESTARTS )); then
     echo "COMMAND TO RUN: qsub -V -l h_rt=$WALLTIME -v WALLTIME=$WALLTIME -v SNAKEMAKE_ARGS=$SNAKEMAKE_ARGS -v MA_SELECT_ENV_FILE=$MA_SELECT_ENV_FILE
     -v MA_BASE_DIR=$MA_BASE_DIR -v MA_CODEPATH=$MA_CODEPATH -v MA_CONDAPATH=$MA_CONDAPATH -v RUN_NR=$RUN_NR -v MA_CUSTOM_ACCTFILE=$MA_CUSTOM_ACCTFILE
-    -v MA_CONFIGDIR=$MA_CONFIGDIR $MA_CODEPATH/workflow/sge/run_snakemake.sge"
+    -v MA_CONFIGDIR=$MA_CONFIGDIR -v RUNNER_RESTARTS=$RUNNER_RESTARTS  $MA_CODEPATH/workflow/sge/run_snakemake.sge"
 
     qsub -V -l h_rt=$WALLTIME -v WALLTIME=$WALLTIME -v SNAKEMAKE_ARGS="$SNAKEMAKE_ARGS" -v MA_SELECT_ENV_FILE="$MA_SELECT_ENV_FILE" \
     -v MA_BASE_DIR="$MA_BASE_DIR" -v MA_CODEPATH="$MA_CODEPATH" -v MA_CONDAPATH="$MA_CONDAPATH" -v RUN_NR=$RUN_NR \
-    -v MA_CUSTOM_ACCTFILE="$MA_CUSTOM_ACCTFILE" -v MA_CONFIGDIR="$MA_CONFIGDIR" \
+    -v MA_CUSTOM_ACCTFILE="$MA_CUSTOM_ACCTFILE" -v MA_CONFIGDIR="$MA_CONFIGDIR" -v RUNNER_RESTARTS=$RUNNER_RESTARTS \
     $MA_CODEPATH/workflow/sge/run_snakemake.sge
     sleep 2
     exit 0

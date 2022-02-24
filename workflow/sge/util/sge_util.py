@@ -7,9 +7,14 @@ import time
 import subprocess as sp
 import shlex
 
+LAST_READ = (0, None)
+
 def load_acctfile():
+    global LAST_READ
     if not os.path.isfile(os.environ["MA_CUSTOM_ACCTFILE"]):
         return {}
+    if os.path.getmtime(os.getenv("MA_CUSTOM_ACCTFILE", join(os.getenv("HOME"), "custom_acctfile.yml"))) == LAST_READ[0]:
+        return LAST_READ[1]
     for ntrial in range(1, 6):
         try:
             with open(os.getenv("MA_CUSTOM_ACCTFILE", join(os.getenv("HOME"), "custom_acctfile.yml")), "r") as rfile:
@@ -18,6 +23,7 @@ def load_acctfile():
         except:
             time.sleep(ntrial)
     custom_acct = custom_acct if custom_acct is not None else {}
+    LAST_READ = (os.path.getmtime(os.getenv("MA_CUSTOM_ACCTFILE", join(os.getenv("HOME"), "custom_acctfile.yml"))), custom_acct)
     return custom_acct
 
 

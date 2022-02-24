@@ -57,7 +57,7 @@ class CustomIO(ObjectWrapper):
     @staticmethod
     @contextlib.contextmanager
     def context():
-        yield CustomIO.init()
+        yield CustomIO.init(None)
         sys.stderr = sys.stderr.overwrites_stream
         sys.stdout = sys.stdout.overwrites_stream
 
@@ -68,3 +68,17 @@ class CustomIO(ObjectWrapper):
 
     def __eq__(self, other):
         return self._wrapped == getattr(other, '_wrapped', other)
+
+
+if __name__ == "__main__":
+    from tqdm import tqdm
+    from time import sleep
+
+    with CustomIO.context() as (new_out, new_err):
+        print("HALLO", "wtf")
+        print("next one")
+        for i in tqdm(range(10)):
+            sleep(0.1)
+
+    print(new_out.getvalue())
+    print(new_err.getvalue())
