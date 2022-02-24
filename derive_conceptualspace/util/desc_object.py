@@ -112,10 +112,11 @@ class Description():
         secondpart = self.text if self.text is not None else " ".join([f"{k} "*v for k, v in self.bow().items()])
         return firstpart + secondpart
 
-    def processed_as_string(self, no_dots=False, allow_shorten=False):
+    def processed_as_string(self, no_dots=False, allow_shorten=False, insert_sentborder=False):
+        #sentborder allows to recognize keywords that would be detected across sentences
         if allow_shorten and len(self.processing_steps) == 0 and not self._add_subtitle and not self._add_subtitle:
             return " ".join([k for k in self.bow().keys()])
-        sent_join = " " if no_dots else ". "
+        sent_join = " xxMA_SENTBORDERxx " if insert_sentborder else " " if no_dots else ". "
         if isinstance(self.processed_text, list):
             if isinstance(self.processed_text[0], list):
                 return sent_join.join([" ".join(i) for i in self.processed_text])
@@ -128,9 +129,11 @@ class Description():
 
     def count_phrase(self, item):
         assert isinstance(item, str)
-        if not " " in item:
+        if (not " " in item) or (" " in item and item in self._bow): #latter one is only bc of the problem when lemmatizing and letting sklearn's count overwrite it so we're force-writing the sklearn-count into the bow for asstions in postprocess_cands
             return self.bow().get(item, 0) #the bow contains ALL words of the desription (so min_df==1)
-        return occurrences(" "+self.processed_as_string()+" ", " "+item+" ") #pp-descriptions NEVER HAS NGRAMS, also not the BoW, deal with it.
+        return occurrences(" "+self.processed_as_string()+" ", " "+item+" ") + (occurrences(" "+self.processed_as_string()+" ", " "+item+". ") if "sent_tokenize" in self.list_ref.proc_steps else 0)
+        #pp-descriptions NEVER HAS NGRAMS, also not the BoW, deal with it.
+        #reason for the second summand: Keyphrases like 'abschlussprufung ende 2' ARE inside a (badly sent-tokenized) string that goes "... ende 2. Semester"
 
         #TODO now it still often occurs that there the text may contain: "deutschen sprachen deutschen sprachen deutschen sprache" and I'm looking for "deutschen sprache"
         # -> correct is to return 1, however I DISLIKE this.
@@ -316,7 +319,8 @@ class DescriptionList():
             else: raise NotImplementedError()
         else:
             cnt = CountVectorizer(strip_accents=None, lowercase=False, stop_words=None, ngram_range=(1, (max_ngram or 1)), min_df=min_df, token_pattern=r"(?u)(\b\w\w+\b|\b\d\b)") #this token_pattern allows for single-digit-numbers
-            fit_base = lambda: self.iter("processed_as_string", no_dots=("sent_tokenize" not in self.proc_steps))
+            fit_base = lambda: self.iter("processed_as_string", insert_sentborder=("sent_tokenize" in self.proc_steps))
+            #if we sent_tokenize, we have something like "2. Semester" in the original, which becomes due to nltk's suckiness [["bla", "2"], ["Semester", "blub"]]. It shouldn't find stuff across sentence borders, so we insert detectables strings that we can remove later.
             # TODO If I can do sent_tokenize for the CountVectorizer I need to update this here as well!
         if do_tfidf is not None:
             #https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfTransformer.html

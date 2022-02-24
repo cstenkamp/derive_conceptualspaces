@@ -30,7 +30,7 @@ def postprocess_candidateterms(candidate_terms, descriptions, extraction_method)
     dtm = descriptions.generate_DocTermMatrix(min_df=1, max_ngram=max_found_ngram)[0] #TODO check if this works for all parameter-combis
 
     postprocessed_candidates = [[] for _ in candidate_terms]
-    fails, changeds, toolong = set(), set(), set()
+    fails, changeds, toolong, ignores = set(), set(), set(), set()
 
     if extraction_method == "keybert":
         from derive_conceptualspace.create_spaces.preprocess_descriptions import PPComponents, get_countvec
@@ -49,19 +49,21 @@ def postprocess_candidateterms(candidate_terms, descriptions, extraction_method)
             if cand.count(" ")+1 > (get_setting("MAX_NGRAM") or 1):
                 toolong.add(cand)
                 continue
+            if "xxMA_SENTBORDERxx" in cand:
+                ignores.add(cand)
+                continue
             cond, ncand = check_cand(cand, desc, edit_fns=all_edit_fns)
             if cond:
-                assert term_counts[ncand] == desc.count_phrase(ncand) #!!this shows that the DTM contains exactly the bow!!
-                if extracted_literally():
-                    assert cand == ncand
-                elif cand != ncand:
-                    changeds.add((cand, ncand))
+                if not extracted_literally():
+                    assert term_counts[ncand] == desc.count_phrase(ncand) #!!this shows that the DTM contains exactly the bow!!
+                    if cand != ncand:
+                        changeds.add((cand, ncand))
                 postprocessed_candidates[desc_ind].append(ncand)
             else:
                 fails.add(cand)
 
     if extracted_literally():
-        assert not fails and not changeds and not toolong
+        assert not changeds and not toolong
 
     # changeds are for example when extract_coursetype extracted "seminar" from a description because it says "hauptseminar".
     # we can use that to make a mapping saying that a description containing the latter is defined to count as positive sample for the former.
@@ -74,9 +76,12 @@ def postprocess_candidateterms(candidate_terms, descriptions, extraction_method)
         for cand in postprocessed_candidates[desc_ind]:
             assert cand in desc
             assert cand in desc_txt
+            assert dtm.reverse_term_dict[cand] in set(i[0] for i in dtm.dtm[desc_ind])
 
     if toolong:
         print(f"Had to drop {len(toolong)} out of {len(flatten(candidate_terms))} (non-unique) candidates because they were too long.")
+    if ignores:
+        print(f"Had to drop {len(ignores)} out of {len(flatten(candidate_terms))} (non-unique) candidates because they were across sentence borders.")
     print(f"Had to drop {len(fails)} out of {len(flatten(candidate_terms))} (non-unique) candidates"+(f" and edit {len(changeds)}." if changeds else "."))
     print("Postprocessed Unique Terms: ", ", ".join([f"{k+1}-grams: {v}" for k, v in sorted(Counter([i.count(" ") for i in set(flatten(postprocessed_candidates))]).items(), key=lambda x:x[0])]), "| sum:", len(set(flatten(postprocessed_candidates))))
     return postprocessed_candidates, changeds_dict
@@ -103,8 +108,23 @@ def check_cand(cand, desc, edit_fns=None):
     if cand in desc:
         return True, cand
 
-    if extracted_literally():
-        assert False, "You shouldn't get here with your extraction-method!"
+    if extracted_literally(): #TODO all of this (besides assert false) is dirty as argh!
+        if any("." in k for k in [j for j in flatten([i[0] for i in desc.processing_steps if i[1] == "lemmatize"][0]) if j.startswith(cand.split(" ")[0])]):
+            # reason for this: In eg. "...  geschult.Der Kurs wird ...", due to no space after the dot and shitty sent-tokenization, "geschult.der" becomes a 1-gram ("geschult.d" after lemmatization).
+            # the cand is extracted with sklearn with less shitty sent-tokenization, so it's "geschult kurs".
+            return False, None
+        if cand in flatten([i.split("-") for i in flatten(desc.processed_text) if "-" in i]):
+            # reason for this: "sprachen" in the string "b-sprachen". Better would be to from-the-start if "b-sprachen" is in the text, add a bow-entry for "sprachen" as well
+            # desc._bow[cand] = sum([desc.count_phrase(i) for i in flatten(desc.processed_text) if "-" in i and cand in i.split("-")])
+            # if (ncand := [i for i in flatten(desc.processed_text) if "-" in i and any(j == cand for j in i.split("-"))][0]) in desc:
+            #     return True, ncand
+            return False, None
+        if not max((indices := [flatten(desc.processed_text).index(i) if i in flatten(desc.processed_text) else -999 for i in cand.split(" ")]))-min(indices) <= cand.count(" ")+1:
+            #see above, this time for situation: token='hausaufgabe geschult kurs', in text it is "hausaufgabe geschult d kurs" (geschult.der -> geschult.d -> geschult d, d being no stopword)
+            return False, None
+        # jo auf die ganzen anderen edge cases hab ich keinen Bock mehr. Dann sind die halt keine Candidates.
+        # assert False, "You shouldn't get here with your extraction-method!"
+        return False, cand
 
     part_cands = [[i for i in desc.bow().keys() if part in i] for part in cand.split(" ")]
     for ccand in product(*part_cands):

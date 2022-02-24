@@ -41,7 +41,7 @@ source $MA_CODEPATH/workflow/sge/util/parse_yml.sh
 eval $(parse_yaml $MA_GRIDCONF/cluster.yaml | grep __default___h_rt)
 export WALLTIME=$(echo $__default___h_rt | tr -d '"')
 
-eval $(parse_yaml $MA_GRIDCONF/config.yaml | grep runner-restarts)
+eval $(parse_yaml $MA_GRIDCONF/cluster.yaml | grep runner-restarts)
 export RUNNER_RESTARTS=$(echo $runner-restarts | tr -d '"')
 
 echo "Wall-Time: $WALLTIME"
@@ -70,7 +70,7 @@ fi
 
 qsub -V -l h_rt=$WALLTIME -v WALLTIME=$WALLTIME -v SNAKEMAKE_ARGS="$SNAKEMAKE_ARGS" -v MA_SELECT_ENV_FILE="$MA_SELECT_ENV_FILE" \
     -v MA_BASE_DIR="$MA_BASE_DIR" -v MA_CODEPATH="$MA_CODEPATH" -v MA_CONDAPATH="$MA_CONDAPATH" \
-    -v MA_CUSTOM_ACCTFILE="$MA_CUSTOM_ACCTFILE" -v MA_CONFIGDIR="$MA_CONFIGDIR" \ -v RUNNER_RESTARTS=$RUNNER_RESTARTS \
+    -v MA_CUSTOM_ACCTFILE="$MA_CUSTOM_ACCTFILE" -v MA_CONFIGDIR="$MA_CONFIGDIR" -v RUNNER_RESTARTS=$RUNNER_RESTARTS \
     $MA_CODEPATH/workflow/sge/run_snakemake.sge
 
 if "$watch"; then
