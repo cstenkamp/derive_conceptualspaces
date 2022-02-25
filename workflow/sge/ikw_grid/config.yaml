@@ -7,3 +7,5 @@ max-status-checks-per-second: 1
 latency-wait: 30
 local-cores: 1
 jobs: 24
+cluster-cancel: qdel
+#cluster-cancel is available since 7.0.0, see https://github.com/snakemake/snakemake/pull/1395,

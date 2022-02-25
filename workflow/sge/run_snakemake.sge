@@ -63,7 +63,7 @@ done
 
 ###################### actual runner stuff ######################
 snakemake --directory $MA_BASE_DIR $SNAKEMAKE_ARGS --unlock
-timeout -k 30 $(( $WALL_SECS-90 )) snakemake --directory $MA_BASE_DIR -p $SNAKEMAKE_ARGS --profile $MA_GRIDCONF
+timeout -k 30 $(( $WALL_SECS-90 )) snakemake --directory $MA_BASE_DIR -p $SNAKEMAKE_ARGS --profile $MA_GRIDCONF --report
 # `timeout -k x y` means `send shutdown after y seconds, and x seconds after that send SIGKILL`. The SIGKILL must be > config.latency-wait !!
 
 ###################### closing stuff ######################

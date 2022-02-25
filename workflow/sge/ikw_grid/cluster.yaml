@@ -23,4 +23,4 @@ nonrequestables:
   - "tmpdir" #the ikw grid doesn't allow to request a tmpdir
   - "s_rt" #does not work on the ikw-grid!
 
-runner-restarts: 10
+runner_restarts: 10

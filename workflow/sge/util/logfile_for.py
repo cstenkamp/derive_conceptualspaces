@@ -101,7 +101,7 @@ def get_info_detailed(acctfile):
             txt = check_joblog(jobid, acctfile)[0]
         except FileNotFoundError:
             # print("No log for job "+jobid+"! full info:", info)
-            pass
+            txt = ""
         if txt:
             if len([line for line in txt.split("\n") if line.startswith("rule")]) == 1:
                 rule_str = txt.split("\n")[[lnum for lnum, line in enumerate(txt.split("\n")) if line.startswith("rule")][0]:]

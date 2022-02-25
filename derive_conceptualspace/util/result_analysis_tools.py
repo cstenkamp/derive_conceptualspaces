@@ -25,9 +25,11 @@ def getfiles_allconfigs(basename, dataset=None, base_dir=None, ext=".json", only
                                      (not only_nondebug or parse(os.sep.join(settings.DIR_STRUCT), dirname(cand)).named.get("debug", False) in ["False", False]))]):
         warnings.warn("There are files that won't be considered here: \n    "+"\n    ".join(leftovers))
     print_cnf = {k: list(set(dic[k] for dic in configs)) for k in configs[0]}
+    print_cnf = {k: [str(i) for i in sorted([int(j) for j in v])] if all(k.isnumeric() for k in v) else sorted(v) for k, v in print_cnf.items()}
+    configs = sorted(configs, key=lambda elem: sum([print_cnf[k].index(v)*(10**(len(elem)-n)) for n, (k, v) in enumerate(elem.items())]))
     print_cnf = {k: v[0] if len(v) == 1 else v for k, v in print_cnf.items()}
     if verbose:
-        display(f"There are {len(candidates)} different parameter-combis for dataset *b*{os.environ['MA_DATASET']}*b*:")
+        display(f"There are {len(configs)} different parameter-combis for dataset *b*{os.environ['MA_DATASET']}*b*:")
         display(print_cnf)
     return configs, print_cnf
 
@@ -54,3 +56,21 @@ def display_metrics(metlist):
         plt.hist(vals, bins=[i/10 for i in range(11)]+[max(vals+[1.1])], log=make_logscale, color="red" if make_logscale else "blue")
     plt.tight_layout()
     plt.show()
+
+
+def show_lambda_elements(metlist, lambda1=0.5, lambda2=0.1):
+    for met in list(list(metlist.values())[0].keys()):
+        if "kappa" in met and not "bin2bin" in met:
+            vals = [i[met] for i in metlist.values()]
+            t1 = len([i for i in vals if i >= lambda1])
+            t2 = len([i for i in vals if i >= lambda2]) - t1
+            if t1:
+                print(f" {met}: T^{lambda1}: {t1}, T^{lambda2}: {t2}")
+                print(f" In T^{lambda1}: {', '.join([k for k, v in metlist.items() if v[met] > lambda1])}")
+
+
+def highlight_nonzero_max(data):
+    #df.style.apply(highlight_nonzero_max, axis=0), https://stackoverflow.com/a/62639983/5122790
+    #df.style.highlight_max(color='lightgreen', axis=0)
+    # return [f'font-weight: bold' if v == data.max() and v > 0 else '' for v in data]
+    return [f'background-color: lightgreen' if v == data.max() and v > 0 else '' for v in data]

@@ -41,8 +41,8 @@ source $MA_CODEPATH/workflow/sge/util/parse_yml.sh
 eval $(parse_yaml $MA_GRIDCONF/cluster.yaml | grep __default___h_rt)
 export WALLTIME=$(echo $__default___h_rt | tr -d '"')
 
-eval $(parse_yaml $MA_GRIDCONF/cluster.yaml | grep runner-restarts)
-export RUNNER_RESTARTS=$(echo $runner-restarts | tr -d '"')
+eval $(parse_yaml $MA_GRIDCONF/cluster.yaml | grep runner_restarts)
+export RUNNER_RESTARTS=$(echo $runner_restarts | tr -d '"')
 
 echo "Wall-Time: $WALLTIME"
 echo "Runner-restarts: $RUNNER_RESTARTS"

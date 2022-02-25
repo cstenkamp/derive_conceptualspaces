@@ -185,11 +185,15 @@ class CustomContext(ObjectWrapper):
         if self.get_config("DEBUG", silent=True, silence_defaultwarning=True): res.append("DEBUG_N_ITEMS")
         return list({standardize_config_name(k):None for k in res}.keys()) #unique but with order
 
-    def print_important_settings(self):
+    def get_important_settings(self):
         params = {i: self.get_config(i, silent=True) for i in self.important_settings if self.has_config(i)}
         params = dict(sorted(params.items(), key=lambda x:x[0]))
         default_params = {k[len("DEFAULT_"):]:v for k,v in settings.__dict__.items() if k in ["DEFAULT_"+i for i in params.keys()]}
-        print(f"Running with the following settings [{self.settingshash}]: ", ", ".join([f"{k}: *{'b' if v==default_params.get(k) else 'r'}*{v}*{'b' if v==default_params.get(k) else 'r'}*" for k, v in params.items()]))
+        return self.settingshash, ", ".join([f"{k}: *{'b' if v==default_params.get(k) else 'r'}*{v}*{'b' if v==default_params.get(k) else 'r'}*" for k, v in params.items()])
+
+    def print_important_settings(self):
+        settingshash, string = self.get_important_settings()
+        print(f"Running with the following settings [{settingshash}]: {string}")
         if gethostname() != settings.STANDARD_HOSTNAME:
             print(f"Running on {gethostname()}")
 
