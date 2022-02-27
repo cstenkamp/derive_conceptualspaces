@@ -2,7 +2,7 @@ from nltk import word_tokenize, pos_tag, ne_chunk
 from nltk import RegexpParser
 from nltk.tree import Tree
 
-from derive_conceptualspace.util.nltk_util import download_activate_stanfordnlp, download_nltk_dependencies
+from derive_conceptualspace.util.nltk_util import download_nltk_dependencies #, download_activate_stanfordnlp
 
 ########################################################################################################################
 

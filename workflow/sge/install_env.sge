@@ -4,19 +4,28 @@
 #$ -pe default 1
 
 cd $HOME
-git clone https://github.com/cstenkamp/derive_conceptualspaces.git
 
-wget -q https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
-bash Miniconda3-latest-Linux-x86_64.sh -b -p "$HOME/miniconda"
-rm Miniconda3-latest-Linux-x86_64.sh
+if [ ! -d "$HOME/derive_conceptualspaces" ]; then
+    git clone https://github.com/cstenkamp/derive_conceptualspaces.git
+fi
+
+if [ ! -d "$HOME/miniconda" ]; then
+    wget -q https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+    bash Miniconda3-latest-Linux-x86_64.sh -b -p "$HOME/miniconda"
+    rm Miniconda3-latest-Linux-x86_64.sh
+fi
 
 export PATH="$HOME/miniconda/bin:$PATH"
 
-conda create -y -q --name derive_conceptualspaces python=3.9.1
+conda create -y -q --name watcher python=3.8
+source miniconda/bin/activate watcher
+pip install python-dotenv pyyaml
 
+conda create -y -q --name derive_conceptualspaces python=3.10.0
 source miniconda/bin/activate derive_conceptualspaces
-
 pip install --upgrade pip
+pip install --pre torch -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
+conda install -c alubbock pygraphviz
 pip install -r $HOME/derive_conceptualspaces/requirements-dev.txt
 pip install -r $HOME/derive_conceptualspaces/requirements.txt
 python3 -c "import nltk; nltk.download('stopwords'); nltk.download('punkt'); nltk.download('wordnet'); nltk.download('averaged_perceptron_tagger')"

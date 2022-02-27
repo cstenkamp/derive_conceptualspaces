@@ -1,4 +1,4 @@
-#! /home/student/c/cstenkamp/miniconda/envs/derive_conceptualspaces/bin/python3
+#! /home/student/c/cstenkamp/miniconda/envs/watcher/bin/python3
 
 import argparse
 import os
@@ -7,26 +7,15 @@ from os.path import isfile, join, basename
 import re
 from datetime import datetime, timedelta
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(join(dirname(__file__), ".."))
 
 from dotenv import load_dotenv
 
-from util.sge_util import load_acctfile, get_active_jobs, get_enqueued_detailed
+from util.sge_util import load_acctfile, get_active_jobs, get_enqueued_detailed, apply_dotenv_vars, read_errorfile, \
+    extract_error
 from ikw_grid.sge_status import get_status
 
 
-def apply_dotenv_vars(ENV_PREFIX="MA"):
-    if os.getenv(ENV_PREFIX+"_SELECT_ENV_FILE"):
-        assert isfile(os.getenv(ENV_PREFIX+"_SELECT_ENV_FILE"))
-        load_dotenv(os.getenv(ENV_PREFIX+"_SELECT_ENV_FILE"))
-    curr_envvars = {k: v for k, v in os.environ.items() if k.startswith(ENV_PREFIX+"_")}
-    curr_envvars = {k: os.path.expandvars(v) for k, v in curr_envvars.items()} #replace envvars
-    curr_envvars = {k: os.path.expandvars(os.path.expandvars(re.sub(r"{([^-\s]*?)}", r"$\1", v))) for k, v in curr_envvars.items()} #replace {ENV_VAR} with $ENV_VAR and then apply them
-    envfile = curr_envvars.get(ENV_PREFIX + "_" + "ENV_FILE")
-    if envfile and not isfile(envfile) and isfile(join(curr_envvars.get(ENV_PREFIX+"_"+"CONFIGDIR", ""), envfile)):
-        curr_envvars[ENV_PREFIX+"_"+"ENV_FILE"] = join(curr_envvars.get(ENV_PREFIX+"_"+"CONFIGDIR"), envfile)
-    for k, v in curr_envvars.items():
-        os.environ[k] = v
 
 def parse_command_line_args():
     parser = argparse.ArgumentParser()
@@ -45,18 +34,6 @@ def check_joblog(jobid, acctfile):
     txt = read_errorfile(error_file)
     return txt, error_file
 
-def read_errorfile(error_file):
-    error_file = join(os.environ["MA_BASE_DIR"], "..", "..", error_file) if isfile(join(os.environ["MA_BASE_DIR"], "..", "..", error_file)) else os.path.join(os.environ["MA_BASE_DIR"], error_file)
-    if not isfile(error_file) and isfile(join(os.environ["MA_BASE_DIR"], basename(error_file)) if isfile(join(os.environ["MA_BASE_DIR"], basename(error_file))) else os.path.join(os.environ["MA_BASE_DIR"], "logs", "sge", basename(error_file))):
-        error_file = join(os.environ["MA_BASE_DIR"], basename(error_file)) if isfile(join(os.environ["MA_BASE_DIR"], basename(error_file))) else os.path.join(os.environ["MA_BASE_DIR"], "logs", "sge", basename(error_file))
-    try:
-        with open(error_file, "r", newline="\n", errors="backslashreplace") as rfile:
-            txt = rfile.read()
-    except UnicodeDecodeError as e:
-        print("Cannot read", error_file)
-        raise e
-    return txt
-
 
 def print_singlejob(jobid, acctfile, onlyerr):
     txt, path = check_joblog(jobid, acctfile)
@@ -68,26 +45,6 @@ def print_singlejob(jobid, acctfile, onlyerr):
     print()
     print("==" * 50)
 
-def extract_error(txt):
-    txt = txt.split("\n")
-    startlines = [lnum for lnum, line in enumerate(txt) if line == "Building DAG of jobs..."]
-    if startlines:
-        txt = txt[max(startlines):]  # take only the last try into account
-    if not 'Exiting because a job execution failed. Look above for error message' in txt:
-        return False, "" #no error
-    if not any(i.startswith(j) for i in txt for j in ["RuleException:", "SystemExit in line", "Interrupted at iteration"]):
-        return "Unknown Exception", "Exception"
-    if "RuleException:" in txt:
-        txt = txt[txt.index("RuleException:")+1:]
-        kind = "Exception"
-    elif any(i.startswith("SystemExit in line") for i in txt):
-        txt = txt[[i for i, elem in enumerate(txt) if elem.startswith("SystemExit in line")][0]:]
-        kind = "SystemExit("+txt[1]+")"
-    elif any(i.startswith("Interrupted at iteration") for i in txt):
-        return "", "Interrupted"
-    txt = txt[:txt.index('Exiting because a job execution failed. Look above for error message')]
-    txt = [i for i in txt if not any(j in i for j in ["in __rule_", "telegram_notifier.py", "Shutting down, this might take some time."])]
-    return "\n".join(txt), kind
 
 
 def get_info_detailed(acctfile):

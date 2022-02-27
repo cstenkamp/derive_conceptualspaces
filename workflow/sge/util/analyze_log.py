@@ -1,4 +1,4 @@
-#! /home/student/c/cstenkamp/miniconda/envs/derive_conceptualspaces/bin/python3
+#! /home/student/c/cstenkamp/miniconda/envs/watcher/bin/python3
 
 import os
 import argparse
@@ -135,9 +135,14 @@ def main():
         if info["jobid"] in dones.keys():
             info["finished_at"] = dones[info["jobid"]]
         elif not "state" in info:
-            info["state"] = [get_status(i, silent=True) for i in info["external_id"]]
+            info["state"] = {i: get_status(i, status_attempts=1, silent=True, detailed=True) for i in info["external_id"]}
     # assert len([i for i in job_infos if not i.get("finished_at")]) == len(job_infos)-len(dones)
     #TODO nur weil sie nicht finished sind sind sie nicht failed...!!
+    print(job_infos)
+    return
+    if (enqueueds := [i for i in job_infos if all(j == "enqueued" for j in i.get("state", ["not_enqueued"]))]):
+        print("The following runs are enqueued:\n  "+"\n  ".join([f"  {r['output'].ljust(max(len(i['output']) for i in enqueueds))} (pid {','.join(r['external_id'])})" for r in enqueueds]))
+        job_infos = [i for i in job_infos if i["jobid"] not in [i["jobid"] for i in enqueueds]]
     if (runnings := [i for i in job_infos if all(j == "running" for j in i.get("state", ["not_running"]))]):
         print("The following runs are running:\n  "+"\n  ".join([f"  {r['output'].ljust(max(len(i['output']) for i in runnings))} (pid {','.join(r['external_id'])})" for r in runnings]))
         job_infos = [i for i in job_infos if i["jobid"] not in [i["jobid"] for i in runnings]]

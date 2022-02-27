@@ -63,14 +63,14 @@ done
 
 ###################### actual runner stuff ######################
 snakemake --directory $MA_BASE_DIR $SNAKEMAKE_ARGS --unlock
-timeout -k 30 $(( $WALL_SECS-90 )) snakemake --directory $MA_BASE_DIR -p $SNAKEMAKE_ARGS --profile $MA_GRIDCONF --report
+timeout -k 30 $(( $WALL_SECS-90 )) snakemake --directory $MA_BASE_DIR -p $SNAKEMAKE_ARGS --profile $MA_GRIDCONF
 # `timeout -k x y` means `send shutdown after y seconds, and x seconds after that send SIGKILL`. The SIGKILL must be > config.latency-wait !!
 
 ###################### closing stuff ######################
 # restarting if not finished
 retval=$?
 echo "Main process ended. Return-value is $retval"
-if [ $retval -eq 124 ] || [ $retval -eq 137 ] ; then # if the timeout killed the program
+if [ $retval -eq 124 ] || [ $retval -eq 137 ] || [ $retval -eq 1 ] ; then # (124 & 137 are timeout-kill, 1 is snakemake-error)
   if (( $RUN_NR < $RUNNER_RESTARTS )); then
     echo "COMMAND TO RUN: qsub -V -l h_rt=$WALLTIME -v WALLTIME=$WALLTIME -v SNAKEMAKE_ARGS=$SNAKEMAKE_ARGS -v MA_SELECT_ENV_FILE=$MA_SELECT_ENV_FILE
     -v MA_BASE_DIR=$MA_BASE_DIR -v MA_CODEPATH=$MA_CODEPATH -v MA_CONDAPATH=$MA_CONDAPATH -v RUN_NR=$RUN_NR -v MA_CUSTOM_ACCTFILE=$MA_CUSTOM_ACCTFILE
@@ -86,6 +86,8 @@ if [ $retval -eq 124 ] || [ $retval -eq 137 ] ; then # if the timeout killed the
 fi
 
 # sending a message IF you are finished
+snakemake --directory $MA_BASE_DIR $SNAKEMAKE_ARGS --report
+
 if [[ -z "${TELEGRAM_BOT_TOKEN}" ]] ; then
     (export $(cat $MA_ENV_FILE | xargs) && python $CODEPATH/misc_util/telegram_notifier.py "snakemake on $(hostname) ended")
 fi

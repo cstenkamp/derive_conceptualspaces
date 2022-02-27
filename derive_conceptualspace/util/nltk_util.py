@@ -5,7 +5,7 @@ import os
 import urllib
 import zipfile
 
-from stanfordcorenlp import StanfordCoreNLP
+# from stanfordcorenlp import StanfordCoreNLP
 from nltk.corpus import wordnet as wn
 
 from derive_conceptualspace.settings import get_setting
