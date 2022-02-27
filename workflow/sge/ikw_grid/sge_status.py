@@ -16,7 +16,6 @@ logger.setLevel(40)
 
 ORIG_ACCTFILE   = "/var/lib/gridengine/ikwgrid/common/accounting"
 CUSTOM_ACCTFILE = os.getenv("MA_CUSTOM_ACCTFILE") or os.path.join(os.environ["HOME"], "custom_acctfile.yml")
-assert os.path.isfile(ORIG_ACCTFILE) or os.path.isfile(CUSTOM_ACCTFILE)
 
 stdout_print = print
 print = lambda *args, **kwargs: print(*args, **kwargs, file=sys.stderr)
@@ -26,6 +25,7 @@ print = lambda *args, **kwargs: print(*args, **kwargs, file=sys.stderr)
 
 
 def main():
+    assert os.path.isfile(ORIG_ACCTFILE) or os.path.isfile(CUSTOM_ACCTFILE)
     job_status = get_status(sys.argv[1])
     stdout_print(job_status)
 
@@ -67,7 +67,7 @@ def getstatus_origacctfile(jobid: int, status_attempts):
                 time.sleep(5)  # qacct can be quite slow to update on large servers
 
 
-def getstatus_customacctfile(jobid: str, silent):
+def getstatus_customacctfile(jobid: str, silent: bool):
     # `qacct` doesn't work on the IKW-grid. I asked Marc, he said "Es wird kein accounting file auf den Knoten geschrieben. Nur auf dem Master und darauf hast du keinen Zugriff"
     custom_acct = load_acctfile()
     if jobid not in custom_acct:

@@ -246,7 +246,7 @@ def check_if_alreadyscheduled(job_properties):
     acctfile = load_acctfile()
     job_infos = {job: acctfile[job] for job in jobs if job in acctfile}
     for id, inf in job_infos.items():
-        if all(inf.get(i) == job_properties.get(i) for i in to_compare):
+        if all(inf["job_properties"].get(i) == job_properties.get(i) for i in to_compare):
             return id
 
 

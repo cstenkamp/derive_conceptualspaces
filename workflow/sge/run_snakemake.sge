@@ -62,9 +62,13 @@ while [[ "$(qstat | grep -o smk_runner | wc -l)" -ge 2 ]]; do
 done
 
 ###################### actual runner stuff ######################
+if [ $RUN_NR -eq 1 ]; then
+    snakemake --directory $MA_BASE_DIR $SNAKEMAKE_ARGS --dry-run --forceall > all_rules.txt
+fi
 snakemake --directory $MA_BASE_DIR $SNAKEMAKE_ARGS --unlock
 timeout -k 30 $(( $WALL_SECS-90 )) snakemake --directory $MA_BASE_DIR -p $SNAKEMAKE_ARGS --profile $MA_GRIDCONF
 # `timeout -k x y` means `send shutdown after y seconds, and x seconds after that send SIGKILL`. The SIGKILL must be > config.latency-wait !!
+# there's `--detailed-summary`
 
 ###################### closing stuff ######################
 # restarting if not finished

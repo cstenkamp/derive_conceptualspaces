@@ -3,7 +3,7 @@
 import argparse
 import os
 import time
-from os.path import isfile, join, basename
+from os.path import isfile, join, basename, dirname
 import re
 from datetime import datetime, timedelta
 import sys
@@ -12,10 +12,10 @@ sys.path.append(join(dirname(__file__), ".."))
 from dotenv import load_dotenv
 
 from util.sge_util import load_acctfile, get_active_jobs, get_enqueued_detailed, apply_dotenv_vars, read_errorfile, \
-    extract_error
+    extract_error, errorfile_from_id
 from ikw_grid.sge_status import get_status
 
-
+########################################################################################################################
 
 def parse_command_line_args():
     parser = argparse.ArgumentParser()
@@ -24,26 +24,16 @@ def parse_command_line_args():
     return parser.parse_args()
 
 
-def check_joblog(jobid, acctfile):
-    jobinfo = acctfile.get(str(jobid))
-    if not jobinfo:
-        return None, None
-    if not ("envvars" in jobinfo and all (i in jobinfo["envvars"] for i in ["e", "rulename", "jobid"])):
-        return None, None
-    error_file = jobinfo["envvars"]["e"].format(rulename=jobinfo["envvars"]["rulename"], jobid=jobinfo["envvars"]["jobid"])
-    txt = read_errorfile(error_file)
-    return txt, error_file
-
-
 def print_singlejob(jobid, acctfile, onlyerr):
-    txt, path = check_joblog(jobid, acctfile)
-    if onlyerr:
-        txt = extract_error(txt)[0]
+    txt, path = errorfile_from_id(jobid, acctfile)
+    if onlyerr: txt = extract_error(txt)[0]
     print("Filepath:", path)
     print("==" * 50)
     print(txt)
     print()
     print("==" * 50)
+
+
 
 
 
@@ -55,7 +45,7 @@ def get_info_detailed(acctfile):
         if info["name"] == "smk_runner":
             info["is_scheduler"] = True
         try:
-            txt = check_joblog(jobid, acctfile)[0]
+            txt = errorfile_from_id(jobid, acctfile)[0]
         except FileNotFoundError:
             # print("No log for job "+jobid+"! full info:", info)
             txt = ""

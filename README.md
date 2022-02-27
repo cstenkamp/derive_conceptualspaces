@@ -90,8 +90,8 @@ nbdime config-git --enable --global
 
 To render plotly correctly in notebooks, install the jupyterlab extension, then run the notebook (like this exemplary for a conda-env):
 ```
-conda run -n Derive_Conceptualspace python -m jupyter labextension install jupyterlab-plotly@5.3.1
-conda run -n Derive_Conceptualspace python -m jupyter lab --notebook-dir=/path/to/project-root
+conda run -n create_cs python -m jupyter labextension install jupyterlab-plotly@5.3.1
+conda run -n create_cs python -m jupyter lab --notebook-dir=/path/to/project-root
 ```
 
 

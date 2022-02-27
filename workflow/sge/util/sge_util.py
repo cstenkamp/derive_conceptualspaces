@@ -73,6 +73,8 @@ def apply_dotenv_vars(ENV_PREFIX="MA"):
     for k, v in curr_envvars.items():
         os.environ[k] = v
 
+########################################################################################################################
+# stuff to work with error-files
 
 def read_errorfile(error_file):
     # MA_BASE_DIR is set in the run_snakemake.sge file ($PWD and $MA_BASE_DIR are the same)
@@ -86,6 +88,17 @@ def read_errorfile(error_file):
         print("Cannot read", error_file, file=sys.stderr)
         raise e
     return txt
+
+
+def errorfile_from_id(jobid, acctfile):
+    jobinfo = acctfile.get(str(jobid))
+    if not jobinfo:
+        return None, None
+    if not ("envvars" in jobinfo and all (i in jobinfo["envvars"] for i in ["e", "rulename", "jobid"])):
+        return None, None
+    error_file = jobinfo["envvars"]["e"].format(rulename=jobinfo["envvars"]["rulename"], jobid=jobinfo["envvars"]["jobid"])
+    txt = read_errorfile(error_file)
+    return txt, error_file
 
 
 def extract_error(txt):
