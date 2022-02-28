@@ -1,0 +1,3 @@
+## Links to plots referenced in the text at https://github.com/cstenkamp/MastersThesisText/
+
+* fig:3d_hyperplane_ortho: [nbviewer](https://nbviewer.org/github/cstenkamp/derive_conceptualspaces/blob/main/notebooks/text_referenced_plots/hyperplane_orthogonal_3d.ipynb?flush_cache), [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/cstenkamp/derive_conceptualspaces/main?labpath=notebooks%2Ftext_referenced_plots%2Fhyperplane_orthogonal_3d.ipynb)

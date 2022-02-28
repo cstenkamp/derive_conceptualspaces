@@ -2,6 +2,10 @@
 
 Master's thesis deriving conceptual spaces from course data, following [DESC15] and others.
 
+Other Pages:
+* [referenced plots](https://github.com/cstenkamp/derive_conceptualspaces/blob/main/doc/install_docker.md)
+
+
 ## How to run
 
 First install `git`, `docker` and `docker-compose` - see file `docs/install_docker.md`
