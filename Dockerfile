@@ -10,7 +10,7 @@ ARG gid
 ARG git_commit
 
 RUN apt-get update \
-    && apt-get install -y bash git vim curl zsh htop tmux unzip nano \
+    && apt-get install -y bash git vim curl zsh htop tmux unzip nano
 
 # we need nodejs >= 12 for jupyter-labextensions https://computingforgeeks.com/how-to-install-nodejs-on-ubuntu-debian-linux-mint/
 RUN apt-get install -y curl dirmngr apt-transport-https lsb-release ca-certificates \
