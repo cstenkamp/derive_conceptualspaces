@@ -1,2 +1,2 @@
 *.ipynb filter=nbstripout
-*.ipynb diff=ipynb
+#*.ipynb diff=ipynb #removed because I want the "keep_output" cells to be rendered by nbviewer
