@@ -22,6 +22,7 @@ ENV CREATE_UID=${uid}
 ENV CREATE_GID=${gid}
 ENV CONTAINER_GIT_COMMIT=${git_commit}
 
+RUN apt install graphviz libgraphviz-dev pkg-config python-pygraphviz -y
 RUN ln -sf /usr/local/bin/python3 /usr/bin/python3
 RUN ln -sf /usr/bin/python3 /usr/bin/python
 RUN python3 -m pip install --upgrade pip
