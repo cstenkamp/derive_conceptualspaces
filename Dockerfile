@@ -31,6 +31,7 @@ RUN ln -sf /usr/bin/pip3 /usr/bin/pip
 RUN pip install -r ./requirements-dev.txt
 RUN pip install -r ./requirements.txt
 RUN pip install .
+RUN apt install nodejs npm
 RUN python -m jupyter labextension install jupyterlab-plotly@5.3.1
 
 RUN groupadd -g ${gid:-1000} developer \
