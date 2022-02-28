@@ -2,6 +2,7 @@
 
 import os
 import re
+import builtins
 import math
 import argparse
 import subprocess
@@ -18,6 +19,9 @@ import warnings
 
 from snakemake import io
 from snakemake.utils import read_job_properties
+
+stdout_print = builtins.print
+print = lambda *args, **kwargs: builtins.print(*args, **kwargs, file=sys.stderr)
 
 DEFAULT_JOB_NAME = "snakemake_job"
 QSUB_DEFAULTS = "-cwd -V"
@@ -271,10 +275,10 @@ def submit_job(jobscript, qsub_settings, simulate=False):
     try:
         old_jobid = check_if_alreadyscheduled(job_properties)
         if old_jobid:
-            print("This job is already scheduled under external job-id", old_jobid, file=sys.stderr)
+            print("This job is already scheduled under external job-id", old_jobid)
             return old_jobid
-        print(f'Will submit the following: `{" ".join(["qsub", "-terse"] + batch_options + options_as_envvars + batch_resources + [jobscript])}`', file=sys.stderr)
-        print(f'Error-File can be found at `{os.path.join(os.getenv("MA_BASE_DIR", ""), qsub_settings["options"].get("e", "").format(rulename=job_properties["rule"], jobid=job_properties["jobid"]))}`', file=sys.stderr)
+        print(f'Will submit the following: `{" ".join(["qsub", "-terse"] + batch_options + options_as_envvars + batch_resources + [jobscript])}`')
+        print(f'Error-File can be found at `{os.path.join(os.getenv("MA_BASE_DIR", ""), qsub_settings["options"].get("e", "").format(rulename=job_properties["rule"], jobid=job_properties["jobid"]))}`')
         if simulate:
             jobid = None
         else:
@@ -329,5 +333,5 @@ for o in ("o", "e"):
     ensure_directory_exists(qsub_settings["options"][o]) if o in qsub_settings["options"] else None
 
 # submit job and echo id back to Snakemake (must be the only stdout)
-print(submit_job(jobscript, qsub_settings, simulate=simulate))
+stdout_print(submit_job(jobscript, qsub_settings, simulate=simulate))
 

@@ -84,11 +84,12 @@ def split_all(errorfiles):
             tmpstr = rule[[n for n, i in enumerate(rule) if "Error in rule" in i][0] - 1:]
             leftover_text.extend([i for i in tmpstr if not "Submitted job" in i])
             rule = rule[:[n for n, i in enumerate(rule) if "Error in rule" in i][0]-1]+[i for i in tmpstr if "Submitted job" in i]
-
         if any(i.startswith("Submitted job") for i in rule):
             if len(rule) > [i for i, elem in enumerate(rule) if elem.startswith("Submitted job")][0]+1:
                 leftover_text.extend(rule[[i for i, elem in enumerate(rule) if elem.startswith("Submitted job")][0]+1:])
             rule = rule[:[i for i, elem in enumerate(rule) if elem.startswith("Submitted job")][0]+1]
+
+
         if any(i.startswith("Will submit the following:") for i in rule):
             job_infos[-1]["submit_command"] = [i for i in rule if i.startswith("Will submit the following:")][0].split("`")[1]
             job_infos[-1]["errorfile"] = [i for i in rule if i.startswith("Error-File can be found at")][0].split("`")[1]

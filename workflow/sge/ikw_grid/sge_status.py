@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import builtins
 import re
 import subprocess as sp
 import shlex
@@ -17,8 +18,8 @@ logger.setLevel(40)
 ORIG_ACCTFILE   = "/var/lib/gridengine/ikwgrid/common/accounting"
 CUSTOM_ACCTFILE = os.getenv("MA_CUSTOM_ACCTFILE") or os.path.join(os.environ["HOME"], "custom_acctfile.yml")
 
-stdout_print = print
-print = lambda *args, **kwargs: print(*args, **kwargs, file=sys.stderr)
+stdout_print = builtins.print
+print = lambda *args, **kwargs: builtins.print(*args, **kwargs, file=sys.stderr)
 
 # WARNING this currently has no support for task array jobs
 ########################################################################################################################

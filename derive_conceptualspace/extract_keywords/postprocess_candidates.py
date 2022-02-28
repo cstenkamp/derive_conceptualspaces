@@ -71,12 +71,14 @@ def postprocess_candidateterms(candidate_terms, descriptions, extraction_method)
     for k, v in changeds:
         changeds_dict[k].append(v)
 
-    for desc_ind, desc in enumerate(tqdm(descriptions._descriptions, desc="Checking a second time")):
+    for desc_ind, desc in enumerate(tqdm(descriptions._descriptions, desc="Checking a second time "+("(quickly)" if descriptions.proc_steps == ["bow"] else "(slowly)"))):
         desc_txt = desc.processed_as_string(allow_shorten=True)
+        desc_dtm = set(i[0] for i in dtm.dtm[desc_ind])
         for cand in postprocessed_candidates[desc_ind]:
             assert cand in desc
-            assert cand in desc_txt
-            assert dtm.reverse_term_dict[cand] in set(i[0] for i in dtm.dtm[desc_ind])
+            if not descriptions.proc_steps == ["bow"]: #superflous check if it was created solely from the bow
+                assert cand in desc_txt
+            assert dtm.reverse_term_dict[cand] in desc_dtm
 
     if toolong:
         print(f"Had to drop {len(toolong)} out of {len(flatten(candidate_terms))} (non-unique) candidates because they were too long.")
