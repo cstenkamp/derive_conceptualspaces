@@ -31,13 +31,14 @@ def load_acctfile():
     return custom_acct
 
 
-def get_active_jobs(acctfile=None):
+def get_active_jobs(acctfile=None, ignore_stati=("dt",)):
     try:
         qstat_res = sp.check_output(shlex.split("qstat -s pr")).decode().strip()
     except FileNotFoundError:
         if acctfile is None: return []
         return list(acctfile.keys())
     res = {int(x.split()[0]) : x.split()[4] for x in qstat_res.splitlines()[2:]}
+    res = {k: v for k, v in res.items() if v not in ignore_stati}
     return list(res.keys())
 
 

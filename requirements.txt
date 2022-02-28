@@ -1,50 +1,53 @@
-# conda create -n create_cs python=3.10
+# Using environment.yml instead because I cannot tell binder that graphviz must come from conda-forge otherwise.
+# TODO: allow the setup.py to install from environment.yml instead
 
-numpy==1.22.2  #resampy and librosa (TODO: why do I need those) require numba, which requires numpy<1.21
-# numba==0.55.0
-jupyter==1.0.0
-jupyterlab~=3.0.14
-matplotlib~=3.4.1
-scipy==1.8.0
-pandas==1.4.1
-nltk==3.6.2
-HanTa==0.2.0 #Lemmatizer for german
-tqdm~=4.60.0
-scikit-learn==1.0.2
-seaborn==0.11.1
-# ipyparams==0.2.1
-langdetect==1.0.9
-google-cloud-translate==2.0.1
-click==7.1.2
-stanfordcorenlp==3.9.1.1
-keybert==0.5.0
-#requires torch >=1.6.0, which exists for python 3.10 only as nightly rn: `pip install --pre torch -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html`
-unidecode~=1.3.2
-parse~=1.19.0
-ijson~=3.1.4
-
-python-Levenshtein~=0.12.0 #für data_exploration.ipynb in data
-python-dotenv~=0.17.1
-
-#sacred
-# sacred==0.8.2
-# pymongo==3.11.4
-# incense==0.0.11
-
-
-#model-downloader
-#how to install seafile-cli on your system: see https://download.seafile.com/published/seafile-user-manual/syncing_client/install_linux_client.md
-# git+https://github.com/cstenkamp/python-seafile.git@v0.1.2#egg=python_seafile #on pypi there's only v0.1.0, which is broken, and even the original repo has an error with binary files
-
-plotly==4.14.3
-#to render in jupyterlab install jupyterlab extension: conda run -n Derive_Conceptualspace python -m jupyter labextension uninstall jupyterlab-plotly@5.3.1
-
-snakemake==7.0.0
-pygraphviz  #on grid only with conda: `conda install -c alubbock pygraphviz` (requires python 3.10), see https://stackoverflow.com/a/61206541/5122790
-networkx
-# the latter two for snakemake's `--report`
-
-gensim==4.1.2
-
-psutil
-graphviz~=0.19.1 #to visualize the dependency graph
+# # conda create -n create_cs python=3.10
+#
+# numpy==1.22.2  #resampy and librosa (TODO: why do I need those) require numba, which requires numpy<1.21
+# # numba==0.55.0
+# jupyter==1.0.0
+# jupyterlab~=3.0.14
+# matplotlib~=3.4.1
+# scipy==1.8.0
+# pandas==1.4.1
+# nltk==3.6.2
+# HanTa==0.2.0 #Lemmatizer for german
+# tqdm~=4.60.0
+# scikit-learn==1.0.2
+# seaborn==0.11.1
+# # ipyparams==0.2.1
+# langdetect==1.0.9
+# google-cloud-translate==2.0.1
+# click==7.1.2
+# stanfordcorenlp==3.9.1.1
+# keybert==0.5.0
+# #requires torch >=1.6.0, which exists for python 3.10 only as nightly rn: `pip install --pre torch -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html`
+# unidecode~=1.3.2
+# parse~=1.19.0
+# ijson~=3.1.4
+#
+# python-Levenshtein~=0.12.0 #für data_exploration.ipynb in data
+# python-dotenv~=0.17.1
+#
+# #sacred
+# # sacred==0.8.2
+# # pymongo==3.11.4
+# # incense==0.0.11
+#
+#
+# #model-downloader
+# #how to install seafile-cli on your system: see https://download.seafile.com/published/seafile-user-manual/syncing_client/install_linux_client.md
+# # git+https://github.com/cstenkamp/python-seafile.git@v0.1.2#egg=python_seafile #on pypi there's only v0.1.0, which is broken, and even the original repo has an error with binary files
+#
+# plotly==4.14.3
+# #to render in jupyterlab install jupyterlab extension: conda run -n Derive_Conceptualspace python -m jupyter labextension uninstall jupyterlab-plotly@5.3.1
+#
+# snakemake==7.0.0
+# pygraphviz  #on grid only with conda: `conda install -c alubbock pygraphviz` (requires python 3.10), see https://stackoverflow.com/a/61206541/5122790
+# networkx
+# # the latter two for snakemake's `--report`
+#
+# gensim==4.1.2
+#
+# psutil
+# graphviz~=0.19.1 #to visualize the dependency graph

@@ -1,5 +1,7 @@
 #! /home/student/c/cstenkamp/miniconda/envs/watcher/bin/python3
 
+#TODO be able to analyze 737922 from backup-28-02-2022. If that shows me the error, this code achieved it's goal.
+
 import os
 import argparse
 from os.path import join, isfile, abspath, dirname
