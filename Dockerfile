@@ -29,6 +29,8 @@ RUN python3 -m pip install --upgrade pip
 RUN ln -sf /usr/bin/pip3 /usr/bin/pip
 RUN pip install -r ./requirements-dev.txt
 RUN pip install -r ./requirements.txt
+RUN pip install .
+RUN python -m jupyter labextension install jupyterlab-plotly@5.3.1
 
 RUN groupadd -g ${gid:-1000} developer \
     && useradd -l -g developer -u ${uid:-1000} -m developer
