@@ -10,7 +10,11 @@ ARG gid
 ARG git_commit
 
 RUN apt-get update \
-    && apt-get install -y bash git vim curl zsh htop tmux unzip nano
+    && apt-get install -y bash git vim curl zsh htop tmux unzip nano \
+# we need nodejs >= 12 for jupyter-labextensions https://computingforgeeks.com/how-to-install-nodejs-on-ubuntu-debian-linux-mint/
+RUN apt-get install -y curl dirmngr apt-transport-https lsb-release ca-certificates \
+    && curl -sL https://deb.nodesource.com/setup_12.x | sudo -E bash - \
+    && apt -y install nodejs npm
 
 ARG WORKDIR=/opt/derive_conceptualspaces
 COPY . ${WORKDIR}
@@ -33,8 +37,6 @@ RUN ln -sf /usr/bin/pip3 /usr/bin/pip
 RUN pip install -r ./requirements-dev.txt
 RUN pip install -r ./requirements.txt
 RUN pip install .
-# we also want to install jupyterlab-webextensions
-RUN apt install nodejs npm -y
 RUN python -m jupyter labextension install jupyterlab-plotly@5.3.1
 
 RUN groupadd -g ${gid:-1000} developer \
