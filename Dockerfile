@@ -11,10 +11,12 @@ ARG git_commit
 
 RUN apt-get update \
     && apt-get install -y bash git vim curl zsh htop tmux unzip nano \
+
 # we need nodejs >= 12 for jupyter-labextensions https://computingforgeeks.com/how-to-install-nodejs-on-ubuntu-debian-linux-mint/
 RUN apt-get install -y curl dirmngr apt-transport-https lsb-release ca-certificates \
-    && curl -sL https://deb.nodesource.com/setup_12.x | sudo -E bash - \
-    && apt -y install nodejs npm
+    && curl -sL https://deb.nodesource.com/setup_12.x | bash - \
+    && apt-get install -y gcc g++ make \
+    && apt-get install -y -f nodejs
 
 ARG WORKDIR=/opt/derive_conceptualspaces
 COPY . ${WORKDIR}
