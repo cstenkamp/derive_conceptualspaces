@@ -29,17 +29,19 @@ ENV CREATE_GID=${gid}
 ENV CONTAINER_GIT_COMMIT=${git_commit}
 
 # graphviz and torch for python 3.10 are problematic, so I need to set up manual stuff
-RUN pip install --pre torch -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
+RUN pip3 install --pre torch -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
 RUN apt install graphviz libgraphviz-dev pkg-config python-pygraphviz -y
 
-RUN ln -sf /usr/local/bin/python3 /usr/bin/python3
-#RUN ln -sf /usr/bin/python3 /usr/bin/python #https://stackoverflow.com/a/44967506/5122790
 RUN python3 -m pip install --upgrade pip
 RUN ln -sf /usr/bin/pip3 /usr/bin/pip
 RUN pip install -r ./requirements-dev.txt
 RUN pip install -r ./requirements.txt
 RUN pip install .
 RUN python3 -m jupyter labextension install jupyterlab-plotly@5.3.1
+
+#https://stackoverflow.com/a/44967506/5122790:  this only after the rests
+# RUN ln -sf /usr/local/bin/python3 /usr/bin/python3
+RUN ln -sf /usr/bin/python3 /usr/bin/python
 
 RUN groupadd -g ${gid:-1000} developer \
     && useradd -l -g developer -u ${uid:-1000} -m developer
