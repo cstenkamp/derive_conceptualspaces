@@ -15,6 +15,12 @@ After installing, use the Explorer to change to a directory of your choice. Down
 * To download data, you need an account for the Myshare of the University of Osnabrück as the data is currently hosted there. The credentials for the account also go into the env-file  
 
 [TODO update these instructions!!!]
+
+To add to instructions:
+* all commands for the SGE
+* how to set this up such that `snakemake` works without specifying pythonpath etc (=> install this as package)
+* 
+
 ```
 cd to/your/path
 mkdir data

@@ -31,7 +31,7 @@ def main():
     stdout_print(job_status)
 
 
-def getstatus_qstat(jobid: int, detailed: bool):
+def getstatus_qstat(jobid: int, detailed: bool, trial: int):
     # first try qstat to see if job is running
     # we can use `qstat -s pr -u "*"` to check for all running and pending jobs
     try:
@@ -45,6 +45,11 @@ def getstatus_qstat(jobid: int, detailed: bool):
             return "running" if not detailed else "enqueued"
         elif res[jobid] == "r":
             return "running"
+        elif res["jobid"] in ["dt"]:
+            if trial < 3:
+                time.sleep(5)
+                raise KeyError("would be failed!")
+            return "failed"
     except sp.CalledProcessError as e:
         logger.error("qstat process error")
         logger.error(e)
@@ -92,7 +97,7 @@ def getstatus_customacctfile(jobid: str, silent: bool):
 def get_status(jobid: str, status_attempts=10, silent=False, detailed=False):
     for i in range(status_attempts):
         try:
-            return getstatus_qstat(int(jobid), detailed)
+            return getstatus_qstat(int(jobid), detailed, i)
         except (KeyError, FileNotFoundError):
             break #job doesn't appear in qstat
     if os.path.isfile(ORIG_ACCTFILE):
