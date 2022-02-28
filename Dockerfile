@@ -2,7 +2,7 @@
 #RUN: `docker run -it --rm --user $(id -u):$(id -g) --name derive_conceptualspaces_cont -v $MA_DATA_DIR:/opt/data --env-file $MA_ENV_FILE derive_conceptualspaces`
 # with that as ma_cont eg. `MA_SNAKEMAKE_TELEGRAM=1 ma_cont snakemake --cores 3 -p  --directory /opt/data default`
 
-ARG PYTHON_VERSION=3.9.1
+ARG PYTHON_VERSION=3.10.0
 FROM python:${PYTHON_VERSION}-buster
 
 ARG uid
