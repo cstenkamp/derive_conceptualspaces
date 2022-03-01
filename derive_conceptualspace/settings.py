@@ -27,11 +27,11 @@ ENV_PREFIX = "MA"
 
 
 #!! use singular for these (bzw the form you'd use if there wasn't the "ALL_" before)
-ALL_PP_COMPONENTS = ["mfhcsd2", "mfauhcsd2", "mfauhtcsdp", "mfauhtcsldp"]     # If in preprocessing it should add title, lemmatize, etc
-ALL_TRANSLATE_POLICY = ["onlyorig"] #["onlyorig", "translate", "origlang"]                    # If non-english/non-german/... descriptions should be translated
+ALL_PP_COMPONENTS = ["mfhcsd2", "mfauhcsd2", "mfauhtcsdp", "mfauhtcsldp"]       # If in preprocessing it should add title, lemmatize, etc
+ALL_TRANSLATE_POLICY = ["onlyorig"] #, "translate", "origlang"]                 # If non-english/non-german/... descriptions should be translated
+ALL_QUANTIFICATION_MEASURE = ["count", "tfidf", "ppmi", "binary", "tf"]         # For the dissimiliarity Matrix of the Descripts
 ALL_EMBED_ALGO = ["mds", "tsne", "isomap"]                                      # Actual Embedding of the Descriptions
 ALL_EMBED_DIMENSIONS = [100, 3, 20, 50, 200]                                    # Actual Embedding of the Descriptions
-ALL_QUANTIFICATION_MEASURE = ["count", "tfidf", "ppmi", "binary", "tf"]         # For the dissimiliarity Matrix of the Descripts
 ALL_EXTRACTION_METHOD = ["keybert", "pp_keybert", "tfidf", "tf", "all", "ppmi"] # How candidate-terms are getting extracted
 ALL_DCM_QUANT_MEASURE = ["count", "tfidf", "ppmi", "binary", "tf"]              # Quantification for the Doc-Keyphrase-Matrix (=CLASSIFIER_COMPARETO_RANKING)    #TODO tag-share
 ALL_CLASSIFIER = ["SVM", "SVM_square", "SVM"]
@@ -45,7 +45,7 @@ for k, v in {k[4:]: v[0] for k,v in dict(locals()).items() if isinstance(v, list
 ################################################## other default values ################################################
 ########################################################################################################################
 
-#DEBUG-Settings
+###### DEBUG-Settings ######
 DEFAULT_DEBUG = False
 DEFAULT_DEBUG_N_ITEMS = 200
 DEFAULT_RANDOM_SEED = 1
@@ -53,24 +53,39 @@ DEFAULT_SEED_ONLY_IN_DEBUG = True
 DEFAULT_VERBOSE = True
 IS_INTERACTIVE = "PYCHARM_HOSTED" in os.environ
 DEFAULT_N_CPUS = max(psutil.cpu_count(logical=False), psutil.cpu_count(logical=True)-2)
+DEFAULT_DO_SANITYCHECKS = False  #sanity-checks check for code-correctness and can increase code-runtime by a lot. Running them once on each dataset&parameter-combination after changes is recommended.
 
 
-#Settings that influence the algorithm
+###### Settings that influence the algorithm (ordered by step) ######
+
+## 1) Preprocess Descriptions ##
 DEFAULT_LANGUAGE = "de"
-DEFAULT_DISSIM_MEASURE = "norm_ang_dist"  #can be: ["cosine", "norm_ang_dist"]
-DEFAULT_CANDIDATE_MIN_TERM_COUNT = 25
-DEFAULT_FASTER_KEYBERT = False
-DEFAULT_PRIM_LAMBDA = 0.45
-DEFAULT_SEC_LAMBDA = 0.1
-DEFAULT_STANFORDNLP_VERSION = "4.2.2" #whatever's newest at https://stanfordnlp.github.io/CoreNLP/history.html
-DEFAULT_COURSE_TYPES = ("colloquium", "seminar", "internship", "practice", "lecture")
+# DEFAULT_PP_COMPONENTS
+# DEFAULT_TRANSLATE_POLICY
+DEFAULT_MIN_WORDS_PER_DESC = 50
+DEFAULT_USE_STANZA = False #for now only for sentence-tokenization, god I hate nltk.
 DEFAULT_CUSTOM_STOPWORDS = ("one", "also", "take")
+
+## 2) Create Dissim Matrix ##
+DEFAULT_DISSIM_MEASURE = "norm_ang_dist"  #can be: ["cosine", "norm_ang_dist"]
 DEFAULT_MAX_NGRAM = 5
 DEFAULT_NGRAMS_IN_EMBEDDING = False # if the dissimilarity-matrix should already consider n-grams (makes it a LOT more sparse)
 DEFAULT_DISSIM_MAT_ONLY_PARTNERED = True
+# DEFAULT_QUANTIFICATION_MEASURE
+
+## 3) Create Embedding ##
+# DEFAULT_EMBED_ALGO
+# DEFAULT_EMBED_DIMENSIONS
+
+## 4-6) Extract Candidates, Postprocess, Create & Filter Doc-Term-Matrix ##
+# DEFAULT_EXTRACTION_METHOD
+# DEFAULT_MAX_NGRAM
+DEFAULT_CANDIDATE_MIN_TERM_COUNT = 25
 DEFAULT_CANDS_USE_NDOCS_COUNT = True
-DEFAULT_MIN_WORDS_PER_DESC = 50
-DEFAULT_USE_STANZA = False #for now only for sentence-tokenization, god I hate nltk.
+DEFAULT_FASTER_KEYBERT = False
+DEFAULT_STANFORDNLP_VERSION = "4.2.2" #whatever's newest at https://stanfordnlp.github.io/CoreNLP/history.html
+DEFAULT_COURSE_TYPES = ("colloquium", "seminar", "internship", "practice", "lecture") #TODO move this to dataset_specifics/siddata
+# DEFAULT_DCM_QUANT_MEASURE
 
 DEFAULT_QUANTEXTRACT_MAXPERDOC_ABS = 40
 DEFAULT_QUANTEXTRACT_MAXPERDOC_REL = 0.2
@@ -80,7 +95,15 @@ DEFAULT_QUANTEXTRACT_MINPERDOC = 0
 DEFAULT_QUANTEXTRACT_FORCETAKE_PERC = 0.99
 #TODO statt dieser settings kann ich auch ne number an demanded candidateterms vorgeben, und die candidates kriegen alle einn wert wie gut sie sind und der standard wird so lange gelowert bis die #demandedterms ungefähr erreicht sind
 
-DEFAULT_CLASSIFIER_SUCCMETRIC = "cohen_kappa"
+## 7) Create Candidate SVMs ##
+# DEFAULT_KAPPA_WEIGHTS
+# DEFAULT_CLASSIFIER
+
+## 8) Cluster & Filter Features ##
+DEFAULT_CLASSIFIER_SUCCMETRIC = "cohen_kappa" #TODO one of the ones actually implemented!
+DEFAULT_PRIM_LAMBDA = 0.5
+DEFAULT_SEC_LAMBDA = 0.1
+
 
 ########################################################################################################################
 ######################################### settings regarding the architecture ##########################################
@@ -94,7 +117,7 @@ def set_noninfluentials():
     globals()["NON_INFLUENTIAL_CONFIGS"] += [i[len("DEFAULT_"):] if i.startswith("DEFAULT_") else i for i in added_vars]
 
 
-NON_INFLUENTIAL_CONFIGS = ["CONF_FILE", "GOOGLE_CREDENTIALS_FILE", "VERBOSE", "STARTUP_ENVVARS", "IS_INTERACTIVE", "ENV_PREFIX", "DEFAULT_SEED_ONLY_IN_DEBUG", "N_CPUS"]
+NON_INFLUENTIAL_CONFIGS = ["CONF_FILE", "GOOGLE_CREDENTIALS_FILE", "VERBOSE", "STARTUP_ENVVARS", "IS_INTERACTIVE", "ENV_PREFIX", "DEFAULT_SEED_ONLY_IN_DEBUG", "N_CPUS", "DEFAULT_DO_SANITYCHECKS"]
 with set_noninfluentials(): #this context-manager adds all settings from here to the NON_INFLUENTIAL_CONFIGS variable
 
     STANDARD_HOSTNAME = 'chris-ThinkPad-E480'
@@ -120,7 +143,6 @@ with set_noninfluentials(): #this context-manager adds all settings from here to
     #note that snakemake reads the conf_file differently and sets env-vars (that however apply force) from the configurations
     MAY_DIFFER_IN_DEPENDENCIES = ["DEBUG", "RANDOM_SEED", "CANDIDATE_MIN_TERM_COUNT", "BASE_DIR", "DEBUG_N_ITEMS", "CONF_FILE"]+NON_INFLUENTIAL_CONFIGS
     DEFAULT_DEP_PREFERS_NONDEBUG = True
-    DEFAULT_DO_SANITYCHECKS = False  #sanity-checks check for code-correctness and can increase code-runtime by a lot. Running them once on each dataset&parameter-combination after changes is recommended.
 
 ########################################################################################################################
 ######################################## set and get settings/env-vars #################################################

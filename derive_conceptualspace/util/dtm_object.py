@@ -72,8 +72,6 @@ class DocTermMatrix():
             max_ind = np.unravel_index(self.as_csr().argmax(), self.as_csr().shape)
             print(f"Max value: Term *b*{self.all_terms[max_ind[0]]}*b* has value *b*{dict(self.dtm[max_ind[1]])[max_ind[0]]:.3f}*b* for doc *b*{descriptions._descriptions[max_ind[1]].title}*b*")
 
-    #num_occurences = [sum([term_ind in i for i in occurs_in]) for term_ind in tqdm(range(len(dtm.all_terms)))]
-
     def doc_freqs(self, verbose=False):
         """the number of documents containing a word, for all words"""
         if not hasattr(self, "_doc_freqs"):
@@ -161,13 +159,6 @@ class DocTermMatrix():
                         print(f"Documents with max {n_keyphrases} keyphrases ({len(items)}):\n  "+"\n  ".join(f"{i[0]}: {', '.join(i[1])}" for i in [j for j in items if j[0] not in shown][:5][:5]))
                         shown += [i[0] for i in items]
         return DocTermMatrix(dtm=doc_term_matrix, all_terms=all_terms_new, quant_name="count", verbose=verbose)
-
-
-    # def doc_freq(self, keyword, rel=False, supress=False):
-    #     raise NotImplementedError("TODO I overhauled doc_freqs so I likely have to overhaul this as well!") #on 8.2.22 - is this even used?
-    #     if supress:
-    #         return len(self.term_existinds(use_index=False).get(keyword, [])) / (self.n_docs if rel else 1)
-    #     return len(self.term_existinds(use_index=False)[keyword]) / (self.n_docs if rel else 1)
 
     def apply_quant(self, quant_name, **kwargs):
         dtm = DocTermMatrix(dtm=apply_quant(quant_name, self, **kwargs), all_terms=self.all_terms, quant_name=quant_name)

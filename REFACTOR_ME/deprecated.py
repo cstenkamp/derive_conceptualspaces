@@ -154,3 +154,101 @@ def json_load(fname, **kwargs): #assert_meta=(), return_meta=False,
 # if skipped.args is not None:
 #     quants_s, _, _ = skipped.args
 # assert len(quants_s) == len(terms)
+
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
+# very old preprocessing func:
+
+# def tokenize_sentences_nltk(descriptions):
+#     #so as we're really only concerning bags-of-words here, we run a lemmatizer
+#     # (see https://textmining.wp.hs-hannover.de/Preprocessing.html#Lemmatisierung)
+#     tagger = ht.HanoverTagger('morphmodel_ger.pgz')
+#     res = []
+#     words = set()
+#     for n, sample in enumerate(tqdm(descriptions)):
+#         all_tags = []
+#         assert "sent_tokenize" in [i[1] for i in sample.processing_steps]
+#         for sent in sample.processed_text:
+#             tags = tagger.tag_sent(sent)
+#             all_tags.extend([i[1].casefold() for i in tags if i[1] != "--"]) #TODO: not sure if I should remove the non-word-tokens completely..?
+#         res.append(all_tags) # we could res.append(Counter(all_tags))
+#         words.update(all_tags)
+#     words = list(words)
+#     alls = []
+#     for wordlist in res:
+#         cnt = Counter(wordlist)
+#         alls.append(np.array([cnt[i] for i in words]))
+#     return words, np.array(alls)
+
+
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
+# OLD PMI & TFIDF Calculation funcs:
+
+# def pmi(doc_term_matrix, positive=False, verbose=False, mds_obj=None, descriptions=None):
+#     """
+#     calculation of ppmi/pmi ([DESC15] 3.4 first lines)
+#     see https://stackoverflow.com/a/58725695/5122790
+#     see https://www.overleaf.com/project/609bbdd6a07c203c38a07ab4
+#     """
+#     logger.info("Calculating PMIs...")
+#     arr = doc_term_matrix.as_csr()
+#     #see doc_term_matrix.as_csr().toarray() - spalten pro doc und zeilen pro term
+#     #[i for i in arr[doc_term_matrix.reverse_term_dict["building"], :].toarray()[0] if i > 0]
+#     words_per_doc = arr.sum(axis=0)       #old name: col_totals
+#     total_words = words_per_doc.sum()     #old name: total
+#     ges_occurs_per_term = arr.sum(axis=1) #old name: row_totals
+#     #assert np.array(ges_occurs_per_term.squeeze().tolist()).squeeze()[doc_term_matrix.reverse_term_dict["building"]] == np.array(ges_occurs_per_term.squeeze().tolist()).squeeze()[doc_term_matrix.reverse_term_dict["building"]]
+#     expected = np.outer(ges_occurs_per_term, words_per_doc)
+#     expected = np_divide(expected, total_words)  #TODO maybe I can convert this to a csr to save RAM?
+#     quantifications = np_divide(arr, expected)
+#     del expected
+#     gc.collect()
+#     # with np.errstate(divide='ignore'): # Silence distracting warnings about log(0)
+#     quantifications = np_log(quantifications)
+#     if positive:
+#         quantifications[quantifications < 0] = 0.0
+#     quantifications  = [[[i,elem] for i, elem in enumerate(quantifications[:,i]) if elem != 0] for i in tqdm(range(quantifications.shape[1]), desc="Last PPMI Step")]
+#     if verbose:
+#         print_quantification(doc_term_matrix, quantifications, descriptions)
+#     return quantifications
+
+
+# def pmi(arr, **kwargs):
+#     '''
+#     https://gist.github.com/TheLoneNut/208cd69bbca7cd7c53af26470581ec1e
+#     Calculate the positive pointwise mutal information score for each entry
+#     https://en.wikipedia.org/wiki/Pointwise_mutual_information
+#     We use the log( p(y|x)/p(y) ), y being the column, x being the row
+#     '''
+#     # p(y|x) probability of each t1 overlap within the row
+#     row_totals = arr.sum(axis=1).astype(float)
+#     prob_cols_given_row = (arr.T / row_totals).T
+#
+#     # p(y) probability of each t1 in the total set
+#     col_totals = arr.sum(axis=0).astype(float)
+#     prob_of_cols = col_totals / sum(col_totals)
+#
+#     # PMI: log( p(y|x) / p(y) )
+#     # This is the same data, normalized
+#     ratio = prob_cols_given_row / prob_of_cols
+#     ratio[ratio==0] = 0.00001
+#     _pmi = np.log(ratio)
+#     _pmi[_pmi < 0] = 0
+#
+#     return _pmi
+#
+# ppmi = pmi
+
+
+# def tf_idf(doc_term_matrix, verbose=False, descriptions=None):
+#     """see https://towardsdatascience.com/3-basic-approaches-in-bag-of-words-which-are-better-than-word-embeddings-c2cbc7398016"""
+#     assert False, "Different result than sklearn!"
+#     n_docs = len(doc_term_matrix.dtm)
+#     quantifications = [[[term, count * log(n_docs/doc_term_matrix.doc_freqs[term])] for term, count in doc] for doc in doc_term_matrix.dtm]
+#     if verbose:
+#         print("Running TF-IDF on the corpus...")
+#         print_quantification(doc_term_matrix, quantifications, descriptions)
+#     return quantifications

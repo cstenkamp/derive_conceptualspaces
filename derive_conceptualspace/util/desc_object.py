@@ -1,6 +1,4 @@
-import random
 import textwrap
-import warnings
 from collections import Counter
 from os.path import basename
 from typing import Optional, List
@@ -128,59 +126,17 @@ class Description():
         return bool(self.count_phrase(item))
 
     def count_phrase(self, item):
+        """this function is used in kw-extraction (which makes a doc-term-matrix from it) and dissim-matrix"""
         assert isinstance(item, str)
+        #pp-descriptions NEVER CREATES NGRAMS, also not in it's BoW.
+        # ...the only exception (and reason for the stuff after the `or`) is that for if sklearn's countvectorizer does something different then our word-tokenization (in postprocess-candidates)
         if (not " " in item) or (" " in item and item in self._bow): #latter one is only bc of the problem when lemmatizing and letting sklearn's count overwrite it so we're force-writing the sklearn-count into the bow for asstions in postprocess_cands
             return self.bow().get(item, 0) #the bow contains ALL words of the desription (so min_df==1)
         return occurrences(" "+self.processed_as_string()+" ", " "+item+" ") + (occurrences(" "+self.processed_as_string()+" ", " "+item+". ") if "sent_tokenize" in self.list_ref.proc_steps else 0)
-        #pp-descriptions NEVER HAS NGRAMS, also not the BoW, deal with it.
         #reason for the second summand: Keyphrases like 'abschlussprufung ende 2' ARE inside a (badly sent-tokenized) string that goes "... ende 2. Semester"
+        # TODO check the following things:
+        #   * text contains: "deutschen sprachen deutschen sprachen deutschen sprache", candidate is "deutschen sprache" -> correct is to return 1, however I DISLIKE this.
 
-        #TODO now it still often occurs that there the text may contain: "deutschen sprachen deutschen sprachen deutschen sprache" and I'm looking for "deutschen sprache"
-        # -> correct is to return 1, however I DISLIKE this.
-
-        #So, we need this for two things: kw-extraction and dissimilarity-matrix. In the former, we'll only take ones that occur often enough anyway,
-        #           and in the latter...?
-        #Problem: Es kann sein, dass processed_phrase filtered ist, sodass ..? #TODO argh
-        # Das Problem ist ja, ich erzeuge erst die n-grams und lösche sie danach raus wenn sie nicht oft genug in anderen descriptions vorkommt.
-        # Das heißt, ich kann einen Teil der very description um die es geht nehmen und wenn sie nicht oft genug insgesamt vorkommt würde count_phrase = 0 sein
-        # =============== feb22
-        # * Do I ever need different results for `term in description`??
-        #     * Do I ever need to test if this is also a CANDIDATE of that description, or do I always just test if it's IN THERE??
-        #     * can it be the case that I'm testing if it's in and I threw it out of this description because I removed certain words from this description, but not from others?? (too little doc-freq)
-        #         => answer SHOULD BE no, because min_df is something GLOBAL
-        # * It doesn't make sense to consider candidates occuring only once, and if I don't, I can rely on the DTM from the dissim_mat (for 1-grams at least)!
-        # ==============
-        # raise NotImplementedError("TODO PP-Descriptions NEVER HAS NGRAMS (08.02.22)!! DEAL WITH IT!!!")
-        # if self._proc_min_df == 1:
-        #     if (self._includes_ngrams and " " in item) or not " " in item:
-        #         return self.bow().get(item, 0)
-        # if item in self.bow():
-        #     return self.bow()[item]
-        # if self._proc_min_df == 1:
-        #     if " " in item:
-        #         return self.processed_as_string().count(item)
-        #     return self.processed_text.count(item)
-        # raise NotImplementedError()
-        # #TODO I don't feel like this is done...! I should be able to check if it's in there even if the doc-term-matrix forgot that its in there
-        #
-        #
-        # if not " " in item:
-        #     return self.bow().get(item, 0)
-        # elif self._includes_ngrams and item in self.bow():
-        #     return self.bow()[item]
-        # else:
-        #     raise NotImplementedError()
-        # # assert not any(" " in i for i in self.bow.keys()) #TODO add this assertion back once I have a parameter for if I should include n-grams
-        # # if " " in item: #TODO why did I even need this originally? When did I check for items with spaces?
-        # #     items = item.split(" ")
-        # #     for it in items:
-        # #         if it not in self.bow:
-        # #             return 0
-        # #     if item in self.processed_as_string():
-        # #         return self.processed_as_string().count(item)
-        # #     elif item in self.processed_as_string(no_dots=True):
-        # #         return 0 # this is legit not a candidate, but I want to be able to set breakpoints in cases where this is not the reason
-        # return self.bow.get(item, 0)
 
     def bow(self):
         if not hasattr(self, "_bow") or self._bow is None:
@@ -276,11 +232,6 @@ class DescriptionList():
             for n, desc in enumerate(self._descriptions):
                 desc.process(res[n], proc_name)
         self.proc_steps.append(proc_name)
-
-    @property
-    def processed_texts(self):
-        for desc in self._descriptions:
-            yield desc.processed_text
 
     def unprocessed_texts(self, remove_htmltags=False):
         for desc in self._descriptions:

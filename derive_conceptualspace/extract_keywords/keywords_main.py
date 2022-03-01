@@ -165,9 +165,11 @@ def create_doc_cand_matrix(postprocessed_candidates, descriptions, verbose=False
     # dictionary = corpora.Dictionary([all_phrases])
     dtm = [sorted([(nphrase, desc.count_phrase(phrase)) for nphrase, phrase in enumerate(all_phrases) if phrase in desc], key=lambda x:x[0]) for ndesc, desc in enumerate(tqdm(descriptions._descriptions, desc="Creating Doc-Cand-Matrix"))]
     #TODO statt dem ^ kann ich wieder SkLearn nehmen
-    assert all([n for n,i in enumerate(descriptions._descriptions) if term in i] == [n for n, i in enumerate(dtm) if all_phrases.index(term) in [j[0] for j in i]] for term in random.sample(all_phrases, 5))
+    if get_setting("DO_SANITYCHECKS"):
+        assert all([n for n,i in enumerate(descriptions._descriptions) if term in i] == [n for n, i in enumerate(dtm) if all_phrases.index(term) in [j[0] for j in i]] for term in random.sample(all_phrases, 5))
     doc_term_matrix = DocTermMatrix(dtm=dtm, all_terms=all_phrases, verbose=verbose, quant_name="count")
-    assert all(len([i for i in descriptions._descriptions if term in i]) == len([i for i in doc_term_matrix.term_quants(term) if i > 0]) for term in random.sample(all_phrases, 5))
+    if get_setting("DO_SANITYCHECKS"):
+        assert all(len([i for i in descriptions._descriptions if term in i]) == len([i for i in doc_term_matrix.term_quants(term) if i > 0]) for term in random.sample(all_phrases, 5))
     #TODO why do I even need to filter this uhm err
     if verbose and get_setting("EXTRACTION_METHOD") != "all":
         print("The 25 terms that are most often detected as candidate terms (incl. their #detections):",
