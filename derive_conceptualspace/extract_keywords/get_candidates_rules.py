@@ -1,6 +1,8 @@
 from derive_conceptualspace.settings import get_setting
 
+# TODO this should be a function in dataset_spefics.siddata (and remove the COURSE_TYPES from the settings as well)
 def extract_coursetype(desc, coursetypes=None):
+    raise NotImplementedError("Hard TODO: move this to dataset_spefics.siddata")
     coursetypes = coursetypes or get_setting("COURSE_TYPES")
     for type in coursetypes:
         if any(i in desc.unprocessed_text.lower() for i in [f"this {type}"]):

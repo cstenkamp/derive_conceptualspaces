@@ -1,8 +1,6 @@
 from nltk.tokenize import word_tokenize
 from functools import lru_cache
 
-from sklearn.feature_extraction.text import CountVectorizer
-
 
 char_replacer = {
     '``': '"',
@@ -15,6 +13,7 @@ char_replacer = {
 ########################################################################################################################
 ########################################################################################################################
 
+# TODO these functions are only used for KeyBERT and should even there be replaced
 
 
 @lru_cache(maxsize=None)

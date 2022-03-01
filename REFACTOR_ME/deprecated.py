@@ -252,3 +252,39 @@ def json_load(fname, **kwargs): #assert_meta=(), return_meta=False,
 #         print("Running TF-IDF on the corpus...")
 #         print_quantification(doc_term_matrix, quantifications, descriptions)
 #     return quantifications
+
+
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
+# OLD STUFF BELOW pp_descriptions_countvec func
+# def pp_descriptions_countvec(descriptions, pp_components, for_language):
+    # the double-commented stuff here is still current
+    #     # if pp_components.remove_htmltags:
+    #     #     descriptions.process_all(lambda data: re.compile(r'<.*?>').sub('', data), "remove_htmltags")
+    #     # cnt = get_countvec(pp_components, 1, for_language, min_df=1) #`build_analyzer`, in contrast to fit_transform, doesn't respect min_df anyway!!
+    #     # descriptions.process_all(cnt.build_preprocessor(), "preprocess")
+    #     # descriptions.process_all(cnt.build_tokenizer(), "tokenize")
+    #     # descriptions.process_all(cnt.build_analyzer(), "analyze", proc_base=lambda desc: " ".join(desc.processed_text))
+    #     # # TODO the analyze-step shouldn't find bigrams across sentences...! (resolves when sent_tokenizing)
+    #     # # TODO if I can do sent_tokenize here I also need to handle DescriptionList.generate_DocTermMatrix
+    #     # descriptions.recover_settings = dict(pp_components=str(pp_components), language=for_language)
+    #     # return descriptions
+    # the stuff below here is old and was used earlier
+    # X = cnt.fit_transform([i.unprocessed_text for i in descriptions])
+    # # aslist = [list(sorted(zip((tmp := X.getrow(nrow).tocoo()).col, tmp.data), key=lambda x:x[0])) for nrow in range(X.shape[0])]
+    # all_words = {v: k for k, v in cnt.vocabulary_.items()}
+    # # if False:
+    # #     #`make_bow` adds the complete counter, including those words which shouldn't be counted due to max_df and min_df values, so we don't do it
+    # #     vocab, descriptions = make_bow(descriptions)
+    # #     for i in random.sample(range(len(descriptions)), 20):
+    # #         assert all(j in descriptions[i] for j in [all_words[w] for w,n in aslist[i]])
+    # #         assert {all_words[j[0]]: j[1] for j in aslist[i]}.items() <= dict(descriptions[i].bow).items()
+    # # else:
+    # #     for j, desc in enumerate(descriptions):
+    # #         desc.bow = {all_words[i[0]]: i[1] for i in aslist[j]}
+    # #     all_words = list(sorted(cnt.vocabulary_.keys()))
+    # # TODO I removed this because it doesn't make sense to set the bag-of-words already here bc this may not contain n-grams, but in the extract-candidates we want to get those.
+    # return all_words, descriptions
+    # #TODO the CountVectorizer mixes up steps 1 and 2 - it prepares which n-grams to be able to extract later already here!
+

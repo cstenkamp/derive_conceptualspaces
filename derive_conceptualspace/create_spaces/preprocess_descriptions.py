@@ -1,11 +1,8 @@
 import warnings
-from os.path import basename, isfile, join, dirname
+from os.path import basename
 import re
 import logging
-import random
 
-
-import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
 
 from misc_util.pretty_print import pretty_print as print
@@ -198,23 +195,3 @@ def pp_descriptions_countvec(descriptions, pp_components, for_language):
     # TODO if I can do sent_tokenize here I also need to handle DescriptionList.generate_DocTermMatrix
     descriptions.recover_settings = dict(pp_components=str(pp_components), language=for_language)
     return descriptions
-
-
-
-    # X = cnt.fit_transform([i.unprocessed_text for i in descriptions])
-    # # aslist = [list(sorted(zip((tmp := X.getrow(nrow).tocoo()).col, tmp.data), key=lambda x:x[0])) for nrow in range(X.shape[0])]
-    # all_words = {v: k for k, v in cnt.vocabulary_.items()}
-    # # if False:
-    # #     #`make_bow` adds the complete counter, including those words which shouldn't be counted due to max_df and min_df values, so we don't do it
-    # #     vocab, descriptions = make_bow(descriptions)
-    # #     for i in random.sample(range(len(descriptions)), 20):
-    # #         assert all(j in descriptions[i] for j in [all_words[w] for w,n in aslist[i]])
-    # #         assert {all_words[j[0]]: j[1] for j in aslist[i]}.items() <= dict(descriptions[i].bow).items()
-    # # else:
-    # #     for j, desc in enumerate(descriptions):
-    # #         desc.bow = {all_words[i[0]]: i[1] for i in aslist[j]}
-    # #     all_words = list(sorted(cnt.vocabulary_.keys()))
-    # # TODO I removed this because it doesn't make sense to set the bag-of-words already here bc this may not contain n-grams, but in the extract-candidates we want to get those.
-    # return all_words, descriptions
-    # #TODO the CountVectorizer mixes up steps 1 and 2 - it prepares which n-grams to be able to extract later already here!
-

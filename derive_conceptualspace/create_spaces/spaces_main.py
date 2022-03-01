@@ -3,16 +3,11 @@ import logging
 
 import numpy as np
 from scipy.spatial.distance import squareform
-from sklearn.feature_extraction.text import TfidfTransformer
-from sklearn.pipeline import Pipeline
 
-from derive_conceptualspace.settings import get_setting
-from derive_conceptualspace.util.text_tools import tf_idf, ppmi
-from .create_embedding import create_dissimilarity_matrix, show_close_descriptions
-from ..util.desc_object import DescriptionList
 from misc_util.pretty_print import pretty_print as print
-from derive_conceptualspace.create_spaces.preprocess_descriptions import get_countvec
-from derive_conceptualspace.util.dtm_object import csr_to_list, DocTermMatrix
+from derive_conceptualspace.settings import get_setting
+from derive_conceptualspace.util.desc_object import DescriptionList
+from .create_embedding import create_dissimilarity_matrix, show_close_descriptions
 
 logger = logging.getLogger(basename(__file__))
 
