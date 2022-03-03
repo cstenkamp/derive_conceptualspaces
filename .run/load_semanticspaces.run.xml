@@ -22,7 +22,7 @@
         <ENTRY IS_ENABLED="true" PARSER="runconfig" />
       </ENTRIES>
     </EXTENSION>
-    <option name="SCRIPT_NAME" value="$PROJECT_DIR$/derive_conceptualspace/cli/load_semanticspaces.py" />
+    <option name="SCRIPT_NAME" value="$PROJECT_DIR$/derive_conceptualspace/load_data/load_semanticspaces.py" />
     <option name="PARAMETERS" value="" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="false" />

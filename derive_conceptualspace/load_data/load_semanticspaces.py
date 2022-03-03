@@ -38,6 +38,14 @@ def get_raw_places_dataset():
     classes = get_classes(data_base, "places", what=["Foursquare", "Geonames"]) #TODO also CYC but I don't understand their file or their explanation of what they did
     json_dump(dict(vecs=vecs, classes=classes), "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/placetypes/raw_descriptions.json")
 
+def get_all_goodkappa():
+    data_base, data_set = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/", "places"
+    greats, goods = set(), set()
+    for n_dims in (20, 50, 100, 200):
+        clusters = get_clusters(data_base, data_set, n_dims)
+        greats |= set(clusters.keys())
+        goods |= set(flatten(clusters.values()))
+    print(greats)
 
 def main():
     data_base, data_set, n_dims = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/", "places", 20
@@ -265,4 +273,4 @@ def get_grouped_candidates(data_base, data_set, mds_dimensions, clusters=None, c
 
 
 if __name__ == "__main__":
-    main()
+    get_all_goodkappa()

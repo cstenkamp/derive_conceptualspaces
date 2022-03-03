@@ -26,6 +26,8 @@ def getfiles_allconfigs(basename, dataset=None, base_dir=None, ext=".json", only
     configs = [parse(os.sep.join(settings.DIR_STRUCT+[basename+ext]), cand).named for cand in candidates if parse(os.sep.join(settings.DIR_STRUCT+[basename+ext]), cand)]
     if only_nondebug:
         configs = [i for i in configs if i["debug"] not in ["True", True]]
+    if not configs:
+        raise FileNotFoundError("There are no usable configs!")
     print_cnf = {k: list(set(dic[k] for dic in configs)) for k in configs[0]}
     print_cnf = {k: [str(i) for i in sorted([int(j) for j in v])] if all(k.isnumeric() for k in v) else sorted(v) for k, v in print_cnf.items()}
     configs = sorted(configs, key=lambda elem: sum([print_cnf[k].index(v)*(10**(len(elem)-n)) for n, (k, v) in enumerate(elem.items())]))

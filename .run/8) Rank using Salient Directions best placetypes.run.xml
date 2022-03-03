@@ -5,6 +5,7 @@
     <option name="PARENT_ENVS" value="true" />
     <envs>
       <env name="PYTHONUNBUFFERED" value="1" />
+      <env name="MA_CLASSIFIER_SUCCMETRIC" value="kappa_rank2rank_onlypos_max" />
       <env name="MA_DATASET" value="placetypes" />
       <env name="MA_LANGUAGE" value="en" />
       <env name="MA_DEBUG" value="False" />
@@ -13,10 +14,10 @@
       <env name="MA_MIN_WORDS_PER_DESC" value="50" />
       <env name="MA_QUANTIFICATION_MEASURE" value="ppmi" />
       <env name="MA_EMBED_ALGO" value="mds" />
-      <env name="MA_EMBED_DIMENSIONS" value="200" />
+      <env name="MA_EMBED_DIMENSIONS" value="50" />
       <env name="MA_EXTRACTION_METHOD" value="all" />
       <env name="MA_DCM_QUANT_MEASURE" value="count" />
-      <env name="MA_CLASSIFIER_COMPARETO_RANKING" value="count" />
+      <env name="MA_KAPPA_WEIGHTS" value="quadratic" />
     </envs>
     <option name="SDK_HOME" value="" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/derive_conceptualspace/cli" />

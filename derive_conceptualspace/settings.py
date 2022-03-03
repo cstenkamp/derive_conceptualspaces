@@ -86,7 +86,6 @@ DEFAULT_FASTER_KEYBERT = False
 DEFAULT_STANFORDNLP_VERSION = "4.2.2" #whatever's newest at https://stanfordnlp.github.io/CoreNLP/history.html
 DEFAULT_COURSE_TYPES = ("colloquium", "seminar", "internship", "practice", "lecture") #TODO move this to dataset_specifics/siddata
 # DEFAULT_DCM_QUANT_MEASURE
-
 DEFAULT_QUANTEXTRACT_MAXPERDOC_ABS = 40
 DEFAULT_QUANTEXTRACT_MAXPERDOC_REL = 0.2
 DEFAULT_QUANTEXTRACT_MINVAL = None
@@ -100,7 +99,7 @@ DEFAULT_QUANTEXTRACT_FORCETAKE_PERC = 0.99
 # DEFAULT_CLASSIFIER
 
 ## 8) Cluster & Filter Features ##
-DEFAULT_CLASSIFIER_SUCCMETRIC = "cohen_kappa" #TODO one of the ones actually implemented!
+DEFAULT_CLASSIFIER_SUCCMETRIC = "kappa_rank2rank_onlypos_max" #TODO one of the ones actually implemented!
 DEFAULT_PRIM_LAMBDA = 0.5
 DEFAULT_SEC_LAMBDA = 0.1
 

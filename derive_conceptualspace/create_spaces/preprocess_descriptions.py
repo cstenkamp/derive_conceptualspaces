@@ -9,7 +9,7 @@ from misc_util.pretty_print import pretty_print as print
 
 from derive_conceptualspace.util.desc_object import Description, DescriptionList
 from derive_conceptualspace.settings import get_setting
-from derive_conceptualspace.util.text_tools import run_preprocessing_funcs, tf_idf, get_stopwords
+from derive_conceptualspace.util.text_tools import run_preprocessing_funcs, get_stopwords
 from derive_conceptualspace.util.mpl_tools import show_hist
 import math
 

@@ -14,7 +14,7 @@ from sklearn.feature_extraction.text import TfidfTransformer
 from .get_candidates_keybert import KeyBertExtractor
 from .get_candidates_rules import extract_coursetype
 
-from derive_conceptualspace.util.text_tools import tf_idf, get_stopwords, ppmi
+from derive_conceptualspace.util.text_tools import get_stopwords, ppmi
 
 
 from misc_util.pretty_print import pretty_print as print

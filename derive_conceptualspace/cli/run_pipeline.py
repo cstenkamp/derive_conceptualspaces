@@ -310,6 +310,26 @@ def create_candidate_svm(ctx):
         quants_s, decision_planes, metrics, metainf = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"), **mgr.kwargs)
     mgr.save(quants_s=quants_s, decision_planes=decision_planes, metrics=metrics, metainf=metainf)
 
+@generate_conceptualspace.command()
+@click.option("--prim-lambda", type=float)
+@click.option("--sec-lambda", type=float)
+@click.option("--classifier-succmetric", type=str)
+@click_pass_add_context
+def cluster_candidates(ctx):
+    ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, "clusters", loader=cluster_loader)
+    cluster_candidates_base(ctx.obj["embedding"], ctx.obj["clusters"], ctx.obj["filtered_dcm"], prim_lambda=ctx.get_config("prim_lambda"), sec_lambda=ctx.get_config("sec_lambda"), metricname=ctx.get_config("classifier_succmetric"))
+
+def cluster_candidates_base(embedding, clusters, filtered_dcm, prim_lambda, sec_lambda, metricname)
+    from derive_conceptualspace.semantic_directions.create_candidate_svm import select_salient_terms
+    pp_descriptions.add_embeddings(embedding.embedding_)
+    decision_planes, metrics = clusters.values()
+    existinds = {k: set(v) for k, v in filtered_dcm.term_existinds(use_index=False).items()}
+    for k, v in metrics.items():
+        metrics[k]["existinds"] = existinds[k]
+        metrics[k]["decision_plane"] = decision_planes[k]
+    n_items = len(pp_descriptions)
+    clusters, directions = select_salient_terms(metrics, decision_planes, prim_lambda=prim_lambda, sec_lambda=sec_lambda, metricname=metricname)
+
 
 @generate_conceptualspace.command()
 @click_pass_add_context

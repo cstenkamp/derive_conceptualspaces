@@ -47,11 +47,13 @@ def apply_dotenv_vars(ENV_PREFIX="MA"):
 
 
 
-def get_filename(variables, get_dependencies=True):
-    variables = dict([[j.strip() for j in i.split(":")] for i in variables.split(",")])
+def get_filename(variables, get_dependencies=True, doprint=True):
+    if not isinstance(variables, dict):
+        variables = dict([[j.strip() for j in i.split(":")] for i in variables.split(",")])
     path = generated_paths[LAST_RESULT].format_map({k.lower(): v for k, v in variables.items()})
     if not get_dependencies:
-        print(path)
+        if doprint: print(path)
+        return path
     else:
         if isfile(os.getenv("MA_SELECT_ENV_FILE", "")):
             load_dotenv(os.environ["MA_SELECT_ENV_FILE"])
@@ -62,10 +64,12 @@ def get_filename(variables, get_dependencies=True):
         dependencies = list({k:v["path"] for k, v in loadeds.items() if k not in ["raw_descriptions", "description_languages", "title_languages"]}.values())
         diff_dirs = [i for i in dependencies if dirname(dirname(path)) in i][0]
         pre_dir = diff_dirs[:diff_dirs.find(dirname(dirname(path)))]
-        print("Data-Dir:", pre_dir)
-        print("Files:", ", ".join([i.replace(pre_dir, "") for i in dependencies]+[path]))
-        print("Copy-command:", f"rsync -az --progress --relative grid:{' :'.join([i.replace(pre_dir, pre_dir+'.'+os.sep) for i in dependencies]+[pre_dir+'.'+os.sep+path])} "+os.environ["MA_BASE_DIR"])
-        print("Env-vars:", get_envvars(path)[0])
+        if doprint:
+            print("Data-Dir:", pre_dir)
+            print("Files:", ", ".join([i.replace(pre_dir, "") for i in dependencies]+[path]))
+            print("Copy-command:", f"rsync -az --progress --relative grid:{' :'.join([i.replace(pre_dir, pre_dir+'.'+os.sep) for i in dependencies]+[pre_dir+'.'+os.sep+path])} "+os.environ["MA_BASE_DIR"])
+            print("Env-vars:", get_envvars(path)[0])
+        return path, pre_dir, dependencies
 
 def get_envvars(filename):
     unmatched = []

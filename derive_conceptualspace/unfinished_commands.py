@@ -111,7 +111,6 @@ def rank_saldirs(pp_descriptions, embedding, clusters, filtered_dcm, prim_lambda
         metrics[k]["existinds"] = existinds[k]
         metrics[k]["decision_plane"] = decision_planes[k]
     n_items = len(pp_descriptions)
-
     clusters, directions = select_salient_terms(metrics, decision_planes, prim_lambda=prim_lambda, sec_lambda=sec_lambda, metricname=metricname)
 
     # TODO this is only bc in debug i set the min_existinds to 1

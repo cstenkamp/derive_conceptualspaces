@@ -22,6 +22,8 @@ from misc_util.pretty_print import pretty_print as print
 
 norm = lambda vec: vec/np.linalg.norm(vec)
 vec_cos = lambda v1, v2: np.arccos(np.clip(np.dot(norm(v1), norm(v2)), -1.0, 1.0))  #https://stackoverflow.com/a/13849249/5122790
+#`vec_cos((1, 0, 0), (0, 1, 0)) == vec_cos((1, 0, 0), (0, 1, 1))` --> that's correct, they ARE 90° if they are (1,0,..) and (0,1,..), never mind other coordinates
+
 flatten = lambda l: [item for sublist in l for item in sublist]
 unique = lambda iterable: list({i:None for i in iterable}.keys())
 
@@ -108,30 +110,45 @@ class Comparer():
 
 def select_salient_terms(metrics, decision_planes, prim_lambda, sec_lambda, metricname):
     #TODO waitwaitwait. Am I 100% sure that the intercepts of the decision_planes are irrelevant?!
+    #TODO what about those with high negative kappa? Einfach abs-wert nehmen und consideren (AUCH SCHON IM SCHRITT VORHER IF SO)
     print(f"Calculated Metrics: {list(list(metrics.values())[0].keys())}")
     print(f"Lambda1: {prim_lambda}, Lambda2: {sec_lambda}, compareto-metric: {metricname}")
-    get_tlambda = lambda metrics, lamb: [i[0] for i in metrics.items() if i[1][metricname] >= prim_lambda]
-    get_tlambda2 = lambda metrics, primlamb, seclamb: [i[0] for i in metrics.items() if i[1][metricname] >= sec_lambda and i[1][metricname] < prim_lambda]
+    metrics = sorted(list({k: v[metricname] for k, v in metrics.items()}.items()), key=lambda x:x[1], reverse=True)
+    get_tlambda = lambda metrics, lamb: [i[0] for i in metrics if i[1] >= prim_lambda]
+    get_tlambda2 = lambda metrics, lamb1objs, seclamb: [i[0] for i in metrics if i[1] >= sec_lambda and i[0] not in lamb1objs]
     candidates = get_tlambda(metrics, prim_lambda)
-    salient_directions = [max(metrics.items(), key=lambda x: x[1][metricname])[0],]
+    salient_directions = [metrics[0][0],]
     n_terms = min(len(candidates), 2*len(decision_planes[salient_directions[0]].coef)) #from [DESC15]
     comparer = Comparer(decision_planes, vec_cos)
-    for nterm in tqdm(range(1, n_terms), desc="Merging Salient Directions"):
+    #DESC15: "as the ith term, we select the term t minimising max_{j<i}cos(v_t_j, v_t) - In other words, we repeatedly select the term which is least similar to the terms that have already been selected"
+    for nterm in tqdm(range(1, n_terms), desc="Finding Salient Directions"):
         cands = set(candidates)-set(salient_directions)
-        compares = {cand: max(comparer(cand, compareto) for compareto in salient_directions) for cand in cands}
-        salient_directions.append(min(compares.items(), key=lambda x:x[1])[0])
-    print(f"Found {len(salient_directions)} salient directions: {salient_directions}")
+        #{cand: {compareto: comparer(cand, compareto) for compareto in salient_directions} for cand in cands}
+        compares = {cand: min(comparer(cand, compareto) for compareto in salient_directions) for cand in cands}
+        #vec_cos(decision_planes[next(iter(cands))].normal, decision_planes[salient_directions[0]].normal)
+        salient_directions.append(max(compares.items(), key=lambda x:x[1])[0])
+    print(f"Found {len(salient_directions)} salient directions: {', '.join(salient_directions)}")
     compare_vecs = [decision_planes[term].normal for term in salient_directions]
     clusters = {term: [] for term in salient_directions}
     #TODO optionally instead do the cluster-assignment with k-means!
-    for term in tqdm(get_tlambda2(metrics, prim_lambda, sec_lambda), desc="Associating Clusters"):
+    for term in tqdm(get_tlambda2(metrics, salient_directions, sec_lambda), desc="Associating the rest to Clusters"):
         # "we then associate with each term d_i a Cluster C_i containing all terms from T^{0.1} which are more similar to d_i than to any of the
         # other directions d_j." TODO: experiment with thresholds, if it's extremely unsimilar to ALL just effing discard it!
         clusters[salient_directions[np.argmin([vec_cos(decision_planes[term].normal, vec2) for vec2 in compare_vecs])]].append(term)
     cluster_directions = {key: np.mean(np.array([decision_planes[term].normal for term in [key]+vals]), axis=0) for key, vals in clusters.items()}
-    # TODO maybe have a smart weighting function that takes into account the kappa-score of the term and/or the closeness to the original clustercenter
+    # TODO maybe have a smart weighting function that takes into account the kappa-score of the term and/or the closeness to the original clustercenter (to threshold which cluster they are added to)
     return clusters, cluster_directions
-
+    #TODO in this step, there are SO MANY improvements to be made.
+    # * I am ordering by kappa and selecting from there on - because "isawyoufirst" is very close to "nature", "nature" will never be picked out as term
+    #    -> either find a way to select more... informative?? terms from the start, or find a way to, once the corresponding clusters are found, select a good one of that as representative
+    #        -> use LSI for that (add pseudodocs with only one term and that term as name, and then let all DOCUMENTNAMES be candidates (change in EARLIER STEP!))
+    #        -> do it like the "enhancing from wikipedia" paper and after the whole clustering, consider the documentnames that fit best as clusterlabels
+    # * The fact that for the clustering, all of the T^0.1 ones are added to the "most similar one", I would definititely threshold that, those that are far from are not considered
+    # * Like Ager2018 or Alshaikh2020, I would LIKE to get uninformative clusters, such that I can throw them out.
+    # * Well, the hierachical way of Alshaikh2020 seemed promising, didn't it?!
+    # * Calculate the direction of the cluster anew,
+    # * 	a) by the (weighted-by-kappa-or-closeness-to-center) averaged direction of it's members,
+    # *     b) by creating a new SVM with "any(or-at-least-x)-of-the-cluster-terms-occur"
 
 def create_candidate_svm(embedding, term, quants, classifier, plot_svm=False, descriptions=None, quant_name=None, pgbar=None, **kwargs):
     bin_labels = np.array(quants, dtype=bool) # Ensure that regardless of quant_measure this is correct binary classification labels
