@@ -31,6 +31,10 @@ class NDPlane:
         assert point.shape[0] == self.coef.shape[0]-1
         return (- self.intercept -np.sum(self.coef[:-1]*point)) / self.coef[-1]
 
+    def dist(self, point: np.array):
+        #see notebooks/proof_of_concept/find_svm_decisionboundary.ipynb for all possibilities to calculate this!
+        return np.dot(self.normal, point)+self.intercept
+
 
 class ThreeDPlane(NDPlane):
     a = property(lambda self: self.coef[0])

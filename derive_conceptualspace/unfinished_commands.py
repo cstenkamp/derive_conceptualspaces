@@ -103,6 +103,7 @@ def show_data_info(ctx):
 
 
 def rank_saldirs(pp_descriptions, embedding, featureaxes, filtered_dcm, prim_lambda, sec_lambda, metricname):
+    # TODO this should rather contain the code from run_pipeline.decision_trees
     from derive_conceptualspace.semantic_directions.create_candidate_svm import select_salient_terms
     pp_descriptions.add_embeddings(embedding.embedding_)
     decision_planes, metrics = featureaxes.values()
@@ -111,7 +112,6 @@ def rank_saldirs(pp_descriptions, embedding, featureaxes, filtered_dcm, prim_lam
         metrics[k]["existinds"] = existinds[k]
         metrics[k]["decision_plane"] = decision_planes[k]
     n_items = len(pp_descriptions)
-    clusters, directions = select_salient_terms(metrics, decision_planes, prim_lambda=prim_lambda, sec_lambda=sec_lambda, metricname=metricname)
 
     # TODO this is only bc in debug i set the min_existinds to 1
     metrics = {k: v for k, v in metrics.items() if len(v["existinds"]) >= 25}

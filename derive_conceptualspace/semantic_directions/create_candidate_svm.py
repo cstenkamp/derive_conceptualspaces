@@ -55,7 +55,7 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
     quants_s = dcm.as_csr().toarray().tolist()  # [dcm.term_quants(term) for term in tqdm(terms, desc="Counting Terms")]
     ncpu = get_ncpu(ram_per_core=5)
     if ncpu == 1:  #TODO Interruptible: for ncpu==1, I'm adding direct key-value-pairs, in the ncpu>1 version I'm appending to a list -> they are incompatible!
-        with Interruptible(zip(terms, quants_s), ([], decision_planes, metrics), metainf, continue_from=continue_from, pgbar="Creating Candidate SVMs", total=len(terms), name="SVMs") as iter:
+        with Interruptible(zip(terms, quants_s), ([], decision_planes, metrics), metainf, continue_from=continue_from, pgbar="Creating Candidate SVMs [1 proc]", total=len(terms), name="SVMs") as iter:
             for term, quants in iter: #in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs", total=len(terms))
                 cand_mets, decision_plane, term = create_candidate_svm(embedding.embedding_, term, quants, classifier=get_setting("CLASSIFIER"), descriptions=descriptions, quant_name=dcm.quant_name)
                 metrics[term] = cand_mets
@@ -63,7 +63,7 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
     else:
         print(f"Starting Multiprocessed with {ncpu} CPUs")
         with Interruptible(zip(terms, quants_s), [None, [], None], metainf, continue_from=continue_from, contains_mp=True, name="SVMs", total=len(quants_s)) as iter:
-            with tqdm(total=iter.n_elems, desc="Creating Candidate SVMs") as pgbar, ThreadPool(ncpu, comqu=iter.comqu) as p:
+            with tqdm(total=iter.n_elems, desc=f"Creating Candidate SVMs [{ncpu} procs]") as pgbar, ThreadPool(ncpu, comqu=iter.comqu) as p:
                 res, interrupted = p.starmap(create_candidate_svm, zip(repeat(embedding.embedding_, iter.n_elems), repeat("next_0"), repeat("next_1"), repeat(get_setting("CLASSIFIER")), repeat(False), repeat(None), repeat(dcm.quant_name), repeat(pgbar)), draw_from=iter.iterable)
             _, res, _ = iter.notify([None, res, None], exception=interrupted)
             if interrupted is not False:
@@ -134,6 +134,7 @@ def select_salient_terms(metrics, decision_planes, prim_lambda, sec_lambda, metr
         # "we then associate with each term d_i a Cluster C_i containing all terms from T^{0.1} which are more similar to d_i than to any of the
         # other directions d_j." TODO: experiment with thresholds, if it's extremely unsimilar to ALL just effing discard it!
         clusters[salient_directions[np.argmin([vec_cos(decision_planes[term].normal, vec2) for vec2 in compare_vecs])]].append(term)
+    #TODO an option here to either take mean, or only main-one, or smartly-weighted (I think DESC15 did only main-one)
     cluster_directions = {key: np.mean(np.array([decision_planes[term].normal for term in [key]+vals]), axis=0) for key, vals in clusters.items()}
     # TODO maybe have a smart weighting function that takes into account the kappa-score of the term and/or the closeness to the original clustercenter (to threshold which cluster they are added to)
     return clusters, cluster_directions

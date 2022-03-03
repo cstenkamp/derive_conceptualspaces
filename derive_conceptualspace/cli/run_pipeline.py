@@ -338,10 +338,34 @@ def show_data_info(ctx):
 
 @generate_conceptualspace.command()
 @click_pass_add_context
+def decision_trees(ctx):
+    import pandas as pd
+    ctx.obj["pp_descriptions"] = ctx.p.load(None, "pp_descriptions", loader=DescriptionList.from_json)
+    ctx.obj["featureaxes"] = ctx.obj["json_persister"].load(None, "featureaxes", loader=featureaxes_loader)
+    ctx.obj["clusters"] = ctx.p.load(None, "clusters")
+    #first I want the distances to the origins of the respective dimensions (induced by the clusters), what induces the respective rankings! (see DESC15 p.24u, proj2 of load_semanticspaces.load_projections)
+    embedding = ctx.obj["embedding"].embedding_
+    #TODO with another cluster-center-finding-algorithm, I cannot recover the NDPlane from an earlier step and have to save it instead of only the direction!!!!
+    planes = {k: ctx.obj["featureaxes"]["decision_planes"][k] for k in ctx.obj["clusters"]["directions"].keys()}
+    # import numpy as np; norm = lambda vec: vec / np.linalg.norm(vec), assert all(np.allclose(norm(v.normal), norm(ctx.obj["clusters"]["directions"][k])) for k, v in planes.items())
+    axis_dists = [{k: v.dist(embedding[i]) for k, v in planes.items()} for i in range(len(embedding))]
+    df = pd.DataFrame(axis_dists)
+    best_per_dim = {k: ctx.obj["pp_descriptions"]._descriptions[v].title for k, v in df.idxmax().to_dict().items()}
+    print("Highest-ranking descriptions per dimension:\n    "+"\n    ".join([f"{k.ljust(max([len(i) for i in best_per_dim.keys()][:20]))}: {v}" for k, v in best_per_dim.items()][:20]))
+    #TODO this is all I need for the movietuner already!! I can say "give me something like X, only with more Y"
+
+    with_cat = [n for n, i in enumerate(ctx.obj["pp_descriptions"]._descriptions) if i._additionals["Geonames"] is not None]
+    print()
+
+
+
+@generate_conceptualspace.command()
+@click_pass_add_context
 def rank_saldirs(ctx):
     ctx.obj["pp_descriptions"] = ctx.p.load(None, "pp_descriptions", loader=DescriptionList.from_json, silent=True) #TODO really silent?
     ctx.obj["featureaxes"] = ctx.p.load(None, "featureaxes", loader=featureaxes_loader)
     ctx.obj["clusters"] = ctx.p.load(None, "clusters")
+    #TODO this should rather contain the code from run_pipeline.decision_trees
     rank_saldirs_base(ctx.obj["pp_descriptions"], ctx.obj["embedding"], ctx.obj["featureaxes"], ctx.obj["filtered_dcm"],
                       prim_lambda=ctx.get_config("prim_lambda"), sec_lambda=ctx.get_config("sec_lambda"), metricname=ctx.get_config("classifier_succmetric"))
 

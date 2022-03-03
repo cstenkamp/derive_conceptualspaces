@@ -363,7 +363,7 @@ class JsonPersister():
             #     if k in self.ctx.obj: assert self.ctx.obj[k] == v, f"{k} is demanded to be {self.ctx.obj[k]}, but is {v} in {tmp['basename']} at {join(subdir, filename)}"
             #     #TODO better error message that tells which file is probably missing
             #     else: self.ctx.obj[k] = v
-            assert save_basename not in self.loaded_objects
+            # assert save_basename not in self.loaded_objects
             self.loaded_objects[save_basename] = {"content": obj, "path": join(self.in_dir, filename), "used_in": ["this"], "metadata": full_metadata}
         if return_metainf:
             return obj, orig["metainf"]

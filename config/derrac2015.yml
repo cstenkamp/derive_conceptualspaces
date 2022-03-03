@@ -19,8 +19,7 @@ dcm_quant_measure:            count
 classifier:                   SVM
 kappa_weights:                quadratic
 
-# classifier_succmetric:        [kappa_count2rank_onlypos, kappa_rank2rank_onlypos_min]  #unclear if the ranking induced by count, or the baremetal count
-# TODO add back as soon as featureaxes work #PRECOMMIT #FIXPRECOMMIT
+classifier_succmetric:        [kappa_count2rank_onlypos, kappa_rank2rank_onlypos_min]  #unclear if the ranking induced by count, or the baremetal count
 prim_lambda:                  0.5
 sec_lambda:                   0.1
 __perdataset__:
