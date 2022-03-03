@@ -91,7 +91,6 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
                 else:
                     highlight = []
                 create_candidate_svm(embedding.embedding_, another, dcm.term_quants(another), quant_name=dcm.quant_name, plot_svm=True, descriptions=descriptions, highlight=highlight)
-    # clusters, cluster_directions = select_salient_terms(sorted_kappa, decision_planes, prim_lambda, sec_lambda)
     return quants_s, decision_planes, metrics, metainf
 
 

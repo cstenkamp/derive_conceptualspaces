@@ -43,7 +43,7 @@ generated_paths = dict(
     candidate_terms =          "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/candidate_terms_{extraction_method}.json",
     postprocessed_candidates = "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/postprocessed_candidates_{extraction_method}.json",
     filtered_dcm =             "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json",
-    clusters =                 "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}_{kappa_weights}/clusters.json"
+    featureaxes =              "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}_{kappa_weights}/featureaxes.json"
 )
 #TODO can I auto-generate these from jsonpersister?!
 
@@ -270,7 +270,8 @@ class CustomContext(ObjectWrapper):
 ########################################################################################################################
 ########################################################################################################################
 
-cluster_loader = lambda **di: dict(decision_planes={k: NDPlane(np.array(v[1][0]),v[1][1]) for k, v in di["decision_planes"].items()}, metrics=di["metrics"])
+featureaxes_loader = lambda **di: dict(decision_planes={k: NDPlane(np.array(v[1][0]),v[1][1]) for k, v in di["decision_planes"].items()}, metrics=di["metrics"])
+#TODO move this somewhere appropriate
 
 
 class SnakeContext():
@@ -287,7 +288,7 @@ class SnakeContext():
         pp_descriptions=DescriptionList.from_json,
         dissim_mat=dtm_dissimmat_loader,
         filtered_dcm=dtm_loader,
-        clusters=cluster_loader,
+        featureaxes=featureaxes_loader,
         title_languages=lambda **kwargs: kwargs["langs"],
         languages=lambda **kwargs: kwargs["langs"],
         raw_descriptions=None,

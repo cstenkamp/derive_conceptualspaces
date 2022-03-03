@@ -54,7 +54,7 @@ from derive_conceptualspace.unfinished_commands import (
 )
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
 from derive_conceptualspace.util.interruptible_funcs import InterruptibleLoad
-from derive_conceptualspace.pipeline import cluster_loader, CustomContext, load_lang_translate_files, apply_dotenv_vars
+from derive_conceptualspace.pipeline import featureaxes_loader, CustomContext, load_lang_translate_files, apply_dotenv_vars
 
 logger = logging.getLogger(basename(__file__))
 
@@ -306,7 +306,7 @@ def generate_conceptualspace(ctx, json_persister):
 @click_pass_add_context
 def create_candidate_svm(ctx):
     ctx.obj["pp_descriptions"] = ctx.p.load(None, "pp_descriptions", loader=DescriptionList.from_json, silent=True)
-    with InterruptibleLoad(ctx, "clusters.json", loader=lambda x:x) as mgr:
+    with InterruptibleLoad(ctx, "featureaxes.json", loader=lambda x:x) as mgr:
         quants_s, decision_planes, metrics, metainf = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"), **mgr.kwargs)
     mgr.save(quants_s=quants_s, decision_planes=decision_planes, metrics=metrics, metainf=metainf)
 
@@ -316,13 +316,13 @@ def create_candidate_svm(ctx):
 @click.option("--classifier-succmetric", type=str)
 @click_pass_add_context
 def cluster_candidates(ctx):
-    ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, "clusters", loader=cluster_loader)
-    cluster_candidates_base(ctx.obj["embedding"], ctx.obj["clusters"], ctx.obj["filtered_dcm"], prim_lambda=ctx.get_config("prim_lambda"), sec_lambda=ctx.get_config("sec_lambda"), metricname=ctx.get_config("classifier_succmetric"))
+    ctx.obj["featureaxes"] = ctx.obj["json_persister"].load(None, "featureaxes", loader=featureaxes_loader)
+    cluster_candidates_base(ctx.obj["embedding"], ctx.obj["featureaxes"], ctx.obj["filtered_dcm"], prim_lambda=ctx.get_config("prim_lambda"), sec_lambda=ctx.get_config("sec_lambda"), metricname=ctx.get_config("classifier_succmetric"))
 
-def cluster_candidates_base(embedding, clusters, filtered_dcm, prim_lambda, sec_lambda, metricname)
+def cluster_candidates_base(embedding, featureaxes, filtered_dcm, prim_lambda, sec_lambda, metricname):
     from derive_conceptualspace.semantic_directions.create_candidate_svm import select_salient_terms
     pp_descriptions.add_embeddings(embedding.embedding_)
-    decision_planes, metrics = clusters.values()
+    decision_planes, metrics = featureaxes.values()
     existinds = {k: set(v) for k, v in filtered_dcm.term_existinds(use_index=False).items()}
     for k, v in metrics.items():
         metrics[k]["existinds"] = existinds[k]
@@ -334,7 +334,7 @@ def cluster_candidates_base(embedding, clusters, filtered_dcm, prim_lambda, sec_
 @generate_conceptualspace.command()
 @click_pass_add_context
 def show_data_info(ctx):
-    ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, "clusters")
+    ctx.obj["featureaxes"] = ctx.obj["json_persister"].load(None, "featureaxes") #TODO use LAST_RESULT (and make it ONE THING used also in Snakefile and args_from_filename)
     show_data_info_base(ctx)
     print()
 
@@ -346,17 +346,18 @@ def show_data_info(ctx):
 @click_pass_add_context
 def rank_saldirs(ctx):
     ctx.obj["pp_descriptions"] = ctx.p.load(None, "pp_descriptions", loader=DescriptionList.from_json, silent=True) #TODO really silent?
-    ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, "clusters", loader=cluster_loader)
-    rank_saldirs_base(ctx.obj["pp_descriptions"], ctx.obj["embedding"], ctx.obj["clusters"], ctx.obj["filtered_dcm"],
+    ctx.obj["featureaxes"] = ctx.obj["json_persister"].load(None, "featureaxes", loader=featureaxes_loader)
+    rank_saldirs_base(ctx.obj["pp_descriptions"], ctx.obj["embedding"], ctx.obj["featureaxes"], ctx.obj["filtered_dcm"],
                       prim_lambda=ctx.get_config("prim_lambda"), sec_lambda=ctx.get_config("sec_lambda"), metricname=ctx.get_config("classifier_succmetric"))
 
 
 @cli.command()
 @click_pass_add_context
 def list_paramcombis(ctx):
+    # TODO get rid of this entirely.
     # TODO this should ONLY consider command-line-args as config to compare the candidates to
     candidates = [join(path, name)[len(ctx.p.in_dir):] for path, subdirs, files in os.walk(join(ctx.p.in_dir, "")) for
-                  name in files if name.startswith("clusters.json")]
+                  name in files if name.startswith("featureaxes.json")] #TODO use LAST_RESULT
     candidates = [i for i in candidates if i.startswith(ctx.p.get_subdir({i: ctx.get_config(i) for i in ["DEBUG", "DATASET", "LANGUAGE"]})[0])]
     for cand in candidates:
         print(cand)

@@ -22,18 +22,18 @@ def main():
     #  value of kappa_weights, to show that only for linear/quadratic I get sensible results
     setup_logging()
     load_envfiles("placetypes")
-    configs, print_cnf = getfiles_allconfigs("clusters")
+    configs, print_cnf = getfiles_allconfigs("featureaxes")
     configs = configs[:10]
 
-    with WorkerPool(DEFAULT_N_CPUS, pgbar="Fetching clusters..") as pool:
-        get_clusters = lambda conf: SnakeContext.loader_context(config=conf, silent=True).load("clusters")
-        cluster_list, interrupted = pool.work(configs, get_clusters)
+    with WorkerPool(DEFAULT_N_CPUS, pgbar="Fetching featureaxes..") as pool:
+        get_featureaxes = lambda conf: SnakeContext.loader_context(config=conf, silent=True).load("featureaxes")
+        cluster_list, interrupted = pool.work(configs, get_featureaxes)
 
     display(f"# Going through all param-combis and checking how many κ ≥ *r*{LAMBDA1}*r* values they have:")
     detailed, displayvar = [], {}
-    for conf, clusters in zip(configs, cluster_list):
+    for conf, featureaxes in zip(configs, cluster_list):
         specials = {k: v for k, v in conf.items() if isinstance(print_cnf[k], list)}
-        mets = make_metrics(clusters["metrics"])
+        mets = make_metrics(featureaxes["metrics"])
         kppa = {k: len([i for i in v if i >= LAMBDA1]) for k, v in mets.items() if len([i for i in v if i >= LAMBDA1]) > 0 and "kappa" in k and k != "kappa_bin2bin"}
         displayvar[", ".join(f"{k}: {v}" for k, v in specials.items())] = kppa
         detailed.append((conf, kppa))

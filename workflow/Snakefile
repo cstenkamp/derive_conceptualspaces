@@ -8,7 +8,7 @@ from config:   `snakemake --cores 1 -p by_config --configfile ./config/derrac201
 
 Plot DAG:      `MA_DATASET=siddata snakemake --cores 1 -np --directory $MA_DATA_DIR --dag default | grep -A99999 "digraph" | dot -Tsvg > dag.svg`
 Get results:   `rsync -az --progress grid:/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/placetypes $MA_DATA_DIR --exclude .snakemake`
-Get clusters : `rsync -az --progress grid:/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/siddata2022 $MA_DATA_DIR  --include="*/" --include="clusters.json" --exclude="*"`
+Get featureaxes: `rsync -az --progress grid:/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/siddata2022 $MA_DATA_DIR  --include="*/" --include="featureaxes.json" --exclude="*"`
 Docker in VM:  `ma_cont snakemake --cores 3 -p --directory /opt/data/siddata by_config --configfile /opt/derive_conceptualspaces/config/derrac2015_edited.yml`
                   where ma_cont = `docker run -it --rm --user $(id -u):$(id -g) --name derive_conceptualspaces_cont -v ~/data:/opt/data --env-file ~/derive_conceptualspaces/test_env.env derive_conceptualspaces`
                   (so there's a bug that you have to specify `--directory` which includes the dataset-name but whatever)
@@ -294,14 +294,14 @@ rule create_candidate_svm:
         filtered_dcm = generated_paths["filtered_dcm"],
         embedding = generated_paths["embedding"]
     output:
-        generated_paths["clusters"]
+        generated_paths["featureaxes"]
     threads: 4
     resources:
         mem_mb=32*1024,
         pe="4-6"
     run:
         autoload_context_inputs(ctx, input, wildcards, silents=["pp_descriptions"])
-        with InterruptibleLoad(ctx, "clusters.json", loader=lambda x:x) as mgr:
+        with InterruptibleLoad(ctx, "featureaxes.json", loader=lambda x:x) as mgr:
             quants_s, decision_planes, metrics, metainf = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"), **mgr.kwargs)
         res = mgr.save(quants_s=quants_s, decision_planes=decision_planes, metrics=metrics, metainf=metainf)
         if res == 1: exit(1)

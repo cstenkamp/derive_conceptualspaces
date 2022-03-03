@@ -79,7 +79,7 @@ def show_data_info(ctx):
             print("Latest commit messages:\n  ", "\n   ".join(tmp))
     dates = {k: v["metadata"]["obj_info"]["date"] for k, v in ctx.obj["json_persister"].loaded_objects.items() if v.get("metadata", {}).get("obj_info", {}).get("date")}
     print("Dates:\n ", "\n  ".join(f"{k.rjust(max(len(i) for i in dates))}: {v}" for k, v in dates.items()))
-    #TODO if there's PREV_RUN_INFO in the metadata (`"PREV_RUN_INFO" in ctx.obj["json_persister"].loaded_objects["clusters"].get("metadata", {})`) add stdout and stderr of that!
+    #TODO if there's PREV_RUN_INFO in the metadata (`"PREV_RUN_INFO" in ctx.obj["json_persister"].loaded_objects["featureaxes"].get("metadata", {})`) add stdout and stderr of that!
     output = {k: merge_streams(v["metadata"]["obj_info"]["stdout"], v["metadata"]["obj_info"]["stderr"], k) for k, v in ctx.obj["json_persister"].loaded_objects.items() if v.get("metadata", {}).get("obj_info", {}).get("stdout")}
     print()
     N_SPACES = 30
@@ -102,10 +102,10 @@ def show_data_info(ctx):
 ########################################################################################################################
 
 
-def rank_saldirs(pp_descriptions, embedding, clusters, filtered_dcm, prim_lambda, sec_lambda, metricname):
+def rank_saldirs(pp_descriptions, embedding, featureaxes, filtered_dcm, prim_lambda, sec_lambda, metricname):
     from derive_conceptualspace.semantic_directions.create_candidate_svm import select_salient_terms
     pp_descriptions.add_embeddings(embedding.embedding_)
-    decision_planes, metrics = clusters.values()
+    decision_planes, metrics = featureaxes.values()
     existinds = {k: set(v) for k, v in filtered_dcm.term_existinds(use_index=False).items()}
     for k, v in metrics.items():
         metrics[k]["existinds"] = existinds[k]
