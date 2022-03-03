@@ -17,6 +17,7 @@ from misc_util.telegram_notifier import telegram_notify
 from misc_util.pretty_print import pretty_print as print
 from misc_util.logutils import setup_logging
 
+
 from derive_conceptualspace.util.desc_object import DescriptionList
 from derive_conceptualspace.settings import (
     ALL_TRANSLATE_POLICY, ALL_QUANTIFICATION_MEASURE, ALL_EXTRACTION_METHOD, ALL_EMBED_ALGO, ALL_DCM_QUANT_MEASURE,
@@ -46,7 +47,8 @@ from derive_conceptualspace.create_spaces.create_embedding import (
     create_embedding as create_embedding_base,
 )
 from derive_conceptualspace.semantic_directions.create_candidate_svm import (
-    create_candidate_svms as create_candidate_svms_base
+    create_candidate_svms as create_candidate_svms_base,
+    select_salient_terms as select_salient_terms_base,
 )
 from derive_conceptualspace.unfinished_commands import (
     rank_saldirs as rank_saldirs_base,
@@ -310,43 +312,36 @@ def create_candidate_svm(ctx):
         quants_s, decision_planes, metrics, metainf = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"), **mgr.kwargs)
     mgr.save(quants_s=quants_s, decision_planes=decision_planes, metrics=metrics, metainf=metainf)
 
+
 @generate_conceptualspace.command()
 @click.option("--prim-lambda", type=float)
 @click.option("--sec-lambda", type=float)
 @click.option("--classifier-succmetric", type=str)
 @click_pass_add_context
 def cluster_candidates(ctx):
+    #TODO decide on ONE name! "cluster_candidates", "cluster_feature_axes", "select_salient_terms"
+    #TODO this one doesn't need to load embedding etc...!! only slows down!
     ctx.obj["featureaxes"] = ctx.obj["json_persister"].load(None, "featureaxes", loader=featureaxes_loader)
-    cluster_candidates_base(ctx.obj["embedding"], ctx.obj["featureaxes"], ctx.obj["filtered_dcm"], prim_lambda=ctx.get_config("prim_lambda"), sec_lambda=ctx.get_config("sec_lambda"), metricname=ctx.get_config("classifier_succmetric"))
-
-def cluster_candidates_base(embedding, featureaxes, filtered_dcm, prim_lambda, sec_lambda, metricname):
-    from derive_conceptualspace.semantic_directions.create_candidate_svm import select_salient_terms
-    pp_descriptions.add_embeddings(embedding.embedding_)
-    decision_planes, metrics = featureaxes.values()
-    existinds = {k: set(v) for k, v in filtered_dcm.term_existinds(use_index=False).items()}
-    for k, v in metrics.items():
-        metrics[k]["existinds"] = existinds[k]
-        metrics[k]["decision_plane"] = decision_planes[k]
-    n_items = len(pp_descriptions)
-    clusters, directions = select_salient_terms(metrics, decision_planes, prim_lambda=prim_lambda, sec_lambda=sec_lambda, metricname=metricname)
+    decision_planes, metrics = ctx.obj["featureaxes"].values()
+    clusters, directions = select_salient_terms_base(metrics, decision_planes, prim_lambda=ctx.get_config("prim_lambda"), sec_lambda=ctx.get_config("sec_lambda"), metricname=ctx.get_config("classifier_succmetric"))
+    ctx.obj["json_persister"].save("clusters.json", clusters=clusters, directions=directions)
+    #TODO this needs WAY MORE Parameters & ways-how-to-do-it, see bottom of select_salient_terms_base
 
 
 @generate_conceptualspace.command()
 @click_pass_add_context
 def show_data_info(ctx):
-    ctx.obj["featureaxes"] = ctx.obj["json_persister"].load(None, "featureaxes") #TODO use LAST_RESULT (and make it ONE THING used also in Snakefile and args_from_filename)
+    ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, "clusters") #TODO use LAST_RESULT (and make it ONE THING used also in Snakefile and args_from_filename)
     show_data_info_base(ctx)
     print()
 
 
 @generate_conceptualspace.command()
-@click.option("--prim-lambda", type=float)
-@click.option("--sec-lambda", type=float)
-@click.option("--classifier-succmetric", type=str)
 @click_pass_add_context
 def rank_saldirs(ctx):
     ctx.obj["pp_descriptions"] = ctx.p.load(None, "pp_descriptions", loader=DescriptionList.from_json, silent=True) #TODO really silent?
-    ctx.obj["featureaxes"] = ctx.obj["json_persister"].load(None, "featureaxes", loader=featureaxes_loader)
+    ctx.obj["featureaxes"] = ctx.p.load(None, "featureaxes", loader=featureaxes_loader)
+    ctx.obj["clusters"] = ctx.p.load(None, "clusters")
     rank_saldirs_base(ctx.obj["pp_descriptions"], ctx.obj["embedding"], ctx.obj["featureaxes"], ctx.obj["filtered_dcm"],
                       prim_lambda=ctx.get_config("prim_lambda"), sec_lambda=ctx.get_config("sec_lambda"), metricname=ctx.get_config("classifier_succmetric"))
 
