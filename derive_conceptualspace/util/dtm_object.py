@@ -120,11 +120,17 @@ class DocTermMatrix():
         if hasattr(self, "_csr"): del self._csr
         if hasattr(self, "_term_existinds"): del self._term_existinds
 
+    @staticmethod
+    def submat_forterms(dtm: "DocTermMatrix", termlist, verbose=False, descriptions=None):
+        """returns a new DTM that only considers the terms in the termlist"""
+        if dtm.quant_name != "count": raise NotImplementedError("Didn't think about this yet, may also make sense for not-count but just check")
+        res = DocTermMatrix._filter_step2(dtm, set(dtm.reverse_term_dict[i] for i in termlist), verbose=verbose, descriptions=descriptions)
+        assert set(res.all_terms.values()) == set(termlist)
+        return res
 
     @staticmethod
-    def filter(dtm, min_count, use_n_docs_count=True, verbose=False, descriptions=None, cap_max=True):
+    def filter(dtm: "DocTermMatrix", min_count, use_n_docs_count=True, verbose=False, descriptions=None, cap_max=True):
         """accepts only a DocTermMatrix as input from now on. descriptions only for verbosity"""
-        assert isinstance(dtm, DocTermMatrix)
         if use_n_docs_count:
             term_counts = dtm.doc_freqs()
         else:
@@ -140,7 +146,10 @@ class DocTermMatrix():
             print("The most used terms are: " + ", ".join([f"{dtm.all_terms[ind]} ({count})" for ind, count in most_used]))
             # show_hist(list(used_terms.values()), f"{'Docs' if use_n_docs_count else 'Occurences'} per Keyword ({dtm.n_docs} docs, {len(used_terms)} terms)", xlabel="Occurences per Keyword", cutoff_percentile=93)
             # showing hist here is the same as just having verbose=True in the DTM-Constructor in the last line of this func!
-        used_terms_set = set(used_terms.keys())
+        return DocTermMatrix._filter_step2(dtm, set(used_terms.keys()), verbose=verbose, descriptions=descriptions)
+
+    @staticmethod
+    def _filter_step2(dtm, used_terms_set, verbose=False, descriptions=None):
         all_terms_new = dict(enumerate([v for k, v in dtm.all_terms.items() if k in used_terms_set]))
         all_terms_new_rev = {v: k for k, v in all_terms_new.items()}
         dtm_translator = {k: all_terms_new_rev[v] for k, v in dtm.all_terms.items() if k in used_terms_set}

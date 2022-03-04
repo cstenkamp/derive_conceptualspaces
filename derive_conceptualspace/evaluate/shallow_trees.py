@@ -1,0 +1,94 @@
+from collections import Counter
+import warnings
+
+import numpy as np
+import pandas as pd
+import graphviz
+from sklearn import tree
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.model_selection import cross_val_score, train_test_split
+from scipy.stats import rankdata
+
+from derive_conceptualspace.settings import get_setting
+from misc_util.pretty_print import pretty_print as print
+
+CATNAMES = {
+    "Geonames": {1: "stream,lake", 2: "parks,area", 3: "road,railroad", 4: "spot,building,farm", 5: "mountain,hill,rock", 6: "undersea", 7: "forest,heath"}, #can recover from http://www.geonames.org/export/codes.html
+    "Foursquare": {1: "Arts&Entertainment", 2: "College&University", 3: "Food", 4: "Professional&Other", 5: "NightlifeSpots", 6: "GreatOutdoors", 7: "Shops&Services", 8:"Travel&Transport", 9:"Residences"}, #https://web.archive.org/web/20140625051659/http://aboutfoursquare.com/foursquare-categories/
+}
+#TODO move somewhere appropriate (-> dataset-class)
+
+
+# def classify_shallowtree_multi(clusters, embedding, descriptions):
+
+
+
+def classify_shallowtree(clusters, embedding, descriptions, one_vs_rest, dt_depth, test_percentage_crossval, classes=None, do_plot=False):
+    clusters, planes = clusters.values()
+    if classes is None:
+        classes = descriptions.additionals_names[0]
+    else:
+        assert classes in descriptions.additionals_names
+    catnames = CATNAMES[classes] #TODO if it's in, otherwise yadda
+
+    #first I want the distances to the origins of the respective dimensions (induced by the clusters), what induces the respective rankings (see DESC15 p.24u, proj2 of load_semanticspaces.load_projections)
+    axis_dists = [{k: v.dist(embedding[i]) for k, v in planes.items()} for i in range(len(embedding))]
+    best_per_dim = {k: descriptions._descriptions[v].title for k, v in pd.DataFrame(axis_dists).idxmax().to_dict().items()}
+    print("Highest-ranking descriptions per dimension:\n    "+"\n    ".join([f"{k.ljust(max([len(i) for i in best_per_dim.keys()][:20]))}: {v}" for k, v in best_per_dim.items()][:20]))
+    #TODO also show places 2, 3, 4 - hier sehen wir wieder sehr ähnliche ("football stadium", "stadium", "fan" for "goalie")
+    #TODO axis_dists is all I need for the movietuner already!! I can say "give me something like X, only with more Y"
+
+    cats = {i.title: catnames[int(i._additionals[classes])] for i in descriptions._descriptions if i._additionals[classes] is not None}
+    print(f"Using classes from {classes} - {len(cats)}/{len(descriptions)} entities have a class")
+    with_cat = [n for n, i in enumerate(descriptions._descriptions) if i._additionals[classes] is not None]
+    print("Labels:", ", ".join(f"{k}: {v}" for k, v in Counter(cats.values()).items())) #TODO pay attention! consider class_weight etc!
+    consider = pd.DataFrame({descriptions._descriptions[i].title: axis_dists[i] for i in with_cat})
+    ranked = pd.DataFrame([rankdata(i) for i in consider.values], index=consider.index, columns=consider.columns, dtype=int).T
+    axnames = [f",".join([i]+clusters[i][:2]) for i in ranked.columns] #TODO would be better if done from the mentioned ways
+    #TODO Teilweise sind Dinge ja in mehreren Klassen, da muss ich dann ja mehrere trees pro class machen!
+    print(f'Eval-Settings: type: *b*{("one-vs-rest" if one_vs_rest else "all-at-once")}*b*, DT-Depth: *b*{dt_depth}*b*, train-test-split:*b*',
+          f'{test_percentage_crossval}-fold cross-validation' if test_percentage_crossval > 1 else f'{test_percentage_crossval*100:.1f}% in test-set', "*b*")
+    class_percents = sorted([i / len(cats) for i in Counter(cats.values()).values()], reverse=True)
+    if one_vs_rest:
+        scores = {}
+        for cat in set(cats.values()):
+            targets = np.array(np.array(list(cats.values())) == cat, dtype=int)
+            scores[cat] = classify(ranked.values, targets, axnames, ["other", cat], dt_depth, test_percentage_crossval, do_plot=do_plot)
+        print("Per-Class-Scores:", ", ".join(f"{k}: {v:.2f}" for k, v in scores.items()))
+        print(f"Unweighted Mean Accuracy: {sum(scores.values()) / len(scores.values()):.2f}")
+        score = sum([v*Counter(cats.values())[k] for k, v in scores.items()])/len(cats)
+        print(f"Weighted Mean Accuracy: {score:.2f}")
+    else: #all at once
+        if len(set(cats.values())) > 2**dt_depth:
+            warnings.warn(f"There are more classes ({len(set(cats.values()))}) than your decision-tree can possibly classify ({2**dt_depth})")
+        targets = np.array(list(cats.values()))
+        score = classify(ranked.values, targets, axnames, list(catnames.values()), dt_depth, test_percentage_crossval, do_plot=do_plot)
+        print(f"Accuracy: {score:.2f}")
+        if dt_depth == 1:
+            print(f"Maximally achievable Accuracy: {sum(class_percents[:2]):.2f}") #two leaves, one is the (perfectly classified) class 1, the other get's the label for the second-most-common class
+    return score
+
+
+def classify(input, target, axnames, catnames, dt_depth, test_percentage_crossval, do_plot=False):
+    clf = DecisionTreeClassifier(random_state=get_setting("RANDOM_SEED"), max_depth=dt_depth, class_weight="balanced")
+    if test_percentage_crossval > 1:
+        scores = cross_val_score(clf, input, target, cv=test_percentage_crossval)
+        score = scores.mean()
+        clf.fit(input, target) #have to to be able to plot_tree
+        # print(f"Doing {test_percentage_crossval}-fold cross-validation. Best Score: {scores.max():.2f}, Mean: {score}:.2f")
+    else:
+        X_train, X_test, y_train, y_test = train_test_split(input, target, test_size=test_percentage_crossval) #TODO: stratify? https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.train_test_split.html
+        clf.fit(X_train, y_train)
+        score = clf.score(X_test, y_test)
+    if do_plot:
+        plot_tree(clf, axnames, catnames)
+    return score
+
+
+def plot_tree(clf, axnames=None, catnames=None):
+    kwargs = {}
+    if axnames is not None: kwargs.update(feature_names=axnames)
+    if catnames is not None: kwargs.update(class_names=[i.replace("&", " and ") for i in catnames])
+    dot_data = tree.export_graphviz(clf, out_file=None, filled=True, rounded=True, special_characters=True, impurity=False, **kwargs)
+    graph = graphviz.Source(dot_data)
+    graph.render("arg", view=True)

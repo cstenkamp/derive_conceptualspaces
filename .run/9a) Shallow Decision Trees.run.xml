@@ -18,6 +18,7 @@
       <env name="MA_EXTRACTION_METHOD" value="all" />
       <env name="MA_DCM_QUANT_MEASURE" value="count" />
       <env name="MA_KAPPA_WEIGHTS" value="quadratic" />
+      <env name="MA_CLASSIFY_CLASSES" value="Foursquare" />
     </envs>
     <option name="SDK_HOME" value="" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/derive_conceptualspace/cli" />

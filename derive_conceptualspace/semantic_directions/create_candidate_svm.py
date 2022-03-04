@@ -4,6 +4,7 @@ import warnings
 from textwrap import shorten
 import random
 import time
+from collections import Counter
 
 from tqdm import tqdm
 import sklearn.svm
@@ -20,13 +21,13 @@ from derive_conceptualspace.util.threedfigure import ThreeDFigure
 from derive_conceptualspace.util.threadpool import ThreadPool
 from misc_util.pretty_print import pretty_print as print
 
+
 norm = lambda vec: vec/np.linalg.norm(vec)
 vec_cos = lambda v1, v2: np.arccos(np.clip(np.dot(norm(v1), norm(v2)), -1.0, 1.0))  #https://stackoverflow.com/a/13849249/5122790
 #`vec_cos((1, 0, 0), (0, 1, 0)) == vec_cos((1, 0, 0), (0, 1, 1))` --> that's correct, they ARE 90° if they are (1,0,..) and (0,1,..), never mind other coordinates
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 unique = lambda iterable: list({i:None for i in iterable}.keys())
-
 
 def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=None):
     #TODO I am still not sure about if I am calculating with vectors somewhere where when I should be working with points
@@ -107,7 +108,7 @@ class Comparer():
         return self.already_compared[v1+","+v2]
 
 
-def select_salient_terms(metrics, decision_planes, prim_lambda, sec_lambda, metricname):
+def select_salient_terms(metrics, decision_planes, dcm, embedding, prim_lambda, sec_lambda, metricname, verbose=False):
     #TODO waitwaitwait. Am I 100% sure that the intercepts of the decision_planes are irrelevant?!
     #TODO what about those with high negative kappa? Einfach abs-wert nehmen und consideren (AUCH SCHON IM SCHRITT VORHER IF SO)
     print(f"Calculated Metrics: {list(list(metrics.values())[0].keys())}")
@@ -117,12 +118,12 @@ def select_salient_terms(metrics, decision_planes, prim_lambda, sec_lambda, metr
     get_tlambda2 = lambda metrics, lamb1objs, seclamb: [i[0] for i in metrics if i[1] >= sec_lambda and i[0] not in lamb1objs]
     candidates = get_tlambda(metrics, prim_lambda)
     salient_directions = [metrics[0][0],]
-    n_terms = min(len(candidates), 2*len(decision_planes[salient_directions[0]].coef)) #from [DESC15]
+    n_terms = min(len(candidates), get_setting("NDIMS_NCANDS_FACTOR")*len(decision_planes[salient_directions[0]].coef)) #2 in [DESC15]
+    if get_setting("DEBUG"): n_terms = min(n_terms, 15)
     comparer = Comparer(decision_planes, vec_cos)
     #DESC15: "as the ith term, we select the term t minimising max_{j<i}cos(v_t_j, v_t) - In other words, we repeatedly select the term which is least similar to the terms that have already been selected"
     for nterm in tqdm(range(1, n_terms), desc="Finding Salient Directions"):
         cands = set(candidates)-set(salient_directions)
-        #{cand: {compareto: comparer(cand, compareto) for compareto in salient_directions} for cand in cands}
         compares = {cand: min(comparer(cand, compareto) for compareto in salient_directions) for cand in cands}
         #vec_cos(decision_planes[next(iter(cands))].normal, decision_planes[salient_directions[0]].normal)
         salient_directions.append(max(compares.items(), key=lambda x:x[1])[0])
@@ -130,13 +131,28 @@ def select_salient_terms(metrics, decision_planes, prim_lambda, sec_lambda, metr
     compare_vecs = [decision_planes[term].normal for term in salient_directions]
     clusters = {term: [] for term in salient_directions}
     #TODO optionally instead do the cluster-assignment with k-means!
-    for term in tqdm(get_tlambda2(metrics, salient_directions, sec_lambda), desc="Associating the rest to Clusters"):
+    nongreats = get_tlambda2(metrics, salient_directions, sec_lambda)
+    if get_setting("DEBUG"): nongreats = nongreats[:2000]
+    for term in tqdm(nongreats, desc="Associating the rest to Clusters"):
         # "we then associate with each term d_i a Cluster C_i containing all terms from T^{0.1} which are more similar to d_i than to any of the
         # other directions d_j." TODO: experiment with thresholds, if it's extremely unsimilar to ALL just effing discard it!
         clusters[salient_directions[np.argmin([vec_cos(decision_planes[term].normal, vec2) for vec2 in compare_vecs])]].append(term)
-    #TODO an option here to either take mean, or only main-one, or smartly-weighted (I think DESC15 did only main-one)
-    cluster_directions = {key: np.mean(np.array([decision_planes[term].normal for term in [key]+vals]), axis=0) for key, vals in clusters.items()}
     # TODO maybe have a smart weighting function that takes into account the kappa-score of the term and/or the closeness to the original clustercenter (to threshold which cluster they are added to)
+
+    #TODO an option here to either take mean, or only main-one, or smartly-weighted (I think DESC15 did only main-one)
+    if get_setting("CLUSTER_DIRECTION_ALGO") == "mean":
+        cluster_directions = join_clusters_average(clusters, decision_planes)
+    elif get_setting("CLUSTER_DIRECTION_ALGO") == "main":
+        cluster_directions = {term: decision_planes[term] for term in clusters.keys()}
+    elif get_setting("CLUSTER_DIRECTION_ALGO") == "reclassify":
+        cluster_directions = join_clusters_reclassify(clusters, dcm, embedding, verbose=verbose)
+    else:
+        raise NotImplementedError("TODO: weighted and others")
+        #missing: weighted-by-kappa-averaged, weighted-by-distance-to-center-averaged (cosine, cosine+coef)
+    #regarding mean-algorithm: taking the mean of the respective orthogonals seems reasonable, it's the mean direction. However we also care for the actual position of the
+    # hyperplane (to get the actual ranking-wrt-this-feature), which is specified by orthogonal+intercept... and simply averaging the intercepts of it's clustercomponents seems really stupid.
+    #  that however gives us another way to weight which-candidates-may-cluster: the closer the orthogonals (cosine-dist) AND the closer their intercepts, the more we want to have them in a cluster.
+
     return clusters, cluster_directions
     #TODO in this step, there are SO MANY improvements to be made.
     # * I am ordering by kappa and selecting from there on - because "isawyoufirst" is very close to "nature", "nature" will never be picked out as term
@@ -150,7 +166,47 @@ def select_salient_terms(metrics, decision_planes, prim_lambda, sec_lambda, metr
     # * 	a) by the (weighted-by-kappa-or-closeness-to-center) averaged direction of it's members,
     # *     b) by creating a new SVM with "any(or-at-least-x)-of-the-cluster-terms-occur"
 
+################### methods to join clusters ###################
+
+def join_clusters_average(clusters, decision_planes):
+    res = {}
+    for key, vals in clusters.items():
+        mean_coef = np.mean(np.array([decision_planes[term].coef for term in [key]+vals]), axis=0)
+        mean_interc = np.mean(np.array([decision_planes[term].intercept for term in [key]+vals]))
+        res[key] = NDPlane(mean_coef, mean_interc)
+    return res
+
+
+def join_clusters_reclassify(clusters, dcm, embedding, verbose=False):
+    all_cand_mets = {}
+    cluster_directions = {}
+    for k, v in clusters.items():
+        embed = embedding.embedding_
+        dtm = DocTermMatrix.submat_forterms(dcm, [k] + v)
+        combined_quants = dtm.as_csr().toarray().sum(axis=0)
+        if any(i < get_setting("CANDIDATE_MIN_TERM_COUNT") or i > dtm.n_docs-get_setting("CANDIDATE_MIN_TERM_COUNT") for i in Counter(np.array(combined_quants, dtype=bool)).values()):
+            #TODO have an option for doing this GENERALLY for the SVMs (and plot in 3D)
+            c0_inds = np.where(combined_quants <= np.percentile(combined_quants, 30))[0]
+            c1_inds = np.where(combined_quants >= np.percentile(combined_quants, 70))[0]
+            used_inds = sorted(list(set(c0_inds)|set(c1_inds)))
+            embed = embedding.embedding_[used_inds]
+            if verbose:
+                print(f"For cluster {k}, the distribution is {dict(Counter(np.array(combined_quants, dtype=bool)))}, so we'll take the most distinct {get_setting('MOST_DISTINCT_PERCENT')}% ({len(c0_inds)} entities per class)")
+            combined_quants = [combined_quants[i] if i in c1_inds else 0 for i in used_inds]
+        cand_mets, decision_plane, _ = create_candidate_svm(embed, f"cluster:{k}", combined_quants, get_setting("CLASSIFIER"), quant_name=dtm.quant_name)
+        all_cand_mets[k] = cand_mets
+        cluster_directions[k] = decision_plane
+    if verbose:
+        print(f"Scores for {get_setting('CLASSIFIER_SUCCMETRIC')} per cluster:", ", ".join(f"{k}: {v[get_setting('CLASSIFIER_SUCCMETRIC')]:.2f}" for k, v in all_cand_mets.items()))
+    return cluster_directions
+
+
+################### methods to join clusters END ###############
+
+
+
 def create_candidate_svm(embedding, term, quants, classifier, plot_svm=False, descriptions=None, quant_name=None, pgbar=None, **kwargs):
+    #!! term is only used for visualization, and ist must stay that way for CLUSTER_DIRECTION_ALGO = "reclassify" !
     bin_labels = np.array(quants, dtype=bool) # Ensure that regardless of quant_measure this is correct binary classification labels
     # (tmp := len(quants)/(2*np.bincount(bin_labels)))[0]/tmp[1] is roughly equal to bin_labels.mean() so balancing is good
     if classifier == "SVM":
@@ -166,8 +222,8 @@ def create_candidate_svm(embedding, term, quants, classifier, plot_svm=False, de
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         svm.fit(embedding, bin_labels)
-        if w: assert len(w) == 1 and issubclass(w[0].category, sklearn.exceptions.ConvergenceWarning)
-        no_converge = bool(w)
+        if w: assert len(w) == 1 and issubclass(w[0].category, (sklearn.exceptions.ConvergenceWarning, DeprecationWarning))
+        no_converge = (bool(w) and issubclass(w[0].category, sklearn.exceptions.ConvergenceWarning))
     tn, fp, fn, tp = confusion_matrix(bin_labels, svm.predict(embedding)).ravel()
     res = {"accuracy": (tp + tn) / len(quants), "precision": tp / (tp + fp), "recall": tp / (tp + fn), "did_converge": not no_converge}
     res["f_one"] = 2 * (res["precision"] * res["recall"]) / (res["precision"] + res["recall"])

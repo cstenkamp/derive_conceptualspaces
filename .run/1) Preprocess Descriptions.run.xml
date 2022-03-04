@@ -5,12 +5,7 @@
     <option name="PARENT_ENVS" value="true" />
     <envs>
       <env name="PYTHONUNBUFFERED" value="1" />
-      <env name="MA_DATASET" value="siddata2022" />
-      <env name="MA_LANGUAGE" value="de" />
-      <env name="MA_PP_COMPONENTS" value="mfauhtcsldp" />
-      <env name="MA_TRANSLATE_POLICY" value="onlyorig" />
-      <env name="MA_MIN_WORDS_PER_DESC" value="80" />
-      <env name="MA_EXTRACTION_METHOD" value="all" />
+      <env name="MA_DATASET" value="placetypes" />
     </envs>
     <option name="SDK_HOME" value="" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/derive_conceptualspace/cli" />

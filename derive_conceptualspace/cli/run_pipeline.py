@@ -54,9 +54,12 @@ from derive_conceptualspace.unfinished_commands import (
     rank_saldirs as rank_saldirs_base,
     show_data_info as show_data_info_base,
 )
+from derive_conceptualspace.evaluate.shallow_trees import (
+    classify_shallowtree as classify_shallowtree_base,
+)
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
 from derive_conceptualspace.util.interruptible_funcs import InterruptibleLoad
-from derive_conceptualspace.pipeline import featureaxes_loader, CustomContext, load_lang_translate_files, apply_dotenv_vars
+from derive_conceptualspace.pipeline import featureaxes_loader, CustomContext, load_lang_translate_files, apply_dotenv_vars, cluster_loader
 
 logger = logging.getLogger(basename(__file__))
 
@@ -319,14 +322,15 @@ def create_candidate_svm(ctx):
 @click.option("--classifier-succmetric", type=str)
 @click_pass_add_context
 def cluster_candidates(ctx):
-    #TODO decide on ONE name! "cluster_candidates", "cluster_feature_axes", "select_salient_terms"
-    #TODO this one doesn't need to load embedding etc...!! only slows down!
+    #TODO decide on ONE for the func! "cluster_candidates", "cluster_feature_axes", "select_salient_terms"
     ctx.obj["featureaxes"] = ctx.obj["json_persister"].load(None, "featureaxes", loader=featureaxes_loader)
     decision_planes, metrics = ctx.obj["featureaxes"].values()
-    clusters, directions = select_salient_terms_base(metrics, decision_planes, prim_lambda=ctx.get_config("prim_lambda"), sec_lambda=ctx.get_config("sec_lambda"), metricname=ctx.get_config("classifier_succmetric"))
+    clusters, directions = select_salient_terms_base(metrics, decision_planes, ctx.obj["filtered_dcm"], ctx.obj["embedding"],
+                                                     prim_lambda=ctx.get_config("prim_lambda"), sec_lambda=ctx.get_config("sec_lambda"),
+                                                     metricname=ctx.get_config("classifier_succmetric"), verbose=ctx.get_config("verbose"))
     ctx.obj["json_persister"].save("clusters.json", clusters=clusters, directions=directions)
     #TODO this needs WAY MORE Parameters & ways-how-to-do-it, see bottom of select_salient_terms_base
-
+    #TODO im JsonPersister abbilden können wenn bestimmte dependencies or configs nur für gewisse parameter relevant sind (filtered_dcm & embedding brauch ich nur bei reclassify)
 
 @generate_conceptualspace.command()
 @click_pass_add_context
@@ -337,25 +341,18 @@ def show_data_info(ctx):
 
 
 @generate_conceptualspace.command()
+@click.option("--one-vs-rest/--no-one-vs-rest", type=bool)
+@click.option("--dt-depth", type=int)
+@click.option("--test-percentage-crossval", type=float)
+@click.option("--classes", type=str)
 @click_pass_add_context
 def decision_trees(ctx):
-    import pandas as pd
-    ctx.obj["pp_descriptions"] = ctx.p.load(None, "pp_descriptions", loader=DescriptionList.from_json)
-    ctx.obj["featureaxes"] = ctx.obj["json_persister"].load(None, "featureaxes", loader=featureaxes_loader)
-    ctx.obj["clusters"] = ctx.p.load(None, "clusters")
-    #first I want the distances to the origins of the respective dimensions (induced by the clusters), what induces the respective rankings! (see DESC15 p.24u, proj2 of load_semanticspaces.load_projections)
-    embedding = ctx.obj["embedding"].embedding_
-    #TODO with another cluster-center-finding-algorithm, I cannot recover the NDPlane from an earlier step and have to save it instead of only the direction!!!!
-    planes = {k: ctx.obj["featureaxes"]["decision_planes"][k] for k in ctx.obj["clusters"]["directions"].keys()}
-    # import numpy as np; norm = lambda vec: vec / np.linalg.norm(vec), assert all(np.allclose(norm(v.normal), norm(ctx.obj["clusters"]["directions"][k])) for k, v in planes.items())
-    axis_dists = [{k: v.dist(embedding[i]) for k, v in planes.items()} for i in range(len(embedding))]
-    df = pd.DataFrame(axis_dists)
-    best_per_dim = {k: ctx.obj["pp_descriptions"]._descriptions[v].title for k, v in df.idxmax().to_dict().items()}
-    print("Highest-ranking descriptions per dimension:\n    "+"\n    ".join([f"{k.ljust(max([len(i) for i in best_per_dim.keys()][:20]))}: {v}" for k, v in best_per_dim.items()][:20]))
-    #TODO this is all I need for the movietuner already!! I can say "give me something like X, only with more Y"
+    descriptions = ctx.p.load(None, "pp_descriptions", loader=DescriptionList.from_json)
+    clusters = ctx.p.load(None, "clusters", loader=cluster_loader)
+    classify_shallowtree_base(clusters, ctx.obj["embedding"].embedding_, descriptions,
+                              one_vs_rest=ctx.get_config("DT_ONE_VS_REST"), dt_depth=ctx.get_config("DT_DEPTH"),
+                              test_percentage_crossval=ctx.get_config("TEST_PERCENTAGE_CROSSVAL"), classes=ctx.get_config("CLASSIFY_CLASSES"))
 
-    with_cat = [n for n, i in enumerate(ctx.obj["pp_descriptions"]._descriptions) if i._additionals["Geonames"] is not None]
-    print()
 
 
 

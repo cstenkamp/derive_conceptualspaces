@@ -270,6 +270,7 @@ class CustomContext(ObjectWrapper):
 ########################################################################################################################
 ########################################################################################################################
 
+cluster_loader = lambda **di: dict(clusters=di["clusters"], directions={k: NDPlane(np.array(v[1][0]),v[1][1]) for k, v in di["directions"].items()})
 featureaxes_loader = lambda **di: dict(decision_planes={k: NDPlane(np.array(v[1][0]),v[1][1]) for k, v in di["decision_planes"].items()}, metrics=di["metrics"])
 #TODO move this somewhere appropriate
 

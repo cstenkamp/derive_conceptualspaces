@@ -8,7 +8,6 @@
       <env name="MA_CLASSIFIER_SUCCMETRIC" value="kappa_rank2rank_onlypos_max" />
       <env name="MA_DATASET" value="placetypes" />
       <env name="MA_LANGUAGE" value="en" />
-      <env name="MA_DEBUG" value="False" />
       <env name="MA_PP_COMPONENTS" value="none" />
       <env name="MA_TRANSLATE_POLICY" value="onlyorig" />
       <env name="MA_MIN_WORDS_PER_DESC" value="50" />
