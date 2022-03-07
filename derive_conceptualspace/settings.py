@@ -1,3 +1,5 @@
+import decimal
+
 import psutil
 import contextlib
 from os.path import abspath, dirname, join
@@ -204,6 +206,8 @@ def cast_config(k, v):
         v = False
     if isinstance(v, list):
         v = tuple(v)
+    if isinstance(v, decimal.Decimal):
+        v = float(v)
     if "DEFAULT_" + k in globals() and type(globals()["DEFAULT_" + k]) != type(v) and (v != None and globals()["DEFAULT_" + k] != None) and not all(i in (int, float) for i in (type(globals()["DEFAULT_" + k]), type(v))):
         raise Exception(f"Default {k}: {globals()['DEFAULT_' + k] }, should-be: {v}")
     return v

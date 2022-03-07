@@ -1,4 +1,5 @@
 """https://stackoverflow.com/a/47626762/5122790"""
+import decimal
 import inspect
 import json
 import os
@@ -243,20 +244,7 @@ class JsonPersister():
                 )
 
     def get_file_config(self, filepath):
-        if not isfile(filepath) and isfile(join(self.in_dir, filepath)):
-            filepath = join(self.in_dir, filepath)
-        try:
-            with open(filepath) as rfile:
-                used_conf = next(ijson.items(rfile, "used_influentials")) #next(ijson.items(rfile, "used_config"))[0]
-                rfile.seek(0)
-                used_files = next(ijson.items(rfile, "loaded_files"))
-        except Exception as e:
-            print(f"Error for {filepath}")
-            raise e
-        used_conf = {k: v for k, v in used_conf.items() if k not in set(settings.MAY_DIFFER_IN_DEPENDENCIES)-set(standardize_config_name(i) for i in self.dirname_vars())}
-        all_used_conf = dict(ChainMap(*(i["metadata"].get("used_influentials", {}) for i in used_files.values()), used_conf))
-        return all_used_conf
-
+        return get_file_config(self.in_dir, filepath, self.dirname_vars())
 
 
     def get_file_by_config(self, subdir, save_basename, postfix=None, extension=".json", check_other_debug=True):
@@ -477,3 +465,19 @@ class JsonPersister():
             else:
                 assert (not obj[equalkey] and not loaded) or obj[equalkey] == loaded
         return obj
+
+
+def get_file_config(base_dir, filepath, dirname_vars):
+    if not isfile(filepath) and isfile(join(base_dir, filepath)):
+        filepath = join(base_dir, filepath)
+    try:
+        with open(filepath) as rfile:
+            used_conf = next(ijson.items(rfile, "used_influentials")) #next(ijson.items(rfile, "used_config"))[0]
+            rfile.seek(0)
+            used_files = next(ijson.items(rfile, "loaded_files"))
+    except Exception as e:
+        print(f"Error for {filepath}")
+        raise e
+    used_conf = {k: v for k, v in used_conf.items() if k not in set(settings.MAY_DIFFER_IN_DEPENDENCIES)-set(standardize_config_name(i) for i in dirname_vars)}
+    all_used_conf = dict(ChainMap(used_conf, *(i["metadata"].get("used_influentials", {}) for i in used_files.values())))
+    return {k: float(v) if isinstance(v, decimal.Decimal) else v for k, v in all_used_conf.items()}

@@ -92,7 +92,11 @@ def get_all(data_base, data_set, n_dims):
     #proj1: 40*20 (same as cluster_directions), proj2: 15000*40
     #proj2 are the distances to the origins of the respective dimensions (induced by the clusters), what induces the respective rankings! (see DESC15 p.24u)
     mds_dict = dict(zip(names, list(mds)))
-    assert mds_dict.keys() == classes.keys()
+    if data_set == "movies":
+        assert mds_dict.keys() == classes.keys()
+    else:
+        assert set(mds_dict.keys()) > set(classes.keys())
+        classes = {k: classes.get(k) for k in mds_dict.keys()}
     #soo let's use all data. For every movie, there's a something in `names`, `mds`, `classes` and `proj2` => `mds_class_dict`
     #`canditerms` uses the `clusters`, `proj1` is the same as `cluster_directions`
     #missing: `feat_vecs` (idk how to map these to names), `all_terms` (extracted phrases are ngrams),
@@ -260,17 +264,24 @@ def get_grouped_candidates(data_base, data_set, mds_dimensions, clusters=None, c
                 canditerm_clusters.append(None)
     elif data_set == "places":
         for word, vec in zip(*canditerms):
-            raise NotImplementedError()
+            if check_cluster(clusters, word, cluster_directions) is not None:
+                canditerm_clusters.append(check_cluster(clusters, word, cluster_directions))
+            else:
+                assert word not in alls
+                canditerm_clusters.append(None)
     else:
         raise NotImplementedError()
     assert len(canditerm_clusters) == len(canditerms[0])
-    canditerms = [i for i in zip(*canditerms, canditerm_clusters) if i[4] is not None]
+    canditerms = [i for i in zip(*canditerms, canditerm_clusters) if i[-1] is not None]
     assert not any(i is None for i in cluster_directions.keys())
-    assert not alls-set(i[3] for i in canditerms)
-    assert set(i[4] for i in canditerms) == set(cluster_directions.keys())
+    if data_set == "movies":
+        assert not alls-set(i[3] for i in canditerms)
+    else:
+        assert not alls-set(i[0] for i in canditerms)
+    assert set(i[-1] for i in canditerms) == set(cluster_directions.keys())
     return canditerms, cluster_directions
 
 
 
 if __name__ == "__main__":
-    get_all_goodkappa()
+    main()

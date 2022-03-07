@@ -70,6 +70,7 @@ def fmt(*args, isnotebook=False):
         to_print = to_print.split(orig)
         to_print[1::2] = [rep + i + translator["*end*"] for i in to_print[1::2]]
         to_print = "".join(to_print)
+    if isnotebook: to_print = to_print.replace("\n", "<br>")
     return to_print
 
 ########################################################################################################################

@@ -56,6 +56,7 @@ from derive_conceptualspace.unfinished_commands import (
 )
 from derive_conceptualspace.evaluate.shallow_trees import (
     classify_shallowtree as classify_shallowtree_base,
+    classify_shallowtree_multi as classify_shallowtree_multi_base,
 )
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
 from derive_conceptualspace.util.interruptible_funcs import InterruptibleLoad
@@ -341,18 +342,18 @@ def show_data_info(ctx):
 
 
 @generate_conceptualspace.command()
-@click.option("--one-vs-rest/--no-one-vs-rest", type=bool)
-@click.option("--dt-depth", type=int)
-@click.option("--test-percentage-crossval", type=float)
-@click.option("--classes", type=str)
+# @click.option("--one-vs-rest/--no-one-vs-rest", type=bool)
+# @click.option("--dt-depth", type=int)
+# @click.option("--test-percentage-crossval", type=float)
+# @click.option("--classes", type=str)
 @click_pass_add_context
 def decision_trees(ctx):
     descriptions = ctx.p.load(None, "pp_descriptions", loader=DescriptionList.from_json)
     clusters = ctx.p.load(None, "clusters", loader=cluster_loader)
-    classify_shallowtree_base(clusters, ctx.obj["embedding"].embedding_, descriptions,
-                              one_vs_rest=ctx.get_config("DT_ONE_VS_REST"), dt_depth=ctx.get_config("DT_DEPTH"),
-                              test_percentage_crossval=ctx.get_config("TEST_PERCENTAGE_CROSSVAL"), classes=ctx.get_config("CLASSIFY_CLASSES"))
-
+    # classify_shallowtree_base(clusters, ctx.obj["embedding"].embedding_, descriptions,
+    #                           one_vs_rest=ctx.get_config("DT_ONE_VS_REST"), dt_depth=ctx.get_config("DT_DEPTH"),
+    #                           test_percentage_crossval=ctx.get_config("TEST_PERCENTAGE_CROSSVAL"), classes=ctx.get_config("CLASSIFY_CLASSES"), verbose=ctx.get_config("VERBOSE"))
+    classify_shallowtree_multi_base(clusters, ctx.obj["embedding"].embedding_, descriptions, verbose=ctx.get_config("VERBOSE"))
 
 
 

@@ -113,17 +113,18 @@ class CustomContext(ObjectWrapper):
             elif self.get_config("RANDOM_SEED"):
                 print(f"*r*Using a random seed ({self.get_config('RANDOM_SEED')}) even though DEBUG=False!*r*")
 
-    def init_context(self, load_envfile=False, load_conffile=True): #works for both a click-Context and my custom one
+    def init_context(self, load_envfile=False, load_conffile=True, ignore_envs=False): #works for both a click-Context and my custom one
         if not self._initialized:
             #first of all, load settings from env-vars and, if you have it by then, from config-file
-            if load_envfile and os.environ.get(ENV_PREFIX+"_"+"ENV_FILE"):
-                load_dotenv(os.environ.get(ENV_PREFIX+"_"+"ENV_FILE"))
-            relevant_envvars = {k[len(ENV_PREFIX)+1:]: v for k, v in os.environ.items() if k.startswith(ENV_PREFIX+"_")}
-            for param, val in relevant_envvars.items():
-                if param.startswith("CONF_FORCE_"): #that's how snakemake enforces the config-file, in that situation conf-file has higher prio than env-var
-                    self.set_config(param[len("CONF_FORCE_"):], val, "smk_wildcard")
-                else:
-                    self.set_config(param, val, "env_vars")
+            if not ignore_envs:
+                if load_envfile and os.environ.get(ENV_PREFIX+"_"+"ENV_FILE"):
+                    load_dotenv(os.environ.get(ENV_PREFIX+"_"+"ENV_FILE"))
+                relevant_envvars = {k[len(ENV_PREFIX)+1:]: v for k, v in os.environ.items() if k.startswith(ENV_PREFIX+"_")}
+                for param, val in relevant_envvars.items():
+                    if param.startswith("CONF_FORCE_"): #that's how snakemake enforces the config-file, in that situation conf-file has higher prio than env-var
+                        self.set_config(param[len("CONF_FORCE_"):], val, "smk_wildcard")
+                    else:
+                        self.set_config(param, val, "env_vars")
             if self.get_config("conf_file"):
                 if load_conffile:
                     self.read_configfile()
@@ -298,11 +299,11 @@ class SnakeContext():
     # TODO das autoloader_di ist schon ne Mischung von Code und Daten, aber wohin sonst damit?
 
     @staticmethod
-    def loader_context(load_envfile=True, config=None, load_conffile=True, **kwargs): #for jupyter
+    def loader_context(load_envfile=True, config=None, load_conffile=True, ignore_envs=False, **kwargs): #for jupyter
         ctx = CustomContext(SnakeContext(**kwargs), silent=kwargs.get("silent", False))
         for k, v in (config or {}).items():
             ctx.set_config(k, v, "force")
-        ctx.init_context(load_envfile=load_envfile, load_conffile=load_conffile)
+        ctx.init_context(load_envfile=load_envfile, load_conffile=load_conffile, ignore_envs=ignore_envs)
         if not kwargs.get("silent"):
             ctx.print_important_settings()
         return ctx

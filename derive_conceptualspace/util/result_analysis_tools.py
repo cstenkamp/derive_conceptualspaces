@@ -3,15 +3,18 @@ from os.path import join, dirname, splitext
 from parse import parse
 import math
 import warnings
+import re
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-from derive_conceptualspace import settings
 from misc_util.pretty_print import display
 
+from derive_conceptualspace import settings
+from derive_conceptualspace.util.jsonloadstore import get_file_config
 
-def getfiles_allconfigs(basename, dataset=None, base_dir=None, ext=".json", only_nondebug=True, verbose=True):
+
+def getfiles_allconfigs(basename, dataset=None, base_dir=None, ext=".json", only_nondebug=True, parse_all=False, verbose=True):
     dataset = dataset or os.environ["MA_DATASET"]
     base_dir = base_dir or os.environ["MA_BASE_DIR"]
     candidates = [join(path, name)[len(base_dir)+1:] for path, subdirs, files in os.walk(base_dir) for
@@ -23,14 +26,17 @@ def getfiles_allconfigs(basename, dataset=None, base_dir=None, ext=".json", only
         if verbose:
             warnings.warn("There are files that won't be considered here: \n    "+"\n    ".join(leftovers))
         candidates = [i for i in candidates if i not in leftovers]
-    configs = [parse(os.sep.join(settings.DIR_STRUCT+[basename+ext]), cand).named for cand in candidates if parse(os.sep.join(settings.DIR_STRUCT+[basename+ext]), cand)]
+    if parse_all:
+        configs = [get_file_config(os.environ["MA_BASE_DIR"], cand, re.findall(r'{(.*?)}', "".join(settings.DIR_STRUCT))) for cand in candidates]
+    else:
+        configs = [parse(os.sep.join(settings.DIR_STRUCT+[basename+ext]), cand).named for cand in candidates if parse(os.sep.join(settings.DIR_STRUCT+[basename+ext]), cand)]
     if only_nondebug:
-        configs = [i for i in configs if i["debug"] not in ["True", True]]
+        configs = [i for i in configs if (i.get("debug") or i["DEBUG"]) not in ["True", True]]
     if not configs:
         raise FileNotFoundError("There are no usable configs!")
     print_cnf = {k: list(set(dic[k] for dic in configs)) for k in configs[0]}
-    print_cnf = {k: [str(i) for i in sorted([int(j) for j in v])] if all(k.isnumeric() for k in v) else sorted(v) for k, v in print_cnf.items()}
-    configs = sorted(configs, key=lambda elem: sum([print_cnf[k].index(v)*(10**(len(elem)-n)) for n, (k, v) in enumerate(elem.items())]))
+    print_cnf = {k: [str(i) for i in sorted([int(j) for j in v])] if all(str(k2).isnumeric() for k2 in v) else sorted([str(j) for j in v]) for k, v in print_cnf.items()}
+    configs = sorted(configs, key=lambda elem: sum([print_cnf[k].index(str(v))*(10**(len(elem)-n)) for n, (k, v) in enumerate(elem.items())]))
     print_cnf = {k: v[0] if len(v) == 1 else v for k, v in print_cnf.items()}
     if verbose:
         display(f"There are {len(configs)} different parameter-combis for dataset *b*{os.environ['MA_DATASET']}*b*:")

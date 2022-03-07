@@ -30,16 +30,14 @@ class Dataset(BaseDataset):
 def get_classes(data_base, what):
     assert what in ["Foursquare", "Geonames", "CYC"] or all(i in ["Foursquare", "Geonames", "CYC"] for i in what)
     names = get_names(data_base, "places")
-    if not isinstance(what, list):
-        what = [what]
     alls = {}
-    for wha in what:
+    for wha in what if isinstance(what, list) else [what]:
         if wha in ["Foursquare", "Geonames"]:
             classes = {k: int(v) for k, v in dict(np.loadtxt(join(data_base, "places", wha+"Classes.txt"), dtype=str, delimiter="\t")).items()}
         else:
             raise NotImplementedError("TODO: CYC")
         alls[wha] = {name: classes.get(name) for name in names if name in classes}
-    return alls
+    return alls if isinstance(what, list) else alls[what]
 
 
 def get_candidateterms(data_base, data_set, n_dims, **kwargs):

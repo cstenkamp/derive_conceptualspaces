@@ -162,6 +162,22 @@ class ThreeDFigure():
             proj = ortho_projection_affine(point, onto)
             self.add_line(point, proj, **kwargs)
 
+    def add_quader(self, coords, name=None, color="#DC143C"):
+        self.fig.add_trace(
+            go.Mesh3d(
+                x=coords[0], y=coords[1], z=coords[2],
+                i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
+                j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
+                k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
+                opacity=0.6,
+                color=color,
+                flatshading=True,
+                name=name,
+                showlegend=True,
+            )
+        )
+
+
     def __enter__(self, *args):
         return self
 
