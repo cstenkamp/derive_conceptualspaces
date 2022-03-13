@@ -46,6 +46,7 @@ class ThreeDFigure():
             paper_bgcolor="White",
             title=name))
         self.fig.update_layout(legend={'itemsizing': 'constant'})
+        self.shown_legendgroups = [] #https://stackoverflow.com/a/26940058/5122790
 
     def _transform(self, points, inverse=False):
         trafo_fn = self.back_trafo_fn if inverse else self.trafo_fn
@@ -173,9 +174,11 @@ class ThreeDFigure():
                 color=color,
                 flatshading=True,
                 name=name,
-                showlegend=True,
+                showlegend=name not in self.shown_legendgroups,
+                legendgroup=name,
             )
         )
+        self.shown_legendgroups.append(name)
 
 
     def __enter__(self, *args):

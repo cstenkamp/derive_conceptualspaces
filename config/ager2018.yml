@@ -7,7 +7,7 @@
 # Cand-Merging:
 
 max_ngram:                    1
-classifier_succmetric:        ["cohen_kappa", "accuracy", "ndcg"]
+classifier_succmetric:        [cohen_kappa, accuracy, ndcg]
 dcm_quant_measure:            ppmi
 
 #TODO finish up

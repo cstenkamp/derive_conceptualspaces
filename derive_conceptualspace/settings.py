@@ -109,9 +109,9 @@ DEFAULT_CLUSTER_DIRECTION_ALGO = "reclassify" #one of "mean", "main", "reclassif
 DEFAULT_MOST_DISTINCT_PERCENT = 30 #for cluster-dir-algo "reclassify": if there are no c_{neg} entities, take the best/worst 30% for the classification (#TODO use this for the main Classifier)
 
 ## 9) Shallow-Decision-Trees for Evaluation
-DEFAULT_DT_DEPTH = 3 #None for unbound trees
-DEFAULT_DT_ONE_VS_REST = True #if trees for all-at-once (can only get 2**dt_depth different classes!) or one-vs-rest
-DEFAULT_TEST_PERCENTAGE_CROSSVAL = 5 #if an int, we will do X-fold-crossvalidation, if a 0<float<1, this will be the test-percentage
+DEFAULT_DT_DEPTH = 1 #None for unbound trees
+DEFAULT_DT_ONE_VS_REST = False #if trees for all-at-once (can only get 2**dt_depth different classes!) or one-vs-rest
+DEFAULT_TEST_PERCENTAGE_CROSSVAL = 0 #if an int, we will do X-fold-crossvalidation, if a 0<float<1, this will be the test-percentage
 
 ########################################################################################################################
 ######################################### settings regarding the architecture ##########################################

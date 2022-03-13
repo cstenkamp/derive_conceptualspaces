@@ -28,15 +28,18 @@ def classify_shallowtree_multi(clusters, embedding, descriptions, verbose=False)
         for test_percentage_crossval in [0.33, 0.5, 4, 5]:
             for one_vs_rest in [True, False]:
                 for dt_depth in [1,2,3]:
-                    print("=="*50)
-                    score = classify_shallowtree(clusters, embedding, descriptions, one_vs_rest, dt_depth, test_percentage_crossval, classes, do_plot=False, verbose=False, return_features=False)
-                    results[(classes, test_percentage_crossval, one_vs_rest, dt_depth)] = score
-    df = pd.DataFrame(results, index=["Accuracy"], columns=pd.MultiIndex.from_tuples([i for i in results.keys()], names=("classes","test%/Xval","1vsRest","Tree-Depth"))).T
-    print(df)
+                    for balance_classes in [True, False]:
+                        print("=="*50)
+                        score = classify_shallowtree(clusters, embedding, descriptions, one_vs_rest, dt_depth, test_percentage_crossval, classes, do_plot=False, verbose=False, return_features=False, balance_classes=balance_classes)
+                        results[(classes, test_percentage_crossval, one_vs_rest, dt_depth, balance_classes)] = score
+    df = pd.DataFrame(results, index=["Accuracy"], columns=pd.MultiIndex.from_tuples([i for i in results.keys()], names=("classes","test%/Xval","1vsRest","Tree-Depth","balanced"))).T
+    with pd.option_context('display.max_rows', 51, 'display.max_columns', 20, 'display.expand_frame_repr', False,
+                           'display.max_colwidth', 20, 'display.float_format', '{:.4f}'.format):
+        print(df)
     return df
 
 def classify_shallowtree(clusters, embedding, descriptions, one_vs_rest, dt_depth, test_percentage_crossval,
-                         classes=None, do_plot=False, verbose=False, return_features=True):
+                         classes=None, do_plot=False, verbose=False, return_features=True, balance_classes=True):
     clusters, planes = clusters.values()
     if classes is None:
         classes = descriptions.additionals_names[0]
@@ -65,12 +68,14 @@ def classify_shallowtree(clusters, embedding, descriptions, one_vs_rest, dt_dept
     class_percents = sorted([i / len(cats) for i in Counter(cats.values()).values()], reverse=True)
     features_outvar = []
     all_targets = []
+    all_classes = []
     if one_vs_rest:
         scores = {}
         for cat in set(cats.values()):
             targets = np.array(np.array(list(cats.values())) == cat, dtype=int)
-            scores[cat] = classify(ranked.values, targets, axnames, ["other", cat], dt_depth, test_percentage_crossval, do_plot=do_plot, features_outvar=features_outvar)
+            scores[cat] = classify(ranked.values, targets, axnames, ["other", cat], dt_depth, test_percentage_crossval, do_plot=do_plot, features_outvar=features_outvar, balance_classes=balance_classes)
             all_targets.append(targets)
+            all_classes.append(["other", cat])
         print("Per-Class-Scores:", ", ".join(f"{k}: {v:.2f}" for k, v in scores.items()))
         print(f"Unweighted Mean Accuracy: {sum(scores.values()) / len(scores.values()):.2f}")
         score = sum([v*Counter(cats.values())[k] for k, v in scores.items()])/len(cats)
@@ -80,21 +85,27 @@ def classify_shallowtree(clusters, embedding, descriptions, one_vs_rest, dt_dept
             warnings.warn(f"There are more classes ({len(set(cats.values()))}) than your decision-tree can possibly classify ({2**dt_depth})")
         targets = np.array(list(cats.values()))
         all_targets.append(targets)
-        score = classify(ranked.values, targets, axnames, list(catnames.values()), dt_depth, test_percentage_crossval, do_plot=do_plot, features_outvar=features_outvar)
+        score = classify(ranked.values, targets, axnames, list(catnames.values()), dt_depth, test_percentage_crossval, do_plot=do_plot, features_outvar=features_outvar, balance_classes=balance_classes)
+        all_classes.append(list(catnames.values()))
         print(f"Accuracy: {score:.2f}")
         if dt_depth == 1:
+            print(f"Baseline Accuracy: {class_percents[0]:.2f}") #all into one class. Praxis is often worse than this because we have class_weight=balanced.
             print(f"Maximally achievable Accuracy: {sum(class_percents[:2]):.2f}") #two leaves, one is the (perfectly classified) class 1, the other get's the label for the second-most-common class
     if return_features:
-        return [features_outvar, ranked, all_targets, list(scores.values()) if one_vs_rest else [score]]
+        return [features_outvar, ranked, all_targets, list(scores.values()) if one_vs_rest else [score], all_classes]
     return score
 
 
-def classify(input, target, axnames, catnames, dt_depth, test_percentage_crossval, do_plot=False, features_outvar=None):
-    clf = DecisionTreeClassifier(random_state=get_setting("RANDOM_SEED"), max_depth=dt_depth, class_weight="balanced")
+def classify(input, target, axnames, catnames, dt_depth, test_percentage_crossval, do_plot=False, features_outvar=None, balance_classes=True):
+    # input[:, 99] = (target == "Shops&Services"); axnames[99] = "is_shop"
+    # input[:, 98] = (target == "Food"); axnames[98] = "is_food"
+    kwargs = dict(class_weight="balanced") if balance_classes else {}
+    clf = DecisionTreeClassifier(random_state=get_setting("RANDOM_SEED"), max_depth=dt_depth, **kwargs)
     if test_percentage_crossval > 1:
         scores = cross_val_score(clf, input, target, cv=test_percentage_crossval)
         score = scores.mean()
-        clf.fit(input, target) #have to to be able to plot_tree
+        clf.fit(input, target)
+        assert clf.score(input, target) == np.array([res==target[i] for i, res in enumerate(clf.predict(input))]).mean()#have to to be able to plot_tree
         # print(f"Doing {test_percentage_crossval}-fold cross-validation. Best Score: {scores.max():.2f}, Mean: {score}:.2f")
     elif test_percentage_crossval == 0:
         warnings.warn("Using the full data as training set without a test-set!")
@@ -105,9 +116,9 @@ def classify(input, target, axnames, catnames, dt_depth, test_percentage_crossva
         clf.fit(X_train, y_train)
         score = clf.score(X_test, y_test)
     if do_plot:
-        plot_tree(clf, axnames, catnames)
+        plot_tree(clf, axnames, clf.classes_)
     if features_outvar is not None:
-        features_outvar.append((catnames, clf))
+        features_outvar.append(clf)
     return score
 
 
