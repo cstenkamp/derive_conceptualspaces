@@ -143,7 +143,8 @@ with set_noninfluentials(): #this context-manager adds all settings from here to
                   "{pp_components}_{translate_policy}_minwords{min_words_per_desc}",
                   "embedding_{quantification_measure}",
                   "{embed_algo}_{embed_dimensions}d",
-                  "{extraction_method}_{dcm_quant_measure}_{kappa_weights}"]
+                  "{extraction_method}_{dcm_quant_measure}_{kappa_weights}",
+                  "{classifier_succmetric}_{prim_lambda}_{sec_lambda}_{cluster_direction_algo}"]
 
     FORBIDDEN_COMBIS = ["tsne_50d", "tsne_100d"]
     NORMALIFY_PARAMS = ["QUANTIFICATION_MEASURE", "EXTRACTON_METHOD", "EMBED_ALGO", "DCM_QUANT_MEASURE"]  #for all params that are in this, eg `Tf-IdF` will become `tfidf`

@@ -1,4 +1,4 @@
-#! /home/student/c/cstenkamp/miniconda/envs/watcher/bin/python3
+#! /home/student/c/cstenkamp/miniconda/envs/derive_conceptualspaces/bin/python3
 
 import argparse
 import os

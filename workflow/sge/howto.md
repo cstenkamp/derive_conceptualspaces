@@ -48,7 +48,7 @@ Sobald das envvargedöns hier richtig ist auch empfehlungen in dieses file schre
 
 get stuff from grid:
 ```
-crsync grid:/home/student/c/cstenkamp/custom_acctfile.yml "grid:/home/student/c/cstenkamp/smk_runner.*" /home/chris/Documents/UNI_neu/Masterarbeit/data_new/backups/grid_snakemake/curr/ && crsync grid:/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/./logs/sge/ --relative /home/chris/Documents/UNI_neu/Masterarbeit/data_new/backups/grid_snakemake/curr/
+crsync grid:/home/student/c/cstenkamp/custom_acctfile.yml "grid:/home/student/c/cstenkamp/smk_runner.*" /home/chris/Documents/UNI_neu/Masterarbeit/data_new/backups/grid_snakemake/curr/ && crsync grid:/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/./logs/sge/ --relative /home/chris/Documents/UNI_neu/Masterarbeit/data_new/backups/grid_snakemake/curr/ && crsync grid:/net/projects/scratch/winter/valid_until_31_July_2022/cstenkamp/data/report.html /home/chris/Documents/UNI_neu/Masterarbeit/data_new/backups/grid_snakemake/curr/ 
 ```
 
 

@@ -1,4 +1,4 @@
-#! /home/student/c/cstenkamp/miniconda/envs/watcher/bin/python3
+#! /home/student/c/cstenkamp/miniconda/envs/derive_conceptualspaces/bin/python3
 
 #TODO be able to analyze 737922 from backup-28-02-2022. If that shows me the error, this code achieved it's goal.
 
@@ -67,10 +67,15 @@ def split_all(errorfiles):
 
     start_inds = [n for n, i in enumerate(job_strings) if i.startswith("rule") and i.endswith(":")]
     indiv_rules = [[j.strip() for j in job_strings[start_inds[i]-1:start_inds[i+1]-1]] for i in range(len(start_inds)-1)]
+    #TODO rather use the fact dass die Sachen zur Rule noch eingerückt sind!! also alles eingerückte nach start_inds, und dann jeweils noch die nächstmöglichen
+    #  reihen die mit any of ["Will submit the following", "Error-File can be found at", "Submitted job"] anfangen, umrühren, fertig.
     job_infos = []
     leftover_text = []
     for nrule, rule in enumerate(indiv_rules):
-        job_infos.append(dict([j.split(": ") for j in rule[2:([n for n, j in enumerate(rule) if j.startswith("Will submit") or j.startswith("Resuming incomplete job")][0]) if any(i.startswith("Will submit") or i.startswith("Resuming incomplete job") for i in rule) else None]]))
+        usable_lines = [j.split(": ") for j in rule[2:([n for n, j in enumerate(rule) if j.startswith("Will submit") or j.startswith("Resuming incomplete job")][0]) if any(i.startswith("Will submit") or i.startswith("Resuming incomplete job") for i in rule) else None]]
+        usable_if = lambda x: len(x) == 2 and not any(j in ": ".join(x) for j in ["failed because of an error"])
+        leftover_text.extend([": ".join(i) for i in usable_lines if not usable_if(i)])
+        job_infos.append(dict(i for i in usable_lines if usable_if(i)))
         job_infos[-1]["rule"] = rule[1][len("rule "):-1]
         job_infos[-1]["timestamp"] = datetime.strptime(rule[0][1:-1], "%a %b %d %H:%M:%S %Y")
 
@@ -99,6 +104,8 @@ def split_all(errorfiles):
         elif any(i.startswith("Resuming incomplete job") for i in rule):
             job_infos[-1]["external_id"] = [i for i in rule if i.startswith("Resuming incomplete job")][0].split("'")[1]
             job_infos[-1]["resuming"] = True
+        else:
+            print()
     pure_resumes = []
     for resumed_job in [i for i in job_infos if i.get("resuming")]:
         orig_job = [i for i in job_infos if i["external_id"] == resumed_job["external_id"] and not i.get("resuming")]

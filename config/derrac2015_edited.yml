@@ -20,7 +20,7 @@ dcm_quant_measure:            [count, ppmi, tfidf]
 classifier:                   SVM
 kappa_weights:                quadratic
 classifier_succmetric:        kappa_digitized_onlypos_2
-prim_lambda:                  0.4
+prim_lambda:                  0.5
 sec_lambda:                   0.2
 __perdataset__:
   placetypes:

@@ -180,7 +180,7 @@ def join_clusters_average(clusters, decision_planes):
 def join_clusters_reclassify(clusters, dcm, embedding, verbose=False):
     all_cand_mets = {}
     cluster_directions = {}
-    for k, v in clusters.items():
+    for k, v in tqdm(clusters.items(), desc="Reclassifying Clusters"):
         embed = embedding.embedding_
         dtm = DocTermMatrix.submat_forterms(dcm, [k] + v)
         combined_quants = dtm.as_csr().toarray().sum(axis=0)
@@ -222,7 +222,7 @@ def create_candidate_svm(embedding, term, quants, classifier, plot_svm=False, de
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         svm.fit(embedding, bin_labels)
-        if w: assert len(w) == 1 and issubclass(w[0].category, (sklearn.exceptions.ConvergenceWarning, DeprecationWarning))
+        if w: assert issubclass(w[0].category, (sklearn.exceptions.ConvergenceWarning, DeprecationWarning))
         no_converge = (bool(w) and issubclass(w[0].category, sklearn.exceptions.ConvergenceWarning))
     tn, fp, fn, tp = confusion_matrix(bin_labels, svm.predict(embedding)).ravel()
     res = {"accuracy": (tp + tn) / len(quants), "precision": tp / (tp + fp), "recall": tp / (tp + fn), "did_converge": not no_converge}

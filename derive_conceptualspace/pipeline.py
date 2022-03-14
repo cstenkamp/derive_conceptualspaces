@@ -43,7 +43,8 @@ generated_paths = dict(
     candidate_terms =          "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/candidate_terms_{extraction_method}.json",
     postprocessed_candidates = "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/postprocessed_candidates_{extraction_method}.json",
     filtered_dcm =             "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json",
-    featureaxes =              "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}_{kappa_weights}/featureaxes.json"
+    featureaxes =              "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}_{kappa_weights}/featureaxes.json",
+    clusters =                 "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}_{kappa_weights}/featureaxes.json"
 )
 #TODO can I auto-generate these from jsonpersister?!
 
@@ -309,6 +310,9 @@ class SnakeContext():
         return ctx
 
     def load(self, *whats, loaders=None):
+        # load the most complex one first, such that all configs are set for it
+        # (loader_context should load what is there and not fail because it assumed defaults for non explicitly set configs)
+        whats = sorted(whats, key=lambda x:{k: v.count("{") for k, v in generated_paths.items()}[x], reverse=True)
         for what in whats:
             loader = (loaders or {}).get(what) or self.autoloader_di.get(what) or (lambda **kwargs: kwargs[what])
             self.obj[what] = self.obj["json_persister"].load(None, what, loader=loader)

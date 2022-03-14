@@ -7,7 +7,7 @@
       <env name="PYTHONUNBUFFERED" value="1" />
       <env name="MA_DATASET" value="siddata2022" />
       <env name="MA_LANGUAGE" value="de" />
-      <env name="MA_DEBUG" value="False" />
+      <env name="MA_DEBUG" value="1" />
       <env name="MA_PP_COMPONENTS" value="mfacsd2" />
       <env name="MA_TRANSLATE_POLICY" value="onlyorig" />
       <env name="MA_MIN_WORDS_PER_DESC" value="80" />

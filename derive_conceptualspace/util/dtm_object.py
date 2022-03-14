@@ -123,8 +123,9 @@ class DocTermMatrix():
     @staticmethod
     def submat_forterms(dtm: "DocTermMatrix", termlist, verbose=False, descriptions=None):
         """returns a new DTM that only considers the terms in the termlist"""
-        if dtm.quant_name != "count": raise NotImplementedError("Didn't think about this yet, may also make sense for not-count but just check")
+        # if dtm.quant_name != "count": raise NotImplementedError("Didn't think about this yet, may also make sense for not-count but just check")
         res = DocTermMatrix._filter_step2(dtm, set(dtm.reverse_term_dict[i] for i in termlist), verbose=verbose, descriptions=descriptions)
+        res.quant_name = dtm.quant_name
         assert set(res.all_terms.values()) == set(termlist)
         return res
 
@@ -185,7 +186,7 @@ class DocTermMatrix():
 
 
 def apply_quant(quant, dtm, verbose=False, descriptions=None):
-    from derive_conceptualspace.util.text_tools import tf_idf, ppmi
+    from derive_conceptualspace.util.text_tools import ppmi #,tf_idf
     if quant == "tfidf":
         # quantification = tf_idf(dtm, verbose=verbose, descriptions=descriptions)
         quantification = csr_to_list(TfidfTransformer().fit_transform(dtm.as_csr().T))
