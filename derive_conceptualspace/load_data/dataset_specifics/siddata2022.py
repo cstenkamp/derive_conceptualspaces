@@ -5,9 +5,19 @@ from tqdm import tqdm
 
 from derive_conceptualspace.load_data.dataset_specifics import BaseDataset
 from derive_conceptualspace.settings import get_setting
+from fb_classifier.preprocess_data import make_classifier_dict
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
+
+    # name_number = get_data(from_csv_path, from_csv_name).set_index("Name")["VeranstaltungsNummer"].to_dict()
+    # fachbereich_per_course = {k: int(v.split(".", 1)[0]) for k, v in name_number.items() if
+    #                           v.split(".", 1)[0].isdigit() and int(v.split(".", 1)[0]) <= 10}  # There are 10 FBs
+    # #TODO instead use `make_classifier_dict(df.set_index("Name")["VeranstaltungsNummer"])`
+    # fb_mapper = {1: "Sozial,Kultur,Kunst", 3: "Theologie,Lehramt,Musik", 4: "Physik", 5: "Bio,Chemie", 6: "Mathe,Info",
+    #              7: "Sprache,Literatur", 8: "Humanwiss", 9: "Wiwi", 10: "Rechtswiss"}
+    # fachbereiche = [fachbereich_per_course.get(name, 0) for name in name_number]
+    # return dict(zip(name_number.keys(), [fb_mapper.get(i, "Unknown") for i in fachbereiche]))
 
 class Dataset(BaseDataset):
     configs = dict(
@@ -15,6 +25,12 @@ class Dataset(BaseDataset):
         candidate_min_term_count = 25, #TODO see the notes in config/derrac2015.yml!
     )
     additionals = ["ddc_code", "type", "veranstaltungsnummer"]
+
+    @staticmethod
+    def get_custom_class(name):
+        if name == "fachbereich":
+            print()
+
 
     @staticmethod
     def preprocess_raw_file(df, pp_components, min_ges_nwords=20):

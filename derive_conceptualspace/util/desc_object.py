@@ -275,6 +275,8 @@ class DescriptionList():
             # TODO If I can do sent_tokenize for the CountVectorizer I need to update this here as well!
         if do_tfidf is not None:
             #https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfTransformer.html
+            # count = Pipeline([("count", cnt)]).fit(fit_base()) #to test if count already dies, otherwise we could try #https://discuss.analyticsvidhya.com/t/tfidf-on-sklearn-library-is-giving-me-a-huge-file-and-memory-error/78448/2
+            # see also https://stackoverflow.com/a/64996792/5122790
             pipe = Pipeline([("count", cnt), ("tfidf", TfidfTransformer(use_idf=(do_tfidf=="tfidf")))]).fit(fit_base())
             aslist, all_words = csr_to_list(pipe.transform(fit_base()), pipe["count"].vocabulary_)
             return DocTermMatrix(dtm=aslist, all_terms=all_words, quant_name=do_tfidf), {"ngrams_in_embedding": any(" " in i for i in all_words.values()), "sklearn_tfidf": True}

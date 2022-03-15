@@ -45,7 +45,7 @@ def classify_shallowtree(clusters, embedding, descriptions, one_vs_rest, dt_dept
         classes = descriptions.additionals_names[0]
     else:
         assert classes in descriptions.additionals_names
-    catnames = CATNAMES[classes] #TODO if it's in, otherwise yadda
+    catnames = CATNAMES.get(classes) #TODO if it's in, otherwise yadda
 
     #first I want the distances to the origins of the respective dimensions (induced by the clusters), what induces the respective rankings (see DESC15 p.24u, proj2 of load_semanticspaces.load_projections)
     axis_dists = [{k: v.dist(embedding[i]) for k, v in planes.items()} for i in range(len(embedding))]
@@ -54,8 +54,10 @@ def classify_shallowtree(clusters, embedding, descriptions, one_vs_rest, dt_dept
         print("Highest-ranking descriptions per dimension:\n    "+"\n    ".join([f"{k.ljust(max([len(i) for i in best_per_dim.keys()][:20]))}: {v}" for k, v in best_per_dim.items()][:20]))
     #TODO also show places 2, 3, 4 - hier sehen wir wieder sehr ähnliche ("football stadium", "stadium", "fan" for "goalie")
     #TODO axis_dists is all I need for the movietuner already!! I can say "give me something like X, only with more Y"
-
-    cats = {i.title: catnames[int(i._additionals[classes])] for i in descriptions._descriptions if i._additionals[classes] is not None}
+    if catnames:
+        cats = {i.title: catnames[int(i._additionals[classes])] for i in descriptions._descriptions if i._additionals[classes] is not None}
+    else:
+        cats = {i.title: i._additionals[classes] for i in descriptions._descriptions if i._additionals[classes] is not None}
     print(f"Using classes from {classes} - {len(cats)}/{len(descriptions)} entities have a class")
     with_cat = [n for n, i in enumerate(descriptions._descriptions) if i._additionals[classes] is not None]
     print("Labels:", ", ".join(f"{k}: {v}" for k, v in Counter(cats.values()).items())) #TODO pay attention! consider class_weight etc!

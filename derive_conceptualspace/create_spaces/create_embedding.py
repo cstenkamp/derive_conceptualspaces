@@ -49,12 +49,12 @@ def _create_dissim_mat(arr, dissim_measure, force_singlethread=False, n_chunks=2
         dist_func = dissim_measure
     metainf = {}
     tmp = []
-    if not force_singlethread and get_ncpu(ram_per_core=10) > 1: # max. 1 thread per 10GB RAM
+    RAM_PER_CORE = 15 #TODO dependent on the dataset
+    if not force_singlethread and get_ncpu(ram_per_core=RAM_PER_CORE) > 1: # max. 1 thread per 10GB RAM
         # with WorkerPool(get_ncpu(ram_per_core=10), arr, pgbar="Creating dissimilarity matrix" if not silent else None) as pool:
         #     tmp = pool.work(list(np.array_split(arr, n_chunks)), lambda arr, chunk: cdist(arr, chunk, dist_func))
-        if not silent: print(f"Running with {get_ncpu(ram_per_core=10)} Processes")
         with Interruptible(np.array_split(arr, n_chunks), [tmp], metainf, shutdown_time=210, continue_from=continue_from, contains_mp=True) as iter:
-            with WorkerPool(get_ncpu(ram_per_core=10), arr, pgbar="Creating dissimilarity matrix" if not silent else None, comqu=iter.comqu) as pool:
+            with WorkerPool(get_ncpu(ram_per_core=RAM_PER_CORE), arr, pgbar="Creating dissimilarity matrix" if not silent else None, comqu=iter.comqu) as pool:
                 tmpres, interrupted = pool.work(iter, lambda arr, chunk: cdist(arr, chunk, dist_func))
             tmp = iter.notify([tmpres], exception=interrupted)[0]
         if iter.interrupted:

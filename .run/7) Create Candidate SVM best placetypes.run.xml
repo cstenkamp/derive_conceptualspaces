@@ -1,22 +1,10 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="7) Create Candidate SVM best placetypes" type="PythonConfigurationType" factoryName="Python">
+  <configuration default="false" name="7) Create Candidate SVM" type="PythonConfigurationType" factoryName="Python">
     <module name="Derive_Conceptualspace" />
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />
     <envs>
       <env name="PYTHONUNBUFFERED" value="1" />
-      <env name="MA_DATASET" value="placetypes" />
-      <env name="MA_LANGUAGE" value="en" />
-      <env name="MA_DEBUG" value="False" />
-      <env name="MA_PP_COMPONENTS" value="none" />
-      <env name="MA_TRANSLATE_POLICY" value="onlyorig" />
-      <env name="MA_MIN_WORDS_PER_DESC" value="50" />
-      <env name="MA_QUANTIFICATION_MEASURE" value="ppmi" />
-      <env name="MA_EMBED_ALGO" value="mds" />
-      <env name="MA_EMBED_DIMENSIONS" value="200" />
-      <env name="MA_EXTRACTION_METHOD" value="all" />
-      <env name="MA_DCM_QUANT_MEASURE" value="count" />
-      <env name="MA_CLASSIFIER_COMPARETO_RANKING" value="count" />
     </envs>
     <option name="SDK_HOME" value="" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/derive_conceptualspace/cli" />

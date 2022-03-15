@@ -84,14 +84,14 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
                 print(str(df.sort_values(by=metricname, ascending=False)[:10]).replace(metricname, f"*r*{metricname}*r*"))
         if embedding.embedding_.shape[1] == 3 and IS_INTERACTIVE:
             best_elem = max(metrics.items(), key=lambda x:(x[1] or {}).get("f_one",0))
-            create_candidate_svm(embedding.embedding_, best_elem[0], dcm.term_quants(best_elem[0]), quant_name=dcm.quant_name, plot_svm=True, descriptions=descriptions)
+            create_candidate_svm(embedding.embedding_, best_elem[0], dcm.term_quants(best_elem[0]), classifier=get_setting("CLASSIFIER"), quant_name=dcm.quant_name, plot_svm=True, descriptions=descriptions)
             while (another := input("Another one to display: ").strip()) != "":
                 if "," in another:
                     highlight = [i.strip() for i in another.split(",")[1:]]
                     another = another.split(",")[0].strip()
                 else:
                     highlight = []
-                create_candidate_svm(embedding.embedding_, another, dcm.term_quants(another), quant_name=dcm.quant_name, plot_svm=True, descriptions=descriptions, highlight=highlight)
+                create_candidate_svm(embedding.embedding_, another, dcm.term_quants(another), classifier=get_setting("CLASSIFIER"), quant_name=dcm.quant_name, plot_svm=True, descriptions=descriptions, highlight=highlight)
     return quants_s, decision_planes, metrics, metainf
 
 
