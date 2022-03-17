@@ -26,6 +26,11 @@ class Dataset(BaseDataset):
         print("Ignoring all PP-Components for this dataset!")
         return jsn
 
+    CATNAMES = {
+        "Geonames": {1: "stream,lake", 2: "parks,area", 3: "road,railroad", 4: "spot,building,farm", 5: "mountain,hill,rock", 6: "undersea", 7: "forest,heath"}, #can recover from http://www.geonames.org/export/codes.html
+        "Foursquare": {1: "Arts&Entertainment", 2: "College&University", 3: "Food", 4: "Professional&Other", 5: "NightlifeSpots", 6: "GreatOutdoors", 7: "Shops&Services", 8:"Travel&Transport", 9:"Residences"}, #https://web.archive.org/web/20140625051659/http://aboutfoursquare.com/foursquare-categories/
+    }
+
 
 def get_classes(data_base, what):
     assert what in ["Foursquare", "Geonames", "CYC"] or all(i in ["Foursquare", "Geonames", "CYC"] for i in what)

@@ -152,6 +152,7 @@ def check_languages(ctx, raw_descriptions_file, pp_components):
 
 
 
+
 # @cli.command()
 # @click.option("--pp-components", type=str, default=None)
 # @click.option("--translate-policy", type=click.Choice(ALL_TRANSLATE_POLICY, case_sensitive=False), default=None)

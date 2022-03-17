@@ -12,13 +12,6 @@ from scipy.stats import rankdata
 from derive_conceptualspace.settings import get_setting
 from misc_util.pretty_print import pretty_print as print
 
-CATNAMES = {
-    "Geonames": {1: "stream,lake", 2: "parks,area", 3: "road,railroad", 4: "spot,building,farm", 5: "mountain,hill,rock", 6: "undersea", 7: "forest,heath"}, #can recover from http://www.geonames.org/export/codes.html
-    "Foursquare": {1: "Arts&Entertainment", 2: "College&University", 3: "Food", 4: "Professional&Other", 5: "NightlifeSpots", 6: "GreatOutdoors", 7: "Shops&Services", 8:"Travel&Transport", 9:"Residences"}, #https://web.archive.org/web/20140625051659/http://aboutfoursquare.com/foursquare-categories/
-}
-#TODO move somewhere appropriate (-> dataset-class)
-
-
 #TODO write a test that checks if a decision-tree without test-set and with depth=None has a 1.0 accuracy:
 # `classify_shallowtree(clusters, embedding, descriptions, one_vs_rest=False, dt_depth=None, test_percentage_crossval=0, classes="Geonames", do_plot=False, verbose=False)`
 
@@ -38,14 +31,21 @@ def classify_shallowtree_multi(clusters, embedding, descriptions, verbose=False)
         print(df)
     return df
 
-def classify_shallowtree(clusters, embedding, descriptions, one_vs_rest, dt_depth, test_percentage_crossval,
+def classify_shallowtree(clusters, embedding, descriptions, dataset_class, one_vs_rest, dt_depth, test_percentage_crossval,
                          classes=None, do_plot=False, verbose=False, return_features=True, balance_classes=True):
     clusters, planes = clusters.values()
     if classes is None:
         classes = descriptions.additionals_names[0]
-    else:
-        assert classes in descriptions.additionals_names
-    catnames = CATNAMES.get(classes) #TODO if it's in, otherwise yadda
+    if classes in descriptions.additionals_names:
+        if hasattr(dataset_class, "CATNAMES") and classes in dataset_class.CATNAMES:
+            catnames = dataset_class.CATNAMES.get(classes)
+        #TODO else ignore catnames and just have numbers
+    elif hasattr(dataset_class, "get_custom_class"):
+        try:
+            catnames = dataset_class.get_custom_class(classes, descriptions)
+        except Exception as e:
+            raise e
+
 
     #first I want the distances to the origins of the respective dimensions (induced by the clusters), what induces the respective rankings (see DESC15 p.24u, proj2 of load_semanticspaces.load_projections)
     axis_dists = [{k: v.dist(embedding[i]) for k, v in planes.items()} for i in range(len(embedding))]

@@ -57,23 +57,32 @@ def preprocess_data(sources, dest_path: str, force_overwrite: bool = False): #so
 
 def make_classifier_dict(df):
     new_dset = {}
-    for key, val in df.items():
-        if len(splits := val.split(".")) == 2 and splits[0].isnumeric() and splits[1].replace("_", "").isnumeric():
-            while len(splits[0]) > 0 and splits[0].startswith("0"):
-                splits[0] = splits[0][1:]
-            if len(splits[0]) > 0:
-                new_dset[key] = splits[0]
-        elif len(splits := val.split(".")) == 2 and splits[0].isnumeric() and splits[1][:-1].isnumeric() and splits[1][-1] in "abcdefg":
-            new_dset[key] = splits[0]
-        elif val.startswith("FB") and val[2:val.find(" ")].isnumeric():
-            res = val[2:val.find(" ") if val.find(" ") > 0 else None]
-            if res.isnumeric():
-                while len(res) > 0 and res.startswith("0"):
-                    res = res[1:]
-                if len(res) > 0:
-                    new_dset[key] = res
-        else:
+    for key, vals in df.items():
+        tmp_vals = []
+        if vals is None:
             new_dset[key] = "other"
+            continue
+        for val in (vals if isinstance(vals, (list, tuple)) else [vals]):
+            if len(splits := val.split(".")) == 2 and splits[0].isnumeric() and splits[1].replace("_", "").isnumeric():
+                while len(splits[0]) > 0 and splits[0].startswith("0"):
+                    splits[0] = splits[0][1:]
+                if len(splits[0]) > 0:
+                    tmp_vals.append(splits[0])
+            elif len(splits := val.split(".")) == 2 and splits[0].isnumeric() and splits[1][:-1].isnumeric() and splits[1][-1] in "abcdefg":
+                tmp_vals.append(splits[0])
+            elif val.startswith("FB") and val[2:val.find(" ")].isnumeric():
+                res = val[2:val.find(" ") if val.find(" ") > 0 else None]
+                if res.isnumeric():
+                    while len(res) > 0 and res.startswith("0"):
+                        res = res[1:]
+                    if len(res) > 0:
+                        tmp_vals.append(res)
+            else:
+                tmp_vals.append("other")
+        if len(set(tmp_vals)-{"other"}) <= 1:
+            new_dset[key] = [tmp_vals[0]]
+        else: #TODO: what to do then?
+            new_dset[key] = list(set(tmp_vals)-{"other"})
     return new_dset
 
 def make_classifier_class(dsetname, dset, plot_dropped=True, save_plot=None):

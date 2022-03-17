@@ -312,8 +312,9 @@ class SnakeContext():
     def load(self, *whats, loaders=None):
         # load the most complex one first, such that all configs are set for it
         # (loader_context should load what is there and not fail because it assumed defaults for non explicitly set configs)
-        whats = sorted(whats, key=lambda x:{k: v.count("{") for k, v in generated_paths.items()}[x], reverse=True)
-        for what in whats:
+        # this can also load stuff that is already in ctx.obj, like "dataset_class". That ignored for the rest
+        loadwhats = sorted([i for i in whats if i not in self.obj], key=lambda x:{k: v.count("{") for k, v in generated_paths.items()}[x], reverse=True)
+        for what in loadwhats:
             loader = (loaders or {}).get(what) or self.autoloader_di.get(what) or (lambda **kwargs: kwargs[what])
             self.obj[what] = self.obj["json_persister"].load(None, what, loader=loader)
         return tuple(self.obj[what] for what in whats) if len(whats) > 1 else self.obj[whats[0]]

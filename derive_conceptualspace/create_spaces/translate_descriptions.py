@@ -6,6 +6,7 @@ import html
 from langdetect import detect
 from langdetect.lang_detect_exception import LangDetectException
 from tqdm import tqdm
+import pandas as pd
 
 from misc_util.pretty_print import pretty_print as print
 from derive_conceptualspace.util.google_translate import translate_text
@@ -21,10 +22,11 @@ logger = logging.getLogger(basename(__file__))
 def get_langs(whatever_list, assert_len=True, pgbar_name=None):
     lans = {}
     for item in tqdm(whatever_list, desc=pgbar_name):
-        try:
-            lans[item] = detect(item)
-        except LangDetectException as e:
-            lans[item] = "unk"
+        if not pd.isna(item):
+            try:
+                lans[item] = detect(item)
+            except LangDetectException as e:
+                lans[item] = "unk"
     if assert_len:
         assert len(lans) == len(whatever_list)
     return lans
@@ -82,7 +84,7 @@ def create_languages_file(raw_descriptions, columns, json_persister, dataset_cla
             if proc_descs is None:
                 proc_descs = dataset_class.preprocess_raw_file(raw_descriptions, pp_components=PPComponents.from_str(pp_components))
             langs = get_langs(proc_descs[col], assert_len=False, pgbar_name=f"Getting Language of {col}")
-            langs = {i[col]: langs[i[col]] for _,i in proc_descs.iterrows()}
+            langs = {i[col]: langs[i[col]] for _,i in proc_descs.iterrows() if not pd.isna(i[col])}
             json_persister.save(f"{col}_languages.json", langs=langs, ignore_confs=["DEBUG", "PP_COMPONENTS", "TRANSLATE_POLICY", "LANGUAGE"])
             languages = json_persister.load(None, f"{col}_languages", loader=lambda langs: langs, silent=declare_silent)
         else:

@@ -10,27 +10,27 @@ from fb_classifier.preprocess_data import make_classifier_dict
 flatten = lambda l: [item for sublist in l for item in sublist]
 
 
-    # name_number = get_data(from_csv_path, from_csv_name).set_index("Name")["VeranstaltungsNummer"].to_dict()
-    # fachbereich_per_course = {k: int(v.split(".", 1)[0]) for k, v in name_number.items() if
-    #                           v.split(".", 1)[0].isdigit() and int(v.split(".", 1)[0]) <= 10}  # There are 10 FBs
-    # #TODO instead use `make_classifier_dict(df.set_index("Name")["VeranstaltungsNummer"])`
-    # fb_mapper = {1: "Sozial,Kultur,Kunst", 3: "Theologie,Lehramt,Musik", 4: "Physik", 5: "Bio,Chemie", 6: "Mathe,Info",
-    #              7: "Sprache,Literatur", 8: "Humanwiss", 9: "Wiwi", 10: "Rechtswiss"}
-    # fachbereiche = [fachbereich_per_course.get(name, 0) for name in name_number]
-    # return dict(zip(name_number.keys(), [fb_mapper.get(i, "Unknown") for i in fachbereiche]))
-
 class Dataset(BaseDataset):
     configs = dict(
         raw_descriptions_file = "raw_descriptions.csv",
         candidate_min_term_count = 25, #TODO see the notes in config/derrac2015.yml!
     )
-    additionals = ["ddc_code", "type", "veranstaltungsnummer"]
+    additionals = ["ddc_code", "type", "veranstaltungsnummer", "is_uos", "is_bremen", "is_hannover", "is_other", "format", "source"]
+    #subject is added to subtitle (#TODO something explicit)!
+
+    FB_MAPPER = {1: "Sozial,Kultur,Kunst", 3: "Theologie,Lehramt,Musik", 4: "Physik", 5: "Bio,Chemie", 6: "Mathe,Info",
+                 7: "Sprache,Literatur", 8: "Humanwiss", 9: "Wiwi", 10: "Rechtswiss"}
 
     @staticmethod
-    def get_custom_class(name):
+    def get_custom_class(name, descriptions):
         if name == "fachbereich":
-            print()
-
+            osna_descriptions = [i for num, i in enumerate(descriptions._descriptions) if i._additionals["publisher"] and "de.uni-osnabrueck.studip" in eval(i._additionals["publisher"])]
+            forbidden_coursenums = {onum: [num for num, j in enumerate(eval(i._additionals["publisher"])) if j != "de.uni-osnabrueck.studip"] for onum, i in enumerate(osna_descriptions) if [num for num, j in enumerate(eval(i._additionals["publisher"])) if j != "de.uni-osnabrueck.studip"]}
+            veranst_nums = [eval(i._additionals["veranstaltungsnummer"]) if i._additionals["veranstaltungsnummer"] else None for i in descriptions._descriptions]
+            clas_di = make_classifier_dict(dict(enumerate(veranst_nums)))
+            usables = {k: [int(v) for v in vs if v != "other" and int(v) <= 10] for k, vs in clas_di.items() if vs != "other"}
+            usables = {k: [Dataset.FB_MAPPER.get(v) for v in vs] for k, vs in usables.items()}
+            usables = {k: v for k, v in usables.items() if v and any(i is not None for i in v)}
 
     @staticmethod
     def preprocess_raw_file(df, pp_components, min_ges_nwords=20):
@@ -39,19 +39,20 @@ class Dataset(BaseDataset):
         #TODO in exploration I also played around with Levenhsthein-distance etc!
         #remove those for which the Name (exluding stuff in parantheses) is equal...
         assert isinstance(df, pd.DataFrame)
-        df = df.reset_index().drop(columns=["Unnamed: 0", "index", "n_descs"])
+        df = df.reset_index().drop(columns=["Unnamed: 0", "index"])
         # df = df[~df['description'].isnull()]
         df = df[df["description"]!="[]"]
         if get_setting("DEBUG"):
             df = df[:get_setting("DEBUG_N_ITEMS")*2]
         df = Dataset.merge_multidescs(df, pp_components)
         df.loc[:, 'ges_nwords'] = df["description"].str.count(" ").fillna(0)
+        df["subtitle"] = df["subtitle"] + df["subject"] #TODO: maybe have an extra pp_comp for this?
         if pp_components.add_title:
             df.loc[:, 'ges_nwords'] += df["title"].str.count(" ").fillna(0)
         if pp_components.add_subtitle:
             df.loc[:, 'ges_nwords'] += df["subtitle"].str.count(" ").fillna(0)
         df = df[df["ges_nwords"] >= min_ges_nwords]
-        with pd.option_context('mode.chained_assignment', None):
+        with pd.option_context('mode.chained_assignment', None): #TODO publisher to get uni
             for column in ["title", "description", "subtitle"]:
                 df.loc[:, column] = df[column].copy().str.strip()
         return df
