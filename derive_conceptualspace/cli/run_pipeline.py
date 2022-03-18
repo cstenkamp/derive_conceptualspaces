@@ -337,7 +337,8 @@ def cluster_candidates(ctx):
 @generate_conceptualspace.command()
 @click_pass_add_context
 def show_data_info(ctx):
-    ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, "clusters") #TODO use LAST_RESULT (and make it ONE THING used also in Snakefile and args_from_filename)
+    from derive_conceptualspace.cli.args_from_filename import LAST_RESULT
+    ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, LAST_RESULT) #make the LAST_RESULT ONE THING used also in Snakefile and args_from_filename
     show_data_info_base(ctx)
     print()
 
