@@ -222,7 +222,7 @@ rule create_dissim_mat:
         generated_paths["dissim_mat"]
     threads: 3
     resources:
-        mem_mb = 29*1024, #TODO make also dependent on the size of the dataset ("input" is also allowed as arg)
+        mem_mb = 62*1024, #TODO make also dependent on the size of the dataset ("input" is also allowed as arg)
         pe = "3"   #I want this to run with 2 processes
     run:
         autoload_context_inputs(ctx, input, wildcards)
