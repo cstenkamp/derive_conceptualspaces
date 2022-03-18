@@ -111,7 +111,8 @@ def check_cand(cand, desc, edit_fns=None):
         return True, cand
 
     if extracted_literally(): #TODO all of this (besides assert false) is dirty as argh!
-        if any("." in k for k in [j for j in flatten([i[0] for i in desc.processing_steps if i[1] == "lemmatize"][0]) if j.startswith(cand.split(" ")[0])]):
+        if ("lemmatize" in desc.list_ref.proc_steps and
+                any("." in k for k in [j for j in flatten([i[0] for i in desc.processing_steps if i[1] == "lemmatize"][0]) if j.startswith(cand.split(" ")[0])])):
             # reason for this: In eg. "...  geschult.Der Kurs wird ...", due to no space after the dot and shitty sent-tokenization, "geschult.der" becomes a 1-gram ("geschult.d" after lemmatization).
             # the cand is extracted with sklearn with less shitty sent-tokenization, so it's "geschult kurs".
             return False, None

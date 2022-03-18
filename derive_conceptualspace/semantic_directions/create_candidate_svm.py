@@ -29,6 +29,14 @@ vec_cos = lambda v1, v2: np.arccos(np.clip(np.dot(norm(v1), norm(v2)), -1.0, 1.0
 flatten = lambda l: [item for sublist in l for item in sublist]
 unique = lambda iterable: list({i:None for i in iterable}.keys())
 
+
+def cohen_kappa(y_test, y_pred, **kwargs):
+    """see https://github.com/scikit-learn/scikit-learn/issues/9624#issuecomment-1004342697"""
+    if len(set(y_test).union(y_pred)) == 1:
+        return 1
+    return cohen_kappa_score(y_test, y_pred, **kwargs)
+
+
 def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=None):
     #TODO I am still not sure about if I am calculating with vectors somewhere where when I should be working with points
     decision_planes = {}
@@ -41,7 +49,9 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
         term_inds = unique(flatten([j[0] for j in dcm.dtm[i]] for i in working_inds))
         terms = [dcm.all_terms[i] for i in term_inds]
         embedding.embedding_ = embedding.embedding_[working_inds]
-        dcm = DocTermMatrix([dcm.dtm[i] for i in working_inds], {i: dcm.all_terms[i] for i in term_inds}, dcm.quant_name)
+        ind_translator = {v: k for k, v in enumerate(term_inds)}
+        dcm = DocTermMatrix([[[ind_translator[j[0]],j[1]] for j in dcm.dtm[i]] for i in working_inds],
+                            {ind_translator[i]: dcm.all_terms[i] for i in term_inds}, dcm.quant_name)
         print(f"Debug-Mode: Running for {len(working_inds)} Items and {len(terms)} Terms.")
         # warnings.warn("PRECOMMIT there's stuff here!")
         # assert all(i in terms for i in ['nature', 'ceiling', 'engine', 'athlete', 'seafood', 'shadows', 'skyscrapers', 'b737', 'monument', 'baby', 'sign', 'marine', 'iowa', 'field', 'buy', 'military', 'lounge', 'factory', 'road', 'education', '13thcentury', 'people', 'wait', 'travel', 'tunnel', 'treno', 'wings', 'hot', 'background', 'vintage', 'farmhouse', 'technology', 'building', 'horror', 'realestate', 'crane', 'slipway', 'ruin', 'national', 'morze'])
@@ -240,23 +250,23 @@ def create_candidate_svm(embedding, term, quants, classifier, plot_svm=False, de
     # quant_ranking = np.zeros(quants.shape); quant_ranking[np.where(quants > 0)] = np.argsort(quants[quants > 0])
     #TODO cohen's kappa hat nen sample_weight parameter!! DESC15 write they select Kappa "due to its tolerance to class imbalance." -> Does that mean I have to set the weight?!
     kappa_weights = get_setting("KAPPA_WEIGHTS") if get_setting("KAPPA_WEIGHTS") != "None" else None
-    res["kappa_rank2rank_dense"]  = cohen_kappa_score(rankdata(quants, method="dense"), rankdata(distances, method="dense"), weights=kappa_weights) #if there are 14.900 zeros, the next is a 1
-    res["kappa_rank2rank_min"] = cohen_kappa_score(rankdata(quants, method="min"), rankdata(distances, method="dense"), weights=kappa_weights) #if there are 14.900 zeros, the next one is a 14.901
-    res["kappa_bin2bin"]    = cohen_kappa_score(bin_labels, [i > 0 for i in distances], weights=kappa_weights)
-    res["kappa_digitized"]  = cohen_kappa_score(np.digitize(quants, np.histogram_bin_edges(quants)[1:]), np.digitize(distances, np.histogram_bin_edges(distances)[1:]), weights=kappa_weights)
+    res["kappa_rank2rank_dense"]  = cohen_kappa(rankdata(quants, method="dense"), rankdata(distances, method="dense"), weights=kappa_weights) #if there are 14.900 zeros, the next is a 1
+    res["kappa_rank2rank_min"] = cohen_kappa(rankdata(quants, method="min"), rankdata(distances, method="dense"), weights=kappa_weights) #if there are 14.900 zeros, the next one is a 14.901
+    res["kappa_bin2bin"]    = cohen_kappa(bin_labels, [i > 0 for i in distances], weights=kappa_weights)
+    res["kappa_digitized"]  = cohen_kappa(np.digitize(quants, np.histogram_bin_edges(quants)[1:]), np.digitize(distances, np.histogram_bin_edges(distances)[1:]), weights=kappa_weights)
     nonzero_indices = np.where(np.array(quants) > 0)[0]
     q2, d2 = np.array(quants)[nonzero_indices], np.array(distances)[nonzero_indices]
     with nullcontext(): #warnings.catch_warnings(): #TODO get rid of what cuases the nans here!!!
         # warnings.filterwarnings('ignore', r'invalid value encountered in true_divide')
         if quant_name == "count":  # in DESC15 they write "measure the correlation between the ranking induced by \vec{vt} and the number of times t appears in the documents associated with each entity", so maybe compare ranking to count?!
-            # res["kappa_count2rank"] = cohen_kappa_score(quants, rankdata(distances, method="dense"), weights=kappa_weights)
-            res["kappa_count2rank_onlypos"] = cohen_kappa_score(q2, rankdata(d2, method="dense"), weights=kappa_weights)
-        res["kappa_rank2rank_onlypos_dense"] = cohen_kappa_score(rankdata(q2, method="dense"), rankdata(d2, method="dense"), weights=kappa_weights)
-        res["kappa_rank2rank_onlypos_min"] = cohen_kappa_score(rankdata(q2, method="min"), rankdata(d2, method="min"), weights=kappa_weights)
-        res["kappa_rank2rank_onlypos_max"] = cohen_kappa_score(rankdata(q2, method="max"), rankdata(d2, method="max"), weights=kappa_weights)
-        # res["kappa_digitized_onlypos_1"] = cohen_kappa_score(np.digitize(q2, np.histogram_bin_edges(quants)[1:]), np.digitize(d2, np.histogram_bin_edges(distances)[1:]), weights=kappa_weights)
+            # res["kappa_count2rank"] = cohen_kappa(quants, rankdata(distances, method="dense"), weights=kappa_weights)
+            res["kappa_count2rank_onlypos"] = cohen_kappa(q2, rankdata(d2, method="dense"), weights=kappa_weights)
+        res["kappa_rank2rank_onlypos_dense"] = cohen_kappa(rankdata(q2, method="dense"), rankdata(d2, method="dense"), weights=kappa_weights)
+        res["kappa_rank2rank_onlypos_min"] = cohen_kappa(rankdata(q2, method="min"), rankdata(d2, method="min"), weights=kappa_weights)
+        res["kappa_rank2rank_onlypos_max"] = cohen_kappa(rankdata(q2, method="max"), rankdata(d2, method="max"), weights=kappa_weights)
+        # res["kappa_digitized_onlypos_1"] = cohen_kappa(np.digitize(q2, np.histogram_bin_edges(quants)[1:]), np.digitize(d2, np.histogram_bin_edges(distances)[1:]), weights=kappa_weights)
         #one ^ has as histogram-bins what it would be for ALL data, two only for the nonzero-ones
-        res["kappa_digitized_onlypos_2"] = cohen_kappa_score(np.digitize(q2, np.histogram_bin_edges(q2)[1:]), np.digitize(d2, np.histogram_bin_edges(d2)[1:]), weights=kappa_weights)
+        res["kappa_digitized_onlypos_2"] = cohen_kappa(np.digitize(q2, np.histogram_bin_edges(q2)[1:]), np.digitize(d2, np.histogram_bin_edges(d2)[1:]), weights=kappa_weights)
     if plot_svm and descriptions is not None:
         display_svm(embedding, np.array(bin_labels, dtype=int), svm, term=term, descriptions=descriptions, name=term+" "+(", ".join(f"{k}: {round(v, 3)}" for k, v in res.items())), quants=quants, distances=distances, **kwargs)
     if pgbar is not None:

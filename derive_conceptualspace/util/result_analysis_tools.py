@@ -7,6 +7,7 @@ import re
 
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 
 from misc_util.pretty_print import display
 
@@ -84,3 +85,23 @@ def highlight_nonzero_max(data):
     #df.style.highlight_max(color='lightgreen', axis=0)
     # return [f'font-weight: bold' if v == data.max() and v > 0 else '' for v in data]
     return [f'background-color: lightgreen' if v == data.max() and v > 0 else '' for v in data]
+
+
+def df_to_latex(df, styler, resizebox=True, bold_keys=True, rotate="45", rotate_index=False, caption=None):
+    df = df.copy()
+    if bold_keys:
+        indexnames = ["\\textbf{"+i+"}" for i in df.index.names]
+        if rotate and rotate_index: indexnames = ["\\rotatebox{"+rotate+"}{"+i+"}" for i in indexnames]
+        df.index = pd.MultiIndex.from_tuples([["\\textbf{"+j+"}" for j in i] for i in df.index], names=indexnames)
+        df.columns = ["\\textbf{"+i+"}" for i in df.columns]
+    res = styler(df)
+    if rotate: res.applymap_index(lambda v: "rotatebox:{"+rotate+"}--rwrap--latex;", axis=1)
+    txt = res.to_latex(convert_css=True, clines="skip-last;index", multirow_align="t", hrules=True, siunitx=False, caption=caption)
+    txt = [i for i in txt.split("\n") if i != "\\thtop"]
+    if resizebox: txt = [txt[0]]+["\\resizebox{\\textwidth}{!}{%"]+txt[1:-2]+["}"]+txt[-2:]
+    for nrow in range(len(txt)-1):
+        if txt[nrow].startswith("\\cline") and txt[nrow+1] == "\\bottomrule":
+            txt[nrow] = ""
+    txt = "\n".join([i for i in txt if i]).replace("nan", "-")
+    txt = txt.replace("≥", "$\\geq$")
+    return txt

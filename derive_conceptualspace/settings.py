@@ -55,7 +55,7 @@ DEFAULT_SEED_ONLY_IN_DEBUG = True
 DEFAULT_VERBOSE = True
 IS_INTERACTIVE = "PYCHARM_HOSTED" in os.environ
 DEFAULT_N_CPUS = max(psutil.cpu_count(logical=False), psutil.cpu_count(logical=True)-2)
-DEFAULT_DO_SANITYCHECKS = False  #sanity-checks check for code-correctness and can increase code-runtime by a lot. Running them once on each dataset&parameter-combination after changes is recommended.
+DEFAULT_DO_SANITYCHECKS = True  #sanity-checks check for code-correctness and can increase code-runtime by a lot. Running them once on each dataset&parameter-combination after changes is recommended.
 
 
 ###### Settings that influence the algorithm (ordered by step) ######
@@ -151,7 +151,7 @@ with set_noninfluentials(): #this context-manager adds all settings from here to
     CONF_PRIORITY = ["force", "smk_wildcard", "dependency", "cmd_args", "env_vars", "smk_args", "conf_file", "dataset_class", "defaults"] #no distinction between env_file and env_var bc load_dotenv is executed eagerly and just overwrites envvars from envfile
     #note that snakemake reads the conf_file differently and sets env-vars (that however apply force) from the configurations
     MAY_DIFFER_IN_DEPENDENCIES = ["DEBUG", "RANDOM_SEED", "CANDIDATE_MIN_TERM_COUNT", "BASE_DIR", "DEBUG_N_ITEMS", "CONF_FILE"]+NON_INFLUENTIAL_CONFIGS
-    DEFAULT_DEP_PREFERS_NONDEBUG = True
+    DEFAULT_DEP_PREFERS_NONDEBUG = False #TODO #PRECOMMIT
 
 ########################################################################################################################
 ######################################## set and get settings/env-vars #################################################

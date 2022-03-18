@@ -208,10 +208,12 @@ def pmi(doc_term_matrix, positive=False, verbose=False, descriptions=None):
     ges_occurs_per_term = arr.sum(axis=1) #p_{*t}
     prod = ges_occurs_per_term*words_per_doc #I'd like to scipy.sparse.csr.csr_matrix(...), but that conversion kills my RAM completely..
     res = arr/prod
+    res[np.isnan(res)] = 0
     del arr; del prod; gc.collect()
     res = np.log1p(res)  # DESC15 say it's just the log, but if we take the log all the values 0<val<1 are negative and [i for i in res[doc_term_matrix.reverse_term_dict["building"]].tolist()[0] if i > 0] becomes a much smaller number
     if positive:
         res[res < 0] = 0.0
+    assert not np.isnan(res).any(), "There are NaNs in the PPMI!"
     quantifications  = csr_to_list(res.T)
     del res; gc.collect()
     if verbose:

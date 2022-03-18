@@ -30,6 +30,7 @@ import socket
 
 from dotenv.main import load_dotenv
 from snakemake import rules
+from snakemake.exceptions import RuleException
 from snakemake.io import expand, touch
 
 from derive_conceptualspace import settings
@@ -257,6 +258,7 @@ rule extract_candidate_terms:
             candidate_terms, metainf = extract_candidateterms_base(ctx.obj["pp_descriptions"], ctx.get_config("extraction_method"), ctx.get_config("max_ngram"), verbose=ctx.get_config("verbose"), **mgr.kwargs)
         res = mgr.save(candidate_terms=candidate_terms, metainf=metainf)
         if res == 1: exit(1)
+
 
 
 rule postprocess_candidateterms:
