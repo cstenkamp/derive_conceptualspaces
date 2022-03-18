@@ -75,7 +75,7 @@ def load_envfiles(for_dataset=None):
     assert isfile(os.environ["MA_ENV_FILE"])
     if for_dataset is not None:
         os.environ["MA_DATASET"] = for_dataset #if I define it before loading the MA_ENV_FILE it can still be overwritten by if it is in there
-    load_dotenv(os.environ["MA_ENV_FILE"])
+    load_dotenv(os.environ["MA_ENV_FILE"], override=True)
 
 
 class CustomContext(ObjectWrapper):

@@ -67,7 +67,7 @@ class PPComponents():
 ########################################################################################################################
 ########################################################################################################################
 
-def preprocess_descriptions_full(raw_descriptions, dataset_class, pp_components, for_language, translate_policy, languages, translations=None):
+def preprocess_descriptions_full(raw_descriptions, dataset_class, pp_components, for_language, translate_policy, languages, translations=None, verbose=True):
     #TODO should I assert a minimal number of PP-Components? If I don't word-tokenize it all doesn't make much sense, does it?
     pp_components = PPComponents.from_str(pp_components)
     print("The following Pre-Processings will be performed:", ", ".join([k for k, v in pp_components.di.items() if v]))
@@ -89,7 +89,8 @@ def preprocess_descriptions_full(raw_descriptions, dataset_class, pp_components,
         else:
             descriptions = preprocess_descriptions(descriptions, pp_components)
     descriptions = descriptions.filter_words(min_words=get_setting("MIN_WORDS_PER_DESC"))
-    show_hist([i.n_words() for i in descriptions._descriptions], "Words per Description", xlabel="Number of Words")
+    if verbose:
+        show_hist([i.n_words() for i in descriptions._descriptions], "Words per Description", xlabel="Number of Words")
     return descriptions, {"n_samples": len(descriptions)}
 
 

@@ -301,7 +301,7 @@ rule create_candidate_svm:
         generated_paths["featureaxes"]
     threads: 4
     resources:
-        mem_mb=32*1024,
+        mem_mb= 62*1024,  #TODO make also dependent on the size of the dataset ("input" is also allowed as arg)
         pe="4-6"
     run:
         autoload_context_inputs(ctx, input, wildcards, silents=["pp_descriptions"])

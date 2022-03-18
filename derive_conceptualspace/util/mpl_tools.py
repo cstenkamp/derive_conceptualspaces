@@ -28,7 +28,7 @@ def generate_filepath(title, ext=".png"):
     print(f"Saving figure `{title}` under `{save_path}`")
     return save_path
 
-def show_hist(x, title="", xlabel="Data", ylabel="Count", cutoff_percentile=95, **kwargs): # density=False shows counts
+def show_hist(x, title="", xlabel="Data", ylabel="Count", cutoff_percentile=95, no_plot=False, **kwargs): # density=False shows counts
     #see https://stackoverflow.com/a/33203848/5122790
     #Freedman–Diaconis number of bins
     x = np.array(x)
@@ -46,19 +46,19 @@ def show_hist(x, title="", xlabel="Data", ylabel="Count", cutoff_percentile=95, 
         kwargs["bins"] = round(bins)
     full_data = dict(type="hist", x=x, kwargs=kwargs, xlim=(0, max_val), cutoff_percentile=cutoff_percentile, xlabel=xlabel,
                      ylabel=ylabel, title=title, max_val=max_val, old_max=old_max)
-    prepare_fig(full_data, title)
+    return prepare_fig(full_data, title, no_plot)
 
 
-def prepare_fig(full_data, title):
+def prepare_fig(full_data, title, no_plot=False):
     serialize_plot(title, full_data)
     if threading.current_thread() is not threading.main_thread():
         #mpl needs main-thread, snakemake often is not mainthread!
         warnings.warn("Cannot plot the figure as we are not in the main-thread!")
         return
-    actually_plot(full_data)
+    return actually_plot(full_data, no_plot)
 
 
-def actually_plot(full_data):
+def actually_plot(full_data, no_plot=False):
     fig, ax = plt.subplots()
     if full_data["type"] == "hist":
         ax.hist(full_data["x"], **full_data["kwargs"])
@@ -72,7 +72,9 @@ def actually_plot(full_data):
         raise NotImplementedError(f"Cannot do plot of type {full_data['type']}!")
     if full_data["title"]: plt.title(full_data["title"])
     plt.tight_layout()
-    show_fig(fig, full_data["title"])
+    if not no_plot:
+        show_fig(fig, full_data["title"])
+    return fig, ax
 
 
 def serialize_plot(title, full_data):

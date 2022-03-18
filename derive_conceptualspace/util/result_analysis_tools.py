@@ -12,8 +12,8 @@ import pandas as pd
 from misc_util.pretty_print import display
 
 from derive_conceptualspace import settings
+from derive_conceptualspace.settings import standardize_config_name
 from derive_conceptualspace.util.jsonloadstore import get_file_config
-
 
 def getfiles_allconfigs(basename, dataset=None, base_dir=None, ext=".json", only_nondebug=True, parse_all=False, verbose=True):
     dataset = dataset or os.environ["MA_DATASET"]
@@ -21,18 +21,23 @@ def getfiles_allconfigs(basename, dataset=None, base_dir=None, ext=".json", only
     candidates = [join(path, name)[len(base_dir)+1:] for path, subdirs, files in os.walk(base_dir) for
                   name in files if splitext(name)[0].startswith(basename) and splitext(name)[1]==ext]
     candidates = [i for i in candidates if i.startswith(dataset) and not "backup" in i.lower()]
-    if (leftovers := [cand for cand in candidates if not parse(os.sep.join(settings.DIR_STRUCT+[basename+ext]), cand) and
-                                   (not parse(os.sep.join(settings.DIR_STRUCT), dirname(cand)) or
-                                     (not only_nondebug or parse(os.sep.join(settings.DIR_STRUCT), dirname(cand)).named.get("debug", False) in ["False", False]))]):
+    if (leftovers := [cand for cand in candidates if not parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]+[basename+ext]), cand) and
+            (not (prs := parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]), dirname(cand))) or
+            (not only_nondebug or not prs.named.get("debug", False) in ["False", False]))]):
         if verbose:
             warnings.warn("There are files that won't be considered here: \n    "+"\n    ".join(leftovers))
         candidates = [i for i in candidates if i not in leftovers]
     if parse_all:
         configs = [get_file_config(os.environ["MA_BASE_DIR"], cand, re.findall(r'{(.*?)}', "".join(settings.DIR_STRUCT))) for cand in candidates]
     else:
-        configs = [parse(os.sep.join(settings.DIR_STRUCT+[basename+ext]), cand).named for cand in candidates if parse(os.sep.join(settings.DIR_STRUCT+[basename+ext]), cand)]
+        filename_confs = [i for i in re.findall(r'{(.*?)}', os.sep.join(settings.DIR_STRUCT))]
+        configs = [{[i for i in filename_confs if standardize_config_name(i) == k][0]: v for k, v in get_file_config(os.environ["MA_BASE_DIR"], cand, re.findall(r'{(.*?)}', "".join(settings.DIR_STRUCT))).items() if k in [standardize_config_name(i) for i in filename_confs]}
+                   for cand in candidates]
+        # configs = [parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]+[basename+ext]), cand).named for cand in candidates if parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]+[basename+ext]), cand)] \
+        #          + [prs.named for cand in candidates if (prs := parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]+[basename+"_"+("_".join(re.findall(r'({.*?})', settings.DIR_STRUCT[cand.count(os.sep)+1])))+ext]), cand))]
+        #          #the second summand is for the cases where where not all configs to justify a new dir are there so the rest of the configs overflow to the filename
     if only_nondebug:
-        configs = [i for i in configs if (i.get("debug") or i["DEBUG"]) not in ["True", True]]
+        configs = [i for i in configs if (i.get("debug") or i.get("DEBUG")) not in ["True", True]]
     if not configs:
         raise FileNotFoundError("There are no usable configs!")
     print_cnf = {k: list(set(dic[k] for dic in configs)) for k in configs[0]}
