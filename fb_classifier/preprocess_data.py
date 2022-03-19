@@ -11,6 +11,7 @@ import fb_classifier.settings
 from fb_classifier.settings import PP_TRAIN_PERCENTAGE
 from fb_classifier.util.misc import read_config, write_config
 
+flatten = lambda l: [item for sublist in l for item in sublist]
 
 def get_pp_config():
     '''gets all configs from main.config that start with PP_ as dict.'''
@@ -79,21 +80,24 @@ def make_classifier_dict(df):
                         tmp_vals.append(res)
             else:
                 tmp_vals.append("other")
-        if len(set(tmp_vals)-{"other"}) <= 1:
+        if len(set(tmp_vals)-{"other"}) == 1:
             new_dset[key] = [tmp_vals[0]]
+        elif len(set(tmp_vals)-{"other"}) == 0:
+            new_dset[key] = []
         else: #TODO: what to do then?
             new_dset[key] = list(set(tmp_vals)-{"other"})
     return new_dset
 
-def make_classifier_class(dsetname, dset, plot_dropped=True, save_plot=None):
+def make_classifier_class(dset, plot_dropped=False, save_plot=None, dsetname=None):
     new_dset = make_classifier_dict(dset)
-    usables = {k:int(v)-1 for k,v in new_dset.items() if v != "other" and int(v) <=10}
-    print(f"{dsetname}: dropped {len(new_dset)-len(usables)} courses as they had no unambiguous Fachbereich")
-    counter = {str(k): v for k, v in sorted(Counter([i+1 for i in usables.values()]).items(), key=lambda x:int(x[0]))}
+    usables = {k: [int(v) for v in vs if v != "other" and int(v) <= 10] for k, vs in new_dset.items() if vs != "other"}
+    usables = {k: v for k, v in usables.items() if v and any(i is not None for i in v)}
+    print((f"{dsetname}:" if dsetname else "") + f" dropped {len(new_dset)-len(usables)}/{len(new_dset)} ({(len(new_dset)-len(usables))/len(new_dset)*100:.2f}%) courses")
+    counter = {str(k): v for k, v in sorted(Counter(flatten([i for i in usables.values()])).items(), key=lambda x:int(x[0]))}
     if plot_dropped:
         counter["Other"] = len(new_dset)-len(usables)
     plt.bar(*list(zip(*counter.items())))
-    plt.title(f"Number of Courses per Faculty"+(f"({dsetname}-dataset)" if dsetname != "all" else ""))
+    plt.title(f"Number of Courses per Faculty"+(f"({dsetname}-dataset)" if (dsetname and dsetname != "all") else ""))
     if save_plot:
         plt.savefig(save_plot)
     plt.show()
