@@ -38,7 +38,7 @@ def show_data_info(ctx):
                  for k, v in ctx.p.loaded_influentials.items()} #TODO those that may differ yadda yadda
     print("Settings:\n", "\n".join(f"{k.rjust(max(len(i) for i in conf.keys()))}: *b*{str(v[0]).ljust(max(len(str(i[0])) for i in conf.values()))}*b* (used in {', '.join(v[1])})" for k, v in conf.items()), "\n")
     print("Collected Metainf:", ", ".join([f"{k}: *b*{v}*b*" for k, v in ctx.obj["json_persister"].collected_metainf().items()]))
-    data_dirs = {k: v["path"].replace(ctx.obj["json_persister"].in_dir, "data_dir") for k, v in ctx.obj["json_persister"].loaded_objects.items()}
+    data_dirs = {k: v["path"].replace(ctx.obj["json_persister"].in_dir, "data_dir/") for k, v in ctx.obj["json_persister"].loaded_objects.items()}
     print("Directories:\n ", "\n  ".join(f"{k.rjust(max(len(i) for i in data_dirs))}: {v}" for k, v in data_dirs.items()))
     dependencies = {k: set([i for i in v["used_in"] if i != "this"]) for k, v in ctx.obj["json_persister"].loaded_objects.items()}
     # figuring out when a new param was first necessary

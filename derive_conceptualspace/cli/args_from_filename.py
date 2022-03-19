@@ -10,7 +10,7 @@ import ijson
 from derive_conceptualspace.settings import standardize_config, ENV_PREFIX
 from derive_conceptualspace.pipeline import generated_paths
 
-LAST_RESULT = "featureaxes"
+LAST_RESULT = "clusters"
 
 def parse_command_line_args():
     parser = argparse.ArgumentParser()

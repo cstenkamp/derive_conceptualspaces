@@ -20,7 +20,7 @@ def getfiles_allconfigs(basename, dataset=None, base_dir=None, ext=".json", only
     base_dir = base_dir or os.environ["MA_BASE_DIR"]
     candidates = [join(path, name)[len(base_dir)+1:] for path, subdirs, files in os.walk(base_dir) for
                   name in files if splitext(name)[0].startswith(basename) and splitext(name)[1]==ext]
-    candidates = [i for i in candidates if i.startswith(dataset) and not "backup" in i.lower()]
+    candidates = [i for i in candidates if i.startswith(dataset) and not "backup" in i.lower() and not "interrupted" in i.lower()]
     if (leftovers := [cand for cand in candidates if not parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]+[basename+ext]), cand) and
             (not (prs := parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]), dirname(cand))) or
             (not only_nondebug or not prs.named.get("debug", False) in ["False", False]))]):

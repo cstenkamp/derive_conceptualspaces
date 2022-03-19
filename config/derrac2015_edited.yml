@@ -4,12 +4,12 @@
 # Cand-Filter:   binary linear SVM with pos/neg-count-ratio as instance cost, then select all for which kappa(svm_rank, count(t,e)) >= 0.1
 # Cand-Merging:  Custom
 
-pp_components:                [mfhcsd2, mfauhcsd2, mfauhtcsdp, mfauhtcsldp]
+pp_components:                [mfauhcsd2, mfauhtcsldp]  #mfhcsd2, mfauhtcsdp
 translate_policy:             onlyorig
 quantification_measure:       [ppmi, tfidf]
 dissim_measure:               norm_ang_dist
 embed_algo:                   mds
-embed_dimensions:             [3, 50, 100, 200]
+embed_dimensions:             [3, 50, 200]
 extraction_method:            tfidf
 #TODO: DESC15 hat darauf abgezielt ~22k keywords zu haben => mit meinen params dafür sorgen dass ich auch auf sowas komme, mit den aktuellen ists nur 2402!
 #candidate_min_term_count:     25 #movies has samples-to-threshold value of 100, placetypes has 35, 20newsgrups has 614, so for 8000 courses any threshold from 2 to 25 seems reasonable (BUT see above, I get too little)!!
@@ -19,7 +19,7 @@ max_ngram:                    5                   # not explicitly, but it takes
 dcm_quant_measure:            [count, ppmi, tfidf]
 classifier:                   SVM
 kappa_weights:                quadratic
-classifier_succmetric:        kappa_digitized_onlypos_2
+classifier_succmetric:        [kappa_count2rank_onlypos, kappa_rank2rank_onlypos_min, kappa_digitized_onlypos_2]
 prim_lambda:                  0.5
 sec_lambda:                   0.2
 __perdataset__:

@@ -339,7 +339,7 @@ def cluster_candidates(ctx):
 @click_pass_add_context
 def show_data_info(ctx):
     from derive_conceptualspace.cli.args_from_filename import LAST_RESULT
-    ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, LAST_RESULT) #make the LAST_RESULT ONE THING used also in Snakefile and args_from_filename
+    ctx.obj[LAST_RESULT] = ctx.obj["json_persister"].load(None, LAST_RESULT) #TODO: make the LAST_RESULT ONE THING used also in Snakefile and args_from_filename
     show_data_info_base(ctx)
     print()
 
@@ -374,10 +374,11 @@ def rank_saldirs(ctx):
 @cli.command()
 @click_pass_add_context
 def list_paramcombis(ctx):
+    from derive_conceptualspace.cli.args_from_filename import LAST_RESULT
     # TODO get rid of this entirely.
     # TODO this should ONLY consider command-line-args as config to compare the candidates to
     candidates = [join(path, name)[len(ctx.p.in_dir):] for path, subdirs, files in os.walk(join(ctx.p.in_dir, "")) for
-                  name in files if name.startswith("featureaxes.json")] #TODO use LAST_RESULT
+                  name in files if name.startswith(f"{LAST_RESULT}.json")] #TODO better LAST_RESULT
     candidates = [i for i in candidates if i.startswith(ctx.p.get_subdir({i: ctx.get_config(i) for i in ["DEBUG", "DATASET", "LANGUAGE"]})[0])]
     for cand in candidates:
         print(cand)
