@@ -1,3 +1,5 @@
+import warnings
+
 import pandas as pd
 import nltk
 from Levenshtein import distance
@@ -18,19 +20,24 @@ class Dataset(BaseDataset):
     additionals = ["ddc_code", "type", "veranstaltungsnummer", "is_uos", "is_bremen", "is_hannover", "is_other", "format", "source"]
     #subject is added to subtitle (#TODO something explicit)!
 
-    FB_MAPPER = {1: "Sozial,Kultur,Kunst", 3: "Theologie,Lehramt,Musik", 4: "Physik", 5: "Bio,Chemie", 6: "Mathe,Info",
-                 7: "Sprache,Literatur", 8: "Humanwiss", 9: "Wiwi", 10: "Rechtswiss"}
+    #mapper from https://www.uni-osnabrueck.de/fileadmin/documents/public/1_universitaet/1.2_zahlen_daten_fakten/Zahlenspiegel_2009-2010.pdf
+    # FB_MAPPER = {1: "Sozial,(Kultur,Kunst)", 2:"Kultur,Geo", 3: "Erziehung,Kultur(Theo,Lehramt,Musik)", 4: "Physik", 5: "Bio,Chemie", 6: "Mathe,Info",
+    #              7: "Sprache,Literatur", 8: "Humanwiss", 9: "Wiwi", 10: "Rechtswiss"}
+    FB_MAPPER = {1: "Sozial", 2:"Kultur/Geo", 3: "Erziehung/Kultur", 4: "Physik", 5: "Bio/Chemie", 6: "Mathe/Info",
+                 7: "Sprache", 8: "Humanwiss", 9: "Wiwi", 10: "Rechtswiss"}
 
     @staticmethod
     def get_custom_class(name, descriptions):
         if name == "fachbereich":
-            osna_descriptions = [i for num, i in enumerate(descriptions._descriptions) if i._additionals["publisher"] and "de.uni-osnabrueck.studip" in eval(i._additionals["publisher"])]
-            forbidden_coursenums = {onum: [num for num, j in enumerate(eval(i._additionals["publisher"])) if j != "de.uni-osnabrueck.studip"] for onum, i in enumerate(osna_descriptions) if [num for num, j in enumerate(eval(i._additionals["publisher"])) if j != "de.uni-osnabrueck.studip"]}
-            veranst_nums = [eval(i._additionals["veranstaltungsnummer"]) if i._additionals["veranstaltungsnummer"] else None for i in descriptions._descriptions]
-            clas_di = make_classifier_dict(dict(enumerate(veranst_nums)))
-            usables = {k: [int(v) for v in vs if v != "other" and int(v) <= 10] for k, vs in clas_di.items() if vs != "other"}
-            usables = {k: [Dataset.FB_MAPPER.get(v) for v in vs] for k, vs in usables.items()}
+            veranst_nums = [eval(i._additionals.get("veranstaltungsnummer")) or None for i in descriptions._descriptions]
+            new_dset = make_classifier_dict(dict(enumerate(veranst_nums)))
+            usables = {k: [int(v) for v in vs if v != "other" and int(v) <= 10] for k, vs in new_dset.items() if vs != "other"}
             usables = {k: v for k, v in usables.items() if v and any(i is not None for i in v)}
+            print(f"Dropping {len(new_dset)-len(usables)}/{len(new_dset)} ({(len(new_dset)-len(usables))/len(new_dset):.2%}) courses - there is no Fachbereich for them")
+            print(f"{sum([1 for i in usables.values() if len(i) > 1])} courses are assigned more than 1 Fachbereich!")
+            warnings.warn("Will return the first Fachbereich for those ambiguous courses!")
+            return lambda x: usables.get(x)[0], list(usables.keys()), Dataset.FB_MAPPER
+
 
     @staticmethod
     def preprocess_raw_file(df, pp_components, min_ges_nwords=20):

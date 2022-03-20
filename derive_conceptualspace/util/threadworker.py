@@ -5,19 +5,23 @@ from tqdm import tqdm
 
 class WorkerPool():
     def __init__(self, n_workers, workerobj=None, pgbar=None, comqu=None):
-        self.qu = JoinableQueue()
-        self.prioqu = JoinableQueue()
-        self.donequ = JoinableQueue()
-        self.workers = [Worker(self.qu, self.prioqu, self.donequ, num, workerobj) for num in range(n_workers)]
         self.pgbar = pgbar if pgbar is None else pgbar+f" [{n_workers} procs]"
-        self.known_deaths = []
-        self.comqu = comqu
+        self.n_workers = n_workers
+        if n_workers > 1:
+            self.qu = JoinableQueue()
+            self.prioqu = JoinableQueue()
+            self.donequ = JoinableQueue()
+            self.workers = [Worker(self.qu, self.prioqu, self.donequ, num, workerobj) for num in range(n_workers)]
+            self.known_deaths = []
+            self.comqu = comqu
 
     def __enter__(self):
         return self
 
     def work(self, iterable, func, enum_start=0):
         iterable = list(enumerate(iterable, start=enum_start))
+        if self.n_workers == 1:
+            return [func(elem[1]) for elem in tqdm(iterable, desc=self.pgbar)], False
         self.iterable = iterable
         for elem in iterable:
             self.qu.put(elem)
@@ -73,10 +77,11 @@ class WorkerPool():
         return [i[1] for i in sorted(results)], False
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        for worker in self.workers:
-            worker.kill()
-        if exc_type is not None and issubclass(exc_type, KeyboardInterrupt): #TODO also Interrupted
-            print()
+        if self.n_workers > 1:
+            for worker in self.workers:
+                worker.kill()
+            if exc_type is not None and issubclass(exc_type, KeyboardInterrupt): #TODO also Interrupted
+                print()
 
     def bookkeep(self):
         for worker in self.workers:

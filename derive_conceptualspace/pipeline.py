@@ -288,14 +288,17 @@ class SnakeContext():
         self.set_config("base_dir", os.getcwd(), "smk_args", silent=self.silent)
 
     autoloader_di = dict(
-        pp_descriptions=DescriptionList.from_json,
-        dissim_mat=dtm_dissimmat_loader,
-        filtered_dcm=dtm_loader,
-        featureaxes=featureaxes_loader,
+        raw_descriptions=None,
         title_languages=lambda **kwargs: kwargs["langs"],
         languages=lambda **kwargs: kwargs["langs"],
-        raw_descriptions=None,
+        subtitle_languages=lambda **kwargs: kwargs["langs"],
+        pp_descriptions=DescriptionList.from_json,
+        dissim_mat=dtm_dissimmat_loader,
+        embedding=lambda **args: args["embedding"].embedding_,
         postprocessed_candidates=None,
+        filtered_dcm=dtm_loader,
+        featureaxes=featureaxes_loader,
+        clusters=cluster_loader,
     )
     # TODO das autoloader_di ist schon ne Mischung von Code und Daten, aber wohin sonst damit?
 
@@ -309,7 +312,7 @@ class SnakeContext():
             ctx.print_important_settings()
         return ctx
 
-    def load(self, *whats, loaders=None):
+    def load(self, *whats, loaders=None, default_loaders=False):
         # load the most complex one first, such that all configs are set for it
         # (loader_context should load what is there and not fail because it assumed defaults for non explicitly set configs)
         # this can also load stuff that is already in ctx.obj, like "dataset_class". That ignored for the rest
