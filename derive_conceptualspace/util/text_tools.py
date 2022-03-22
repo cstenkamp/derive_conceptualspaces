@@ -233,7 +233,7 @@ def print_quantification(dtm, quantifications, descriptions):
     distinctive_terms = [max(doc, key=lambda x:x[1]) if doc else [-1, 0] for doc in quantifications]
     most_distinct = sorted([[ind, elem] for ind, elem in enumerate(distinctive_terms)], key=lambda x:x[1][1], reverse=True)[:10]
     print("Most distinct terms:\n  "+"\n  ".join([f"*r*{dtm.all_terms[termid].ljust(12)}*r* ({str(round(value)).ljust(3)}) in `{getname(docid)}`" for docid, (termid, value) in most_distinct]))
-    frequent_words = [[dtm.all_terms[i[0]], i[1]] for i in sorted([[k, v] for k, v in dtm.doc_freqs().items()], key=lambda x: x[1], reverse=True)[:20]]
+    frequent_words = [[dtm.all_terms[i[0]], i[1]] for i in sorted([[k, v] for k, v in dtm.term_freqs().items()], key=lambda x: x[1], reverse=True)[:20]]
     print("Terms that are in many documents:", ", ".join([f"{i[0]} ({round(i[1]/len(dtm.dtm)*100)}%)" for i in frequent_words]))
     values_per_phrase = {}
     for phrase, value in flatten(quantifications):

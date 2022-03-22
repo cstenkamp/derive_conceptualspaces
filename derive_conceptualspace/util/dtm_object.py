@@ -55,7 +55,7 @@ class DocTermMatrix():
             self.show_info()
 
     def json_serialize(self):
-        return Struct(**{k:v for k,v in self.__dict__.items() if not k.startswith("_") and k not in ["csr_matrix", "doc_freqs", "reverse_term_dict"]})
+        return Struct(**{k:v for k,v in self.__dict__.items() if not k.startswith("_") and k not in ["csr_matrix", "reverse_term_dict"]})
 
     n_docs = property(lambda self: len(self.dtm))
 
@@ -72,17 +72,20 @@ class DocTermMatrix():
             max_ind = np.unravel_index(self.as_csr().argmax(), self.as_csr().shape)
             print(f"Max value: Term *b*{self.all_terms[max_ind[0]]}*b* has value *b*{dict(self.dtm[max_ind[1]])[max_ind[0]]:.3f}*b* for doc *b*{descriptions._descriptions[max_ind[1]].title}*b*")
 
-    def doc_freqs(self, verbose=False):
+    def term_freqs(self, verbose=False):
         """the number of documents containing a word, for all words"""
-        if not hasattr(self, "_doc_freqs"):
+        if not hasattr(self, "_term_freqs"):
             # occurences = [set(i[0] for i in doc) for doc in self.dtm]
-            # self._doc_freqs = {term: sum(term in doc for doc in occurences) for term in tqdm(list(self.all_terms.keys()), desc="Calculating Doc-Frequencies")}
-            self._doc_freqs = dict(enumerate(self.as_csr(binary=True).sum(axis=1).squeeze().tolist()[0]))
+            # self._term_freqs = {term: sum(term in doc for doc in occurences) for term in tqdm(list(self.all_terms.keys()), desc="Calculating Doc-Frequencies")}
+            self._term_freqs = dict(enumerate(self.as_csr(binary=True).sum(axis=1).squeeze().tolist()[0]))
             if verbose:
-                most_freq = sorted(self._doc_freqs.items(), key=lambda x:x[1], reverse=True)[:5]
+                most_freq = sorted(self._term_freqs.items(), key=lambda x:x[1], reverse=True)[:5]
                 print("Most frequent terms:", ", ".join([f"{self.all_terms[term]} ({num})" for term, num in most_freq]))
-        return self._doc_freqs
+        return self._term_freqs
 
+    def term_freq(self, term, relative=False):
+        tf = {self.all_terms[k]: v for k, v in self.term_freqs().items()}.get(term, 0)
+        return tf / (self.n_docs if relative else 1)
 
     def terms_per_doc(self):
         if not hasattr(self, "_terms_per_doc"):
@@ -133,7 +136,7 @@ class DocTermMatrix():
     def filter(dtm: "DocTermMatrix", min_count, use_n_docs_count=True, verbose=False, descriptions=None, cap_max=True):
         """accepts only a DocTermMatrix as input from now on. descriptions only for verbosity"""
         if use_n_docs_count:
-            term_counts = dtm.doc_freqs()
+            term_counts = dtm.term_freqs()
         else:
             flat_terms = [flatten([[i[0]] * i[1] for i in doc]) for doc in dtm]
             term_counts = Counter(flatten(flat_terms))

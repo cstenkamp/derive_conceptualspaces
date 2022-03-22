@@ -247,7 +247,7 @@ def json_load(fname, **kwargs): #assert_meta=(), return_meta=False,
 #     """see https://towardsdatascience.com/3-basic-approaches-in-bag-of-words-which-are-better-than-word-embeddings-c2cbc7398016"""
 #     assert False, "Different result than sklearn!"
 #     n_docs = len(doc_term_matrix.dtm)
-#     quantifications = [[[term, count * log(n_docs/doc_term_matrix.doc_freqs[term])] for term, count in doc] for doc in doc_term_matrix.dtm]
+#     quantifications = [[[term, count * log(n_docs/doc_term_matrix.term_freqs[term])] for term, count in doc] for doc in doc_term_matrix.dtm]
 #     if verbose:
 #         print("Running TF-IDF on the corpus...")
 #         print_quantification(doc_term_matrix, quantifications, descriptions)

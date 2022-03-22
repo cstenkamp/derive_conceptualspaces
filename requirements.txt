@@ -27,9 +27,9 @@ python-Levenshtein~=0.12.0 #für data_exploration.ipynb in data
 python-dotenv~=0.17.1
 
 #sacred
-# sacred==0.8.2
-# pymongo==3.11.4
-# incense==0.0.11
+sacred==0.8.2
+pymongo==3.11.4
+incense==0.0.11
 
 
 #model-downloader

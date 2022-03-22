@@ -158,27 +158,27 @@ def load_mds_representation(data_base, data_set, n_dims, return_array=True, fnam
     :param n_dims: How many dimensions for the MDS result
     :return: MDS-Representations. Result is referred to as S_{place} or S_{movie} in [DESC15].
     """
-    fname_out = fname_out or []
     assert str(n_dims) in ["3", "20", "50", "100", "200"]
     fname = join(data_base, data_set, f"d{n_dims}", f"{TRANSLATE_FNAME.get(data_set, data_set)}{n_dims}.mds")
-    fname_out.append(fname)
+    if fname_out is not None: fname_out.append(fname)
     res = []
     with open(fname, "r") as rfile:
         for line in rfile.readlines():
             l = [float(i) for i in line.strip().split("\t")]
             assert len(l) == n_dims
             res.append(l)
-    return (np.array(res) if return_array else res)#, fname
+    return (np.array(res) if return_array else res)
 
 
-def get_names(data_base, data_set):
+def get_names(data_base, data_set, fname_out=None):
     TRANSLATE_FNAME = {"movies": "filmNames.txt"}
     fname = join(data_base, data_set, TRANSLATE_FNAME.get(data_set, f"{data_set[:-1]}Names.txt"))
+    if fname_out is not None: fname_out.append(fname)
     with open(fname, "r") as rfile:
         names = [i.strip() for i in rfile.readlines()]
     if not len(set(names)) == len(names):
         print("!! The names-list is not unique after stripping! #TODO")
-    return names#, fname
+    return names
 
 
 def get_classes(data_base, data_set, **kwargs):
