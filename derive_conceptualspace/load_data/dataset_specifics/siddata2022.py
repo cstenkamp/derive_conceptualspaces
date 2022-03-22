@@ -23,8 +23,8 @@ class Dataset(BaseDataset):
     #mapper from https://www.uni-osnabrueck.de/fileadmin/documents/public/1_universitaet/1.2_zahlen_daten_fakten/Zahlenspiegel_2009-2010.pdf
     # FB_MAPPER = {1: "Sozial,(Kultur,Kunst)", 2:"Kultur,Geo", 3: "Erziehung,Kultur(Theo,Lehramt,Musik)", 4: "Physik", 5: "Bio,Chemie", 6: "Mathe,Info",
     #              7: "Sprache,Literatur", 8: "Humanwiss", 9: "Wiwi", 10: "Rechtswiss"}
-    FB_MAPPER = {1: "Sozial", 2:"Kultur/Geo", 3: "Erziehung/Kultur", 4: "Physik", 5: "Bio/Chemie", 6: "Mathe/Info",
-                 7: "Sprache", 8: "Humanwiss", 9: "Wiwi", 10: "Rechtswiss"}
+    FB_MAPPER = {1: "Sozialwissenschaften", 2:"Kultur-/Geowissenschaften", 3: "Erziehungs-/Kulturwissenschaften", 4: "Physik", 5: "Biologie/Chemie", 6: "Mathematik/Informatik",
+                 7: "Sprach-/Literaturwissenschaften", 8: "Humanwissenschaften", 9: "Wirtschaftswissenschaften", 10: "Rechtswissenschaften"}
 
     @staticmethod
     def get_custom_class(name, descriptions):
