@@ -188,10 +188,11 @@ def join_clusters_average(clusters, decision_planes):
 
 
 def join_clusters_reclassify(clusters, dcm, embedding, verbose=False):
+    if hasattr(embedding, "embedding_"): embedding = embedding.embedding_
     all_cand_mets = {}
     cluster_directions = {}
     for k, v in tqdm(clusters.items(), desc="Reclassifying Clusters"):
-        embed = embedding.embedding_
+        embed = embedding
         dtm = DocTermMatrix.submat_forterms(dcm, [k] + v)
         combined_quants = dtm.as_csr().toarray().sum(axis=0)
         if any(i < get_setting("CANDIDATE_MIN_TERM_COUNT") or i > dtm.n_docs-get_setting("CANDIDATE_MIN_TERM_COUNT") for i in Counter(np.array(combined_quants, dtype=bool)).values()):
@@ -199,7 +200,7 @@ def join_clusters_reclassify(clusters, dcm, embedding, verbose=False):
             c0_inds = np.where(combined_quants <= np.percentile(combined_quants, 30))[0]
             c1_inds = np.where(combined_quants >= np.percentile(combined_quants, 70))[0]
             used_inds = sorted(list(set(c0_inds)|set(c1_inds)))
-            embed = embedding.embedding_[used_inds]
+            embed = embedding[used_inds]
             if verbose:
                 print(f"For cluster {k}, the distribution is {dict(Counter(np.array(combined_quants, dtype=bool)))}, so we'll take the most distinct {get_setting('MOST_DISTINCT_PERCENT')}% ({len(c0_inds)} entities per class)")
             combined_quants = [combined_quants[i] if i in c1_inds else 0 for i in used_inds]
