@@ -10,6 +10,7 @@ from derive_conceptualspace.settings import get_setting
 from fb_classifier.preprocess_data import make_classifier_dict
 
 flatten = lambda l: [item for sublist in l for item in sublist]
+unique = lambda iterable: list({i:None for i in iterable}.keys())
 
 
 class Dataset(BaseDataset):
@@ -26,6 +27,10 @@ class Dataset(BaseDataset):
     FB_MAPPER = {1: "Sozialwissenschaften", 2:"Kultur-/Geowissenschaften", 3: "Erziehungs-/Kulturwissenschaften", 4: "Physik", 5: "Biologie/Chemie", 6: "Mathematik/Informatik",
                  7: "Sprach-/Literaturwissenschaften", 8: "Humanwissenschaften", 9: "Wirtschaftswissenschaften", 10: "Rechtswissenschaften"}
 
+    #mapper from https://en.wikipedia.org/wiki/Dewey_Decimal_Classification#Classes
+    DDC_MAPPER = {0: "Computer science, information, general", 1:"Philosophy and psychology", 2: "Religion", 3: "Social sciences", 4: "Language", 5: "Pure Science",
+                  6: "Technology", 7: "Arts and recreation", 8: "Literature", 9: "History and geography"}
+
     @staticmethod
     def get_custom_class(name, descriptions):
         if name == "fachbereich":
@@ -37,6 +42,16 @@ class Dataset(BaseDataset):
             print(f"{sum([1 for i in usables.values() if len(i) > 1])} courses are assigned more than 1 Fachbereich!")
             warnings.warn("Will return the first Fachbereich for those ambiguous courses!")
             return lambda x: usables.get(x)[0], list(usables.keys()), Dataset.FB_MAPPER
+        elif name.startswith("ddc_"):
+            level = int(name.split("_")[1].replace("level","").replace("l",""))
+            ddcs = [eval(i._additionals.get("ddc_code")) if i._additionals.get("ddc_code") else None for i in descriptions._descriptions]
+            print(f"Dropping {len(ddcs)-len([i for i in ddcs if i])}/{len(ddcs)} ({(len(ddcs)-len([i for i in ddcs if i]))/len(ddcs):.2%}) courses - there is no DDC for them")
+            assert all(all(j.isnumeric() for j in i) for i in ddcs if i), "The Format of the DDCs is unexpected!"
+            ddcs = [unique([j[:level] for j in i]) if i else None for i in ddcs]
+            print(f"{len([i for i in ddcs if i and len(i) > 1])} courses have multiple differing DDCs at this level!")
+            warnings.warn("Will return the first DDC for those ambiguous courses!")
+            ddcs = {k: v[0] for k, v in enumerate(ddcs) if v is not None}
+            return lambda x: ddcs.get(x), list(ddcs.keys()), (Dataset.DDC_MAPPER if level == 1 else None)
 
 
     @staticmethod

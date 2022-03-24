@@ -44,7 +44,8 @@ generated_paths = dict(
     postprocessed_candidates = "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/postprocessed_candidates_{extraction_method}.json",
     filtered_dcm =             "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/filtered_dcm_{extraction_method}_{dcm_quant_measure}.json",
     featureaxes =              "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}_{kappa_weights}/featureaxes.json",
-    clusters =                 "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}_{kappa_weights}/{classifier_succmetric}/{prim_lambda}_{sec_lambda}_{cluster_direction_algo}/clusters.json"
+    clusters =                 "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}_{kappa_weights}/{classifier_succmetric}/{prim_lambda}_{sec_lambda}_{cluster_direction_algo}/clusters.json",
+    cluster_reprs =            "{dataset}/{language}_debug_{debug}/{pp_components}_{translate_policy}_minwords{min_words_per_desc}/embedding_{quantification_measure}/{embed_algo}_{embed_dimensions}d/{extraction_method}_{dcm_quant_measure}_{kappa_weights}/{classifier_succmetric}/{prim_lambda}_{sec_lambda}_{cluster_direction_algo}/cluster_reprs.json",
 )
 #TODO can I auto-generate these from jsonpersister?!
 
@@ -299,6 +300,7 @@ class SnakeContext():
         filtered_dcm=dtm_loader,
         featureaxes=featureaxes_loader,
         clusters=cluster_loader,
+        cluster_reprs=lambda **args:args["reprs"],
     )
     # TODO das autoloader_di ist schon ne Mischung von Code und Daten, aber wohin sonst damit?
 

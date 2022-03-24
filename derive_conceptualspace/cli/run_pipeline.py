@@ -58,6 +58,9 @@ from derive_conceptualspace.evaluate.shallow_trees import (
     classify_shallowtree as classify_shallowtree_base,
     classify_shallowtree_multi as classify_shallowtree_multi_base,
 )
+from derive_conceptualspace.semantic_directions.cluster_names import (
+    get_cluster_reprs as get_cluster_reprs_base,
+)
 from derive_conceptualspace.util.dtm_object import dtm_dissimmat_loader, dtm_loader
 from derive_conceptualspace.util.interruptible_funcs import InterruptibleLoad
 from derive_conceptualspace.pipeline import featureaxes_loader, CustomContext, load_lang_translate_files, apply_dotenv_vars, cluster_loader
@@ -334,6 +337,24 @@ def cluster_candidates(ctx):
     ctx.obj["json_persister"].save("clusters.json", clusters=clusters, directions=directions)
     #TODO this needs WAY MORE Parameters & ways-how-to-do-it, see bottom of select_salient_terms_base
     #TODO im JsonPersister abbilden können wenn bestimmte dependencies or configs nur für gewisse parameter relevant sind (filtered_dcm & embedding brauch ich nur bei reclassify)
+
+
+@generate_conceptualspace.command()
+@click.option("--classifier-succmetric", type=str)
+@click.option("--word2vec-model-file", type=str, default=None)
+@click_pass_add_context
+def get_cluster_representations(ctx, classifier_succmetric, word2vec_model_file):
+    ctx.obj["featureaxes"] = ctx.obj["json_persister"].load(None, "featureaxes", loader=featureaxes_loader)
+    ctx.obj["clusters"] = ctx.obj["json_persister"].load(None, "clusters", loader=cluster_loader)
+    reprs = get_cluster_reprs_base(ctx.obj["clusters"]["clusters"], ctx.obj["featureaxes"], ctx.obj["filtered_dcm"],
+                                 metric=classifier_succmetric, model_path=join(ctx.p.in_dir, word2vec_model_file), lang=ctx.get_config("LANGUAGE"))
+    ctx.obj["json_persister"].save("cluster_reprs.json", reprs=reprs)
+
+
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
+# others
 
 @generate_conceptualspace.command()
 @click_pass_add_context

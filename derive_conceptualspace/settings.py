@@ -108,7 +108,11 @@ DEFAULT_NDIMS_NCANDS_FACTOR = 2 #in Ager2018, this is either 1 or 2
 DEFAULT_CLUSTER_DIRECTION_ALGO = "reclassify" #one of "mean", "main", "reclassify"
 DEFAULT_MOST_DISTINCT_PERCENT = 30 #for cluster-dir-algo "reclassify": if there are no c_{neg} entities, take the best/worst 30% for the classification (#TODO use this for the main Classifier)
 
-## 9) Shallow-Decision-Trees for Evaluation
+## 9) Get a Cluster-Name
+DEFAULT_CLUS_REP_ALGO = "top_1"
+
+
+## 10) Shallow-Decision-Trees for Evaluation
 DEFAULT_DT_DEPTH = 1 #None for unbound trees
 DEFAULT_DT_ONE_VS_REST = False #if trees for all-at-once (can only get 2**dt_depth different classes!) or one-vs-rest
 DEFAULT_TEST_PERCENTAGE_CROSSVAL = 0 #if an int, we will do X-fold-crossvalidation, if a 0<float<1, this will be the test-percentage
@@ -133,6 +137,8 @@ with set_noninfluentials(): #this context-manager adds all settings from here to
     DEFAULT_NOTIFY_TELEGRAM = False
 
     DEFAULT_RAW_DESCRIPTIONS_FILE = "raw_descriptions.csv"
+    DEFAULT_WORD2VEC_MODEL_FILE = "german.model"
+
     DEFAULT_LOG = "Info"
     DEFAULT_LOGFILE = ""
     DEFAULT_CONF_FILE = None

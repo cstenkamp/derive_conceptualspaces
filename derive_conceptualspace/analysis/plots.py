@@ -6,18 +6,31 @@ def set_seaborn():
     sns.set(font_scale=1.8)
     sns.set_style("whitegrid")
 
-def scatter_2d(df, category, catnames=None, legend_below=True, legend_cols=2):
+def scatter_2d(df, category, catnames=None, legend_below=True, legend_cols=2, **kwargs):
+    palette = lambda num: sns.color_palette([i for i in sns.color_palette("bright") if not i[0]==i[1]==i[2]], num) #no gray
     fig, ax = plt.subplots(figsize=(16, 10))
     sp = sns.scatterplot(
         x="x", y="y",
         hue=category,
-        palette=sns.color_palette("bright", len(df[category].unique())),
-        data=df,
+        palette=dict(unknown="gray"),
+        data=df[df[category] == "unknown"],
         legend="full",
-        alpha=0.7,
+        alpha=0.4,
         ax=ax
     )
     sp.set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None, title=f"t-SNE 2D-Embedding, colored by {category.capitalize()}")
+    sp = sns.scatterplot(
+        x="x", y="y",
+        hue=category,
+        palette=palette(len(df[df[category] != "unknown"][category].unique())),
+        data=df[df[category] != "unknown"],
+        legend="full",
+        alpha=0.7,
+        ax=ax,
+        **kwargs,
+    )
+    sp.set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None, title=f"t-SNE 2D-Embedding, colored by {category.capitalize()}")
+
     handles, labels = ax.get_legend_handles_labels()
     for h in handles:
         h._sizes = [300]

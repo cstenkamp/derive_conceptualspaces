@@ -58,6 +58,9 @@ from derive_conceptualspace.semantic_directions.create_candidate_svm import (
     create_candidate_svms as create_candidate_svms_base,
     select_salient_terms as select_salient_terms_base,
 )
+from derive_conceptualspace.semantic_directions.cluster_names import (
+    get_cluster_reprs as get_cluster_reprs_base,
+)
 from derive_conceptualspace.settings import (
     ENV_PREFIX,
     standardize_config,
@@ -70,7 +73,7 @@ from misc_util.telegram_notifier import telegram_notify, send_message
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
-LAST_RULE = "cluster_candidates"
+LAST_RULE = "get_cluster_representations" #see also `LAST_RESULT` in args_from_filename (IT SHOULDN'T BE THERE!!)
 NONDEFAULT_RULES = ["all", "default", "all_for", "by_config"]
 
 #on the cluster, I sometimes get this error: https://github.com/snakemake/snakemake/issues/1244
@@ -327,6 +330,24 @@ rule cluster_candidates:
                                                          prim_lambda=ctx.get_config("prim_lambda"), sec_lambda=ctx.get_config("sec_lambda"),
                                                          metricname=ctx.get_config("classifier_succmetric"), verbose=ctx.get_config("verbose"))
         ctx.obj["json_persister"].save("clusters.json", clusters=clusters, directions=directions)
+
+
+rule get_cluster_representations:
+    input:
+        clusters = generated_paths["clusters"],
+        featureaxes = generated_paths["featureaxes"],
+        filtered_dcm = generated_paths["filtered_dcm"],
+        embedding = generated_paths["embedding"],
+    output:
+        generated_paths["cluster_reprs"]
+    threads: 3 #KeyBERT can do MP
+    run:
+        autoload_context_inputs(ctx, input, wildcards)
+        clusters, clusterdirs = ctx.obj["clusters"].values()
+        reprs = get_cluster_reprs_base(clusters, ctx.obj["featureaxes"], ctx.obj["filtered_dcm"], metric=ctx.get_config("classifier_succmetric"),
+                                       model_path=join(ctx.p.in_dir, ctx.get_config("word2vec_model_file")), lang=ctx.get_config("LANGUAGE"))
+        ctx.p.save("cluster_reprs.json", reprs=reprs)
+
 
 
 ########################################################################################################################
