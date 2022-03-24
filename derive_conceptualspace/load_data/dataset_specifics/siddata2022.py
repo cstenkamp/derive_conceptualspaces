@@ -32,24 +32,27 @@ class Dataset(BaseDataset):
                   6: "Technology", 7: "Arts and recreation", 8: "Literature", 9: "History and geography"}
 
     @staticmethod
-    def get_custom_class(name, descriptions):
+    def get_custom_class(name, descriptions, verbose=True):
         if name == "fachbereich":
             veranst_nums = [eval(i._additionals.get("veranstaltungsnummer")) or None for i in descriptions._descriptions]
             new_dset = make_classifier_dict(dict(enumerate(veranst_nums)))
             usables = {k: [int(v) for v in vs if v != "other" and int(v) <= 10] for k, vs in new_dset.items() if vs != "other"}
             usables = {k: v for k, v in usables.items() if v and any(i is not None for i in v)}
-            print(f"Dropping {len(new_dset)-len(usables)}/{len(new_dset)} ({(len(new_dset)-len(usables))/len(new_dset):.2%}) courses - there is no Fachbereich for them")
-            print(f"{sum([1 for i in usables.values() if len(i) > 1])} courses are assigned more than 1 Fachbereich!")
-            warnings.warn("Will return the first Fachbereich for those ambiguous courses!")
+            if verbose:
+                print(f"Dropping {len(new_dset)-len(usables)}/{len(new_dset)} ({(len(new_dset)-len(usables))/len(new_dset):.2%}) courses - there is no Fachbereich for them")
+                print(f"{sum([1 for i in usables.values() if len(i) > 1])} courses are assigned more than 1 Fachbereich!")
+                warnings.warn("Will return the first Fachbereich for those ambiguous courses!")
             return lambda x: usables.get(x)[0], list(usables.keys()), Dataset.FB_MAPPER
         elif name.startswith("ddc_"):
             level = int(name.split("_")[1].replace("level","").replace("l",""))
             ddcs = [eval(i._additionals.get("ddc_code")) if i._additionals.get("ddc_code") else None for i in descriptions._descriptions]
-            print(f"Dropping {len(ddcs)-len([i for i in ddcs if i])}/{len(ddcs)} ({(len(ddcs)-len([i for i in ddcs if i]))/len(ddcs):.2%}) courses - there is no DDC for them")
+            if verbose:
+                print(f"Dropping {len(ddcs)-len([i for i in ddcs if i])}/{len(ddcs)} ({(len(ddcs)-len([i for i in ddcs if i]))/len(ddcs):.2%}) courses - there is no DDC for them")
             assert all(all(j.isnumeric() for j in i) for i in ddcs if i), "The Format of the DDCs is unexpected!"
             ddcs = [unique([j[:level] for j in i]) if i else None for i in ddcs]
-            print(f"{len([i for i in ddcs if i and len(i) > 1])} courses have multiple differing DDCs at this level!")
-            warnings.warn("Will return the first DDC for those ambiguous courses!")
+            if verbose:
+                print(f"{len([i for i in ddcs if i and len(i) > 1])} courses have multiple differing DDCs at this level!")
+                warnings.warn("Will return the first DDC for those ambiguous courses!")
             ddcs = {k: v[0] for k, v in enumerate(ddcs) if v is not None}
             return lambda x: ddcs.get(x), list(ddcs.keys()), (Dataset.DDC_MAPPER if level == 1 else None)
 

@@ -1,3 +1,4 @@
+notebooks/not_mine/
 config/*.env
 .snakemake/
 data_dump

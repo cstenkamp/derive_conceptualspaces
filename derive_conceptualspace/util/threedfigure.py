@@ -32,7 +32,7 @@ def ortho_projection_affine(a, b):
 class ThreeDFigure():
     hovertemplate = "<br>".join(["X: %{x}", "Y: %{y}", "Z: %{z}"])
 
-    def __init__(self, trafo_fn=None, back_trafo_fn=None, swap_axes=None, name=None):
+    def __init__(self, trafo_fn=None, back_trafo_fn=None, swap_axes=None, name=None, width=1000, height=800, bigfont=False):
         self.trafo_fn = trafo_fn if trafo_fn is not None else lambda x: x
         self.back_trafo_fn = back_trafo_fn if back_trafo_fn is not None else lambda x: x
         self.swap_axes = swap_axes
@@ -40,12 +40,13 @@ class ThreeDFigure():
         self.fig = go.Figure(layout=go.Layout(
             scene=dict(camera=dict(eye=dict(x=1, y=1, z=1)), aspectmode="data"),
             autosize=True,
-            width=1000,
-            height=800,
-            margin=dict(l=10, r=10, b=10, t=30 if name else 10, pad=4),
+            width=width,
+            height=height,
+            margin=dict(l=10, r=10, b=10, t=40 if name else 10, pad=4),
             paper_bgcolor="White",
             title=name))
         self.fig.update_layout(legend={'itemsizing': 'constant'})
+        if bigfont: self.fig.update_layout(legend_font_size=16, title_font_size=20)
         self.shown_legendgroups = [] #https://stackoverflow.com/a/26940058/5122790
 
     def _transform(self, points, inverse=False):
@@ -83,7 +84,7 @@ class ThreeDFigure():
         res = {k: surface_form(points[:, ind]) for ind, k in enumerate("xyz")}
         return {**res, **{"surfacecolor": surface_form(cols)}}
 
-    def add_surface(self, plane, samples, labels=None, margin=0, swap_axes=None, opacity=0.9, color="blue", showlegend=False):
+    def add_surface(self, plane, samples, labels=None, margin=0, swap_axes=None, opacity=0.9, color="blue", showlegend=False, name=None):
         xx, yy, zz, cols = [v for v in self._get_surface_tight(plane, samples, margin).values()]
         points = np.vstack([xx.flatten(), yy.flatten(), zz.flatten()]).T
         points = self._transform(points)
@@ -98,7 +99,7 @@ class ThreeDFigure():
                        cmin=0,
                        cmax=1,
                        colorscale=[[0, color], [0.999, color], [1, "rgba(0,0,0,0)"]],
-                       opacity=opacity, showlegend=showlegend, showscale=False
+                       opacity=opacity, showlegend=showlegend, showscale=False, name=name,
                        )
         )
 
@@ -163,14 +164,14 @@ class ThreeDFigure():
             proj = ortho_projection_affine(point, onto)
             self.add_line(point, proj, **kwargs)
 
-    def add_quader(self, coords, name=None, color="#DC143C"):
+    def add_quader(self, coords, name=None, color="#DC143C", opacity=0.6):
         self.fig.add_trace(
             go.Mesh3d(
                 x=coords[0], y=coords[1], z=coords[2],
                 i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
                 j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
                 k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
-                opacity=0.6,
+                opacity=opacity,
                 color=color,
                 flatshading=True,
                 name=name,

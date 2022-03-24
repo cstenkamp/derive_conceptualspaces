@@ -1,4 +1,5 @@
 import os
+from functools import partial
 from os.path import join, dirname, splitext
 from parse import parse
 import math
@@ -9,11 +10,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from derive_conceptualspace.evaluate.shallow_trees import classify_shallowtree
+from derive_conceptualspace.pipeline import SnakeContext
+from derive_conceptualspace.util.threadworker import WorkerPool
 from misc_util.pretty_print import display
 
 from derive_conceptualspace import settings
-from derive_conceptualspace.settings import standardize_config_name
+from derive_conceptualspace.settings import standardize_config_name, DEFAULT_N_CPUS
 from derive_conceptualspace.util.jsonloadstore import get_file_config
+
 
 def getfiles_allconfigs(basename, dataset=None, base_dir=None, ext=".json", only_nondebug=True, parse_all=False, verbose=True):
     dataset = dataset or os.environ["MA_DATASET"]
@@ -31,8 +36,10 @@ def getfiles_allconfigs(basename, dataset=None, base_dir=None, ext=".json", only
         configs = [get_file_config(os.environ["MA_BASE_DIR"], cand, re.findall(r'{(.*?)}', "".join(settings.DIR_STRUCT))) for cand in candidates]
     else:
         filename_confs = [i for i in re.findall(r'{(.*?)}', os.sep.join(settings.DIR_STRUCT))]
-        configs = [{[i for i in filename_confs if standardize_config_name(i) == k][0]: v for k, v in get_file_config(os.environ["MA_BASE_DIR"], cand, re.findall(r'{(.*?)}', "".join(settings.DIR_STRUCT))).items() if k in [standardize_config_name(i) for i in filename_confs]}
-                   for cand in candidates]
+        getconf = lambda cand: get_file_config(os.environ["MA_BASE_DIR"], cand, re.findall(r'{(.*?)}', "".join(settings.DIR_STRUCT)))
+        trnsl = {standardize_config_name(i): i for i in filename_confs}
+        order = {{v2: k2 for k2,v2 in trnsl.items()}[v]: k for k, v in enumerate(filename_confs)} #ensure later settings come up later
+        configs = [{trnsl[k]: v for k, v in sorted([(k2,v2) for k2,v2 in getconf(cand).items() if k2 in trnsl], key=lambda x:order[x[0]])} for cand in candidates]
         # configs = [parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]+[basename+ext]), cand).named for cand in candidates if parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]+[basename+ext]), cand)] \
         #          + [prs.named for cand in candidates if (prs := parse(os.sep.join(settings.DIR_STRUCT[:cand.count(os.sep)]+[basename+"_"+("_".join(re.findall(r'({.*?})', settings.DIR_STRUCT[cand.count(os.sep)+1])))+ext]), cand))]
         #          #the second summand is for the cases where where not all configs to justify a new dir are there so the rest of the configs overflow to the filename
@@ -93,12 +100,13 @@ def highlight_nonzero_max(data):
 
 
 def df_to_latex(df, styler, resizebox=True, bold_keys=True, rotate="45", rotate_index=False, caption=None):
+    rotate = str(rotate) if rotate is not False else False
     df = df.copy()
     if bold_keys:
         indexnames = ["\\textbf{"+i+"}" for i in df.index.names]
         if rotate and rotate_index: indexnames = ["\\rotatebox{"+rotate+"}{"+i+"}" for i in indexnames]
-        df.index = pd.MultiIndex.from_tuples([["\\textbf{"+j+"}" for j in i] for i in df.index], names=indexnames)
-        df.columns = ["\\textbf{"+i+"}" for i in df.columns]
+        df.index = pd.MultiIndex.from_tuples([["\\textbf{"+str(j)+"}" for j in i] for i in df.index], names=indexnames)
+        df.columns = ["\\textbf{"+(str(i[1]) if isinstance(i, (list, tuple)) else i)+"}" for i in df.columns] #i[1] if it's a named index
     res = styler(df)
     if rotate: res.applymap_index(lambda v: "rotatebox:{"+rotate+"}--rwrap--latex;", axis=1)
     txt = res.to_latex(convert_css=True, clines="skip-last;index", multirow_align="t", hrules=True, siunitx=False, caption=caption)
@@ -110,3 +118,39 @@ def df_to_latex(df, styler, resizebox=True, bold_keys=True, rotate="45", rotate_
     txt = "\n".join([i for i in txt if i]).replace("nan", "-")
     txt = txt.replace("≥", "$\\geq$")
     return txt
+
+
+
+SHORTEN_DICT = {
+    "kappa": "k",
+    "dense": "d",
+    "rank2rank": "r2r",
+    "count2rank": "c2r",
+    "bin2bin": "b2b",
+    "f_one": "f1",
+    "digitized": "dig",
+    "_onlypos": "+"
+}
+def shorten_met(met, reverse=False):
+    for k, v in ({v2: k2 for k2, v2 in SHORTEN_DICT.items()} if reverse else SHORTEN_DICT).items():
+        met = met.replace(k, v)
+    return met
+
+
+def get_best_conf(classes, nprocs=DEFAULT_N_CPUS-1, verbose=True, **kwargs): #kwargs can be: balance_classes, test_percentage_crossval, dt_depth, one_vs_rest
+    configs, print_cnf = getfiles_allconfigs("clusters", verbose=True)
+    def get_tree_perf(conf, print_cnf):
+        ctx = SnakeContext.loader_context(config=conf, silent=True, warn_filters=["DifferentFileWarning"])
+        clusters, embedding, descriptions = ctx.load("clusters", "embedding", "pp_descriptions")
+        res = classify_shallowtree(clusters, embedding, descriptions, ctx.obj["dataset_class"], classes=classes,
+                                   return_features=False, shutup=True, clus_rep_algo="top_1", **kwargs)
+        cnf = tuple(v for k, v in conf.items() if isinstance(print_cnf[k], list))
+        return cnf, res
+    with WorkerPool(nprocs, pgbar="Getting Best-Performing Config") as pool:
+        perconf_list, interrupted = pool.work(configs, partial(get_tree_perf, print_cnf=print_cnf))
+    best = max(perconf_list, key=lambda x:x[1])
+    if verbose:
+        if len(set(dict(perconf_list))-{tuple()}) > 0:
+            display(pd.DataFrame(dict(perconf_list).values(), index=dict(perconf_list).keys(), columns=["Accuracy"]).unstack(level=[0,1,2]))
+        print(f"Best Accuracy: {best[1]:.2%}")
+    return ({**{k: v for k, v in print_cnf.items() if not isinstance(v, list)}, **dict(zip([k for k, v in print_cnf.items() if isinstance(v, list)],best[0]))}, best[1])

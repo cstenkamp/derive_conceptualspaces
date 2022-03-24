@@ -13,6 +13,7 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import cross_val_score, train_test_split
 from scipy.stats import rankdata
 
+from derive_conceptualspace.semantic_directions.cluster_names import get_name_dict
 from derive_conceptualspace.settings import get_setting
 from misc_util.pretty_print import pretty_print as print, isnotebook, display
 
@@ -38,17 +39,9 @@ def classify_shallowtree_multi(clusters, embedding, descriptions, dataset_class,
     return df
 
 
-def get_name_dict(clusters, cluster_reprs, clus_rep_algo):
-    if clus_rep_algo.startswith("top"):
-        topwhat = int(clus_rep_algo.split("_")[1])
-        return {k: ",".join(([k]+v)[:topwhat]) for k, v in clusters.items()}
-    elif clus_rep_algo in ["keybert", "gensim", "gensim_w1", "gensim_w2", "gensim_w3"]:
-        return {k: v[clus_rep_algo] for k, v in cluster_reprs.items()}
-
-
 def classify_shallowtree(clusters, embedding, descriptions, dataset_class, one_vs_rest, dt_depth, test_percentage_crossval,
                          classes=None, cluster_reprs=None, do_plot=False, verbose=False, return_features=True,
-                         balance_classes=True, **kwargs):
+                         balance_classes=True, clus_rep_algo=None, shutup=False, **kwargs):
     clusters, planes = clusters.values()
     if classes is None:
         classes = descriptions.additionals_names[0]
@@ -59,32 +52,34 @@ def classify_shallowtree(clusters, embedding, descriptions, dataset_class, one_v
         hascat = [n for n,i in enumerate(descriptions._descriptions) if i._additionals[classes] is not None]
         getcat = lambda i: descriptions._descriptions[i]._additionals[classes]
     elif hasattr(dataset_class, "get_custom_class"):
-        getcat, hascat, catnames = dataset_class.get_custom_class(classes, descriptions, **kwargs)
+        getcat, hascat, catnames = dataset_class.get_custom_class(classes, descriptions, verbose=(verbose and not shutup), **kwargs)
     else:
         raise Exception(f"The class {classes} does not exist!")
     if catnames:
         orig_getcat = getcat; getcat = lambda x: catnames.get(int(orig_getcat(x)), orig_getcat(x))
 
-    print(f"Using classes from {classes} - {len(hascat)}/{len(descriptions)} entities have a class")
+    if not shutup:
+        print(f"Using classes from {classes} - {len(hascat)}/{len(descriptions)} entities have a class")
     cats = {i: getcat(i) for i in hascat}
 
-    cluster_names = get_name_dict(clusters, cluster_reprs, get_setting("CLUS_REP_ALGO"))
-
+    cluster_names = get_name_dict(clusters, cluster_reprs, clus_rep_algo)
     #first I want the distances to the origins of the respective dimensions (induced by the clusters), what induces the respective rankings (see DESC15 p.24u, proj2 of load_semanticspaces.load_projections)
     axis_dists = {i: {cluster_names[k]: v.dist(embedding[i]) for k, v in planes.items()} for i in hascat}
-    best_per_dim = {k: descriptions._descriptions[v].title for k, v in pd.DataFrame(axis_dists).T.idxmax().to_dict().items()}
-    if verbose:
+    if verbose and not shutup:
+        best_per_dim = {k: descriptions._descriptions[v].title for k, v in pd.DataFrame(axis_dists).T.idxmax().to_dict().items()}
         print("Highest-ranking descriptions [with any class] per dimension:\n    "+"\n    ".join([f"*b*{k.ljust(max([len(i) for i in best_per_dim.keys()][:20]))}*b*: {v}" for k, v in best_per_dim.items()][:20]))
     #TODO also show places 2, 3, 4 - hier sehen wir wieder sehr ähnliche ("football stadium", "stadium", "fan" for "goalie")
     #TODO axis_dists is all I need for the movietuner already!! I can say "give me something like X, only with more Y"
 
-    print(f"Labels ({len(set(cats.values()))} classes):", ", ".join(f"*b*{k}*b*: {v}" for k, v in Counter(cats.values()).items())) #TODO pay attention! consider class_weight etc!
+    if not shutup:
+        print(f"Labels ({len(set(cats.values()))} classes):", ", ".join(f"*b*{k}*b*: {v}" for k, v in Counter(cats.values()).items())) #TODO pay attention! consider class_weight etc!
     consider = pd.DataFrame({descriptions._descriptions[i].title: axis_dists[i] for i in hascat})
     ranked = pd.DataFrame([rankdata(i) for i in consider.values], index=consider.index, columns=consider.columns).astype(int).T
     ranked = ranked / ranked.shape[0] #looks better if we're doing relative rankings
     #TODO Teilweise sind Dinge ja in mehreren Klassen, da muss ich dann ja mehrere trees pro class machen!
-    print(f'Eval-Settings: type: *b*{("one-vs-rest" if one_vs_rest else "all-at-once")}*b*, DT-Depth: *b*{dt_depth}*b*, train-test-split:*b*',
-          f'{test_percentage_crossval}-fold cross-validation' if test_percentage_crossval > 1 else f'{test_percentage_crossval*100:.1f}% in test-set', "*b*")
+    if not shutup:
+        print(f'Eval-Settings: type: *b*{("one-vs-rest" if one_vs_rest else "all-at-once")}*b*, DT-Depth: *b*{dt_depth}*b*, train-test-split:*b*',
+              f'{test_percentage_crossval}-fold cross-validation' if test_percentage_crossval > 1 else f'{test_percentage_crossval*100:.1f}% in test-set', "*b*")
     class_percents = sorted([i / len(cats) for i in Counter(cats.values()).values()], reverse=True)
     features_outvar = []
     all_targets = []
@@ -99,7 +94,7 @@ def classify_shallowtree(clusters, embedding, descriptions, dataset_class, one_v
             plottree_strs.append(plottree_str)
             all_targets.append(targets)
             all_classes.append(["other", cat])
-        if do_plot: #holy shit that merging took a while - see https://stackoverflow.com/q/47258673/5122790 for how
+        if do_plot and not shutup: #holy shit that merging took a while - see https://stackoverflow.com/q/47258673/5122790 for how
             dot_cnts = [subprocess.run(["dot"], stdout=subprocess.PIPE, input=str(i), encoding="UTF-8").stdout for n, i in enumerate(plottree_strs)]
             if not isnotebook():
                 a = subprocess.run(["dot"], stdout=subprocess.PIPE, input="\n".join(dot_cnts), encoding="UTF-8").stdout
@@ -111,14 +106,15 @@ def classify_shallowtree(clusters, embedding, descriptions, dataset_class, one_v
                 os.system("xdg-open merge.pdf")
             else:
                 JUPYTER_N_COLS = 2
-                plots = [subprocess.run(["gvpack", "-m50"], stdout=subprocess.PIPE, input="\n".join(dot_cnts[i:i+JUPYTER_N_COLS]), encoding="UTF-8").stdout for i in range(0, len(dot_cnts), JUPYTER_N_COLS)]
+                plots = [subprocess.run(["gvpack", "-m50"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, input="\n".join(dot_cnts[i:i+JUPYTER_N_COLS]), encoding="UTF-8").stdout for i in range(0, len(dot_cnts), JUPYTER_N_COLS)]
                 for plot in plots:
                     display(graphviz.Source(plot))
                     print("\n\n")
-        print("Per-Class-Scores:", ", ".join(f"{k}: {v:.2f}" for k, v in scores.items()))
-        print(f"Unweighted Mean Accuracy: {sum(scores.values()) / len(scores.values()):.2%}")
-        score = sum([v*Counter(cats.values())[k] for k, v in scores.items()])/len(cats)
-        print(f"Weighted Mean Accuracy: {score:.2%}")
+        score = sum([v * Counter(cats.values())[k] for k, v in scores.items()]) / len(cats)
+        if not shutup:
+            print("Per-Class-Scores:", ", ".join(f"{k}: {v:.2f}" for k, v in scores.items()))
+            print(f"Unweighted Mean Accuracy: {sum(scores.values()) / len(scores.values()):.2%}")
+            print(f"Weighted Mean Accuracy: {score:.2%}")
     else: #all at once
         if dt_depth is not None and len(set(cats.values())) > 2**dt_depth:
             warnings.warn(f"There are more classes ({len(set(cats.values()))}) than your decision-tree can possibly classify ({2**dt_depth})")
@@ -127,10 +123,11 @@ def classify_shallowtree(clusters, embedding, descriptions, dataset_class, one_v
         score,_ = classify(ranked.values, targets, list(ranked.columns), list(catnames.values()), dt_depth, test_percentage_crossval, do_plot=do_plot,
                          features_outvar=features_outvar, balance_classes=balance_classes, do_render = False)
         all_classes.append(list(catnames.values()))
-        print(f"Accuracy: {score:.2f}")
-        if dt_depth == 1:
-            print(f"Baseline Accuracy: {class_percents[0]:.2f}") #all into one class. Praxis is often worse than this because we have class_weight=balanced.
-            print(f"Maximally achievable Accuracy: {sum(class_percents[:2]):.2f}") #two leaves, one is the (perfectly classified) class 1, the other get's the label for the second-most-common class
+        if not shutup:
+            print(f"Accuracy: {score:.2f}")
+            if dt_depth == 1:
+                print(f"Baseline Accuracy: {class_percents[0]:.2f}") #all into one class. Praxis is often worse than this because we have class_weight=balanced.
+                print(f"Maximally achievable Accuracy: {sum(class_percents[:2]):.2f}") #two leaves, one is the (perfectly classified) class 1, the other get's the label for the second-most-common class
     if return_features:
         return [features_outvar, ranked, all_targets, list(scores.values()) if one_vs_rest else [score], all_classes]
     return score

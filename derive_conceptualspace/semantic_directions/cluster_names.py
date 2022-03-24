@@ -6,6 +6,8 @@ import numpy as np
 from tqdm import tqdm
 from keybert import KeyBERT
 
+from derive_conceptualspace.settings import get_setting
+
 flatten = lambda l: [item for sublist in l for item in sublist]
 
 
@@ -79,3 +81,11 @@ def get_cluster_reprs(clusters, featureaxes, filtered_dcm, metric, model_path, l
                       )
     return res
 
+
+def get_name_dict(clusters, cluster_reprs, clus_rep_algo=None):
+    clus_rep_algo = clus_rep_algo or get_setting("CLUS_REP_ALGO")
+    if clus_rep_algo.startswith("top"):
+        topwhat = int(clus_rep_algo.split("_")[1])
+        return {k: ",".join(([k]+v)[:topwhat]) for k, v in clusters.items()}
+    elif clus_rep_algo in ["keybert", "gensim", "gensim_w1", "gensim_w2", "gensim_w3"]:
+        return {k: v[clus_rep_algo] for k, v in cluster_reprs.items()}

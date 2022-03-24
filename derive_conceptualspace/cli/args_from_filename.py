@@ -2,6 +2,7 @@ import argparse
 import os
 from os.path import join, isdir, isfile, abspath, dirname, splitext, basename, split
 import re
+import warnings
 
 from dotenv.main import load_dotenv
 from parse import parse
@@ -50,7 +51,17 @@ def apply_dotenv_vars(ENV_PREFIX="MA"):
 def get_filename(variables, get_dependencies=True, doprint=True):
     if not isinstance(variables, dict):
         variables = dict([[j.strip() for j in i.split(":")] for i in variables.split(",")])
-    path = generated_paths[LAST_RESULT].format_map({k.lower(): v for k, v in variables.items()})
+    try:
+        path = generated_paths[LAST_RESULT].format_map({k.lower(): v for k, v in variables.items()})
+    except KeyError:
+        warnings.warn("Assuming that generated_paths is sorted!")
+        for key in list(generated_paths.keys())[::-1]:
+            try:
+                path = generated_paths[key].format_map({k.lower(): v for k, v in variables.items()})
+            except KeyError:
+                pass
+            else:
+                break
     if not get_dependencies:
         if doprint: print(path)
         return path
