@@ -16,5 +16,6 @@ def remove_unnecesssary_columns(data):
     :param data: the raw data as saved in the tsv
     :return: only the classes- and description-columns with meaningful column-names
     """
-    data = data.set_index("Name")
-    return data["VeranstaltungsNummer"]
+    # data = data.set_index("Name")
+    # return data["VeranstaltungsNummer"]
+    return data.set_index("text")["class"]

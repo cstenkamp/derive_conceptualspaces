@@ -25,14 +25,14 @@ from fb_classifier.dataset import load_data
 from fb_classifier.train import TrainPipeline
 # from src.fb_classifier.util.misc import get_all_debug_confs, clear_checkpoints_summary
 from fb_classifier.util.misc import get_all_configs
-from fb_classifier.settings import CLASSIFIER_CHECKPOINT_PATH, SUMMARY_PATH, MONGO_URI, DATA_BASE
+from fb_classifier.settings import CLASSIFIER_CHECKPOINT_PATH, SUMMARY_PATH, MONGO_URI, DATA_BASE, DEBUG
 import fb_classifier
 
 ex = Experiment("Fachbereich_Classifier")
 ex.observers.append(MongoObserver(url=MONGO_URI, db_name=os.environ["MONGO_DATABASE"]))
 ex.captured_out_filter = apply_backspaces_and_linefeeds
 ex.add_config(get_all_configs(as_string=False))
-ex.add_config(DEBUG=get_setting("DEBUG"))
+ex.add_config(DEBUG=DEBUG)
 for pyfile in [join(path, name) for path, subdirs, files in os.walk(dirname(fb_classifier.__file__)) for name in files if splitext(name)[1] == ".py"]:
     ex.add_source_file(pyfile)
 
@@ -55,11 +55,11 @@ def run_experiment(_run):
         logging.warning(f"Continuing run {latest_exp}")
         #TODO check if the configs are the same and the run is not through yet!
 
-    if get_setting("DEBUG"):
+    if DEBUG:
         tf.config.run_functions_eagerly(True)
         tf.data.experimental.enable_debug_mode()
 
-    raw_data = os.path.join(DATA_BASE, "kurse-beschreibungen.csv")
+    raw_data = os.path.join(DATA_BASE, "siddata_fachbereich.csv")
     traintest = create_traintest(raw_data)
     data = preprocess_data(traintest, os.path.join(DATA_BASE, "preprocessed_dataset"), force_overwrite=False)
 
@@ -90,10 +90,8 @@ def parse_command_line_args():
                         help='log-level for logging-module. one of [DEBUG, INFO, WARNING, ERROR, CRITICAL]',)
     parser.add_argument('--logfile', dest='logfile', default='',
                         help='logfile to log to. If not set, it will be logged to standard stdout/stderr')
-    # parser.add_argument('--restart', default=False, action='store_true',
-    #                     help='If you want to delete checkpoint and logging and restart from scratch',)
     parser.add_argument('--no-continue', default=False, action='store_true',
-                         help='If you dont want to continue from the last checkpoint (default True)',)
+                         help='If you DONT want to continue from the last checkpoint (default False)',)
     parsed_args = parser.parse_args()
     sys.argv = SACRED_ARGV
     return parsed_args

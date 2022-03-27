@@ -181,6 +181,9 @@ class ThreeDFigure():
         )
         self.shown_legendgroups.append(name)
 
+    def show(self):
+        self.fig.update_layout(legend={'itemsizing': 'constant'})
+        self.fig.show()
 
     def __enter__(self, *args):
         return self
@@ -188,7 +191,3 @@ class ThreeDFigure():
     def __exit__(self, exc_type, exc, exc_tb):
         if not exc_type:
             return self.fig
-
-    def show(self):
-        self.fig.show()
-

@@ -21,7 +21,7 @@ def get_pp_config():
 
 
 def create_traintest(sourcefile):
-    all_sources = dict(zip(["train", "test"], train_test_split(pd.read_csv(sourcefile), train_size=PP_TRAIN_PERCENTAGE)))
+    all_sources = dict(zip(["train", "test"], train_test_split(pd.read_csv(sourcefile, index_col=0), train_size=PP_TRAIN_PERCENTAGE)))
     sources = {}
     for source, cont in all_sources.items():
         cont.to_csv(join(dirname(sourcefile), splitext(sourcefile)[0]+"_"+source + ".csv"))
@@ -47,7 +47,7 @@ def preprocess_data(sources, dest_path: str, force_overwrite: bool = False): #so
         data = load_data(sources)
         all_vals = set()
         for key, val in data.items():
-            val = make_classifier_class(key, val)
+            # val = make_classifier_class(key, val)
             val.to_csv(join(dest_path, key+'.csv'))
             all_vals.update(set(val.values))
         write_config(dest_path, get_pp_config())

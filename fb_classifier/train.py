@@ -4,8 +4,9 @@ from datetime import datetime
 import pandas as pd
 from tqdm import tqdm
 
-from fb_classifier.settings import ANN_EPOCHS, CLASSIFIER_CHECKPOINT_PATH, CHECKPOINT_ALL_EPOCHS, LABEL_NAME, DPOINT_NAME, \
-    DEBUG_SHOW_ANN_INPUT, SUMMARY_PATH, LOG_ALL_EPOCHS, CHECKPOINT_LOG_ALL_TIME, DOMINANT_METRIC
+from fb_classifier.settings import ANN_EPOCHS, CLASSIFIER_CHECKPOINT_PATH, CHECKPOINT_ALL_EPOCHS, LABEL_NAME, \
+    DPOINT_NAME, \
+    DEBUG_SHOW_ANN_INPUT, SUMMARY_PATH, LOG_ALL_EPOCHS, CHECKPOINT_LOG_ALL_TIME, DOMINANT_METRIC, DEBUG
 from fb_classifier.model import FB_Classifier
 from fb_classifier.util.debug_tools import debug_tf_function
 from fb_classifier.dataset import get_dset_len
@@ -116,8 +117,9 @@ class TrainPipeline():
             metric.reset_states()
 
         iterator = enumerate(self.dataset[setname])
-        if size: #TODO das vielleicht nur wenn debugging True? ich bezweifel dass tf das elegantieren kann
-            iterator = tqdm(enumerate(self.dataset[setname]), total=size)
+        if size and DEBUG:
+            iterator = tqdm(enumerate(self.dataset[setname]), total=size, desc="Iteration")
+
         for num, batch in iterator:
         #TODO feels weird not to iterate over train_iterator, see https://www.tensorflow.org/guide/data#iterator_checkpointing
         #however this being already an iterator cannot reset after an epoch, so I'd need to call the Checkpoint-constructor every epoch??

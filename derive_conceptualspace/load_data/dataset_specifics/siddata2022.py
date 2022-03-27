@@ -33,6 +33,7 @@ class Dataset(BaseDataset):
 
     @staticmethod
     def get_custom_class(name, descriptions, verbose=True):
+        name = name.lower()
         if name == "fachbereich":
             veranst_nums = [eval(i._additionals.get("veranstaltungsnummer")) or None for i in descriptions._descriptions]
             new_dset = make_classifier_dict(dict(enumerate(veranst_nums)))

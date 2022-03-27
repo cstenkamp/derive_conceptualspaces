@@ -3,11 +3,12 @@ from os.path import join, isdir, isfile, abspath, dirname, splitext
 import json
 
 import numpy as np
+import pandas as pd
+from matplotlib import pyplot as plt
 
-from derive_conceptualspace.util.base_changer import ThreeDPlane
 from derive_conceptualspace.util.threedfigure import ThreeDFigure, make_meshgrid
-
 from derive_conceptualspace.util.jsonloadstore import json_dump
+from derive_conceptualspace.util.mpl_tools import show_hist
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 
@@ -15,6 +16,7 @@ TRANSLATE_FNAME = {"movies": "films"}
 
 #TODO If I want to do that for classes as well, I have to create these as well, not only load
 #TODO Do this ones also for the [ALBS20] and [AGKS18] datasets
+
 
 def get_raw_movies_dataset():
     data_base = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/"
@@ -31,12 +33,20 @@ def get_raw_movies_dataset():
     canditerms, cluster_directions = get_grouped_candidates(data_base, "movies", 50)
     print()
 
+def count_raw_places_dataset():
+    data_base = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/"
+    vecs = load_ppmi_weighted_feature_vectors(data_base, "places")
+    counts = pd.DataFrame({k: {"unique words": len(v), "words": sum(v.values())} for k, v in vecs.items()}).T
+    # counts.hist()
+    # plt.show()
+    show_hist(counts["words"], cutoff_percentile=90, zero_bin=True, ylabel="unique words")
 
 def get_raw_places_dataset():
     data_base = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/"
     vecs = load_ppmi_weighted_feature_vectors(data_base, "places")
     classes = get_classes(data_base, "places", what=["Foursquare", "Geonames"]) #TODO also CYC but I don't understand their file or their explanation of what they did
     json_dump(dict(vecs=vecs, classes=classes), "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/placetypes/raw_descriptions.json")
+
 
 def get_all_goodkappa():
     data_base, data_set = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/", "places"
@@ -284,4 +294,8 @@ def get_grouped_candidates(data_base, data_set, mds_dimensions, clusters=None, c
 
 
 if __name__ == "__main__":
-    main()
+    get_raw_places_dataset()
+    #get_raw_places_dataset()
+    #get_all_goodkappa()
+    # display_svm()
+    # get_all()

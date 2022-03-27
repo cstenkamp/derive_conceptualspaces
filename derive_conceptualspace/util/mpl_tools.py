@@ -28,11 +28,12 @@ def generate_filepath(title, ext=".png"):
     print(f"Saving figure `{title}` under `{save_path}`")
     return save_path
 
-def show_hist(x, title="", xlabel="Data", ylabel="Count", cutoff_percentile=95, no_plot=False, **kwargs): # density=False shows counts
+def show_hist(x, title="", xlabel="Data", ylabel="Count", cutoff_percentile=95, no_plot=False, zero_bin=False, **kwargs): # density=False shows counts
     #see https://stackoverflow.com/a/33203848/5122790
     #Freedman–Diaconis number of bins
     x = np.array(x)
     max_val = x.max() if not cutoff_percentile else round(np.percentile(x, cutoff_percentile)) + 1
+    min_val = x.min()
     old_max = x.max()
     x[x >= max_val] = max_val
     q25, q75 = np.percentile(x, [25, 75])
@@ -45,7 +46,7 @@ def show_hist(x, title="", xlabel="Data", ylabel="Count", cutoff_percentile=95, 
         bins = x.max() - x.min()
         kwargs["bins"] = round(bins)
     full_data = dict(type="hist", x=x, kwargs=kwargs, xlim=(0, max_val), cutoff_percentile=cutoff_percentile, xlabel=xlabel,
-                     ylabel=ylabel, title=title, max_val=max_val, old_max=old_max)
+                     ylabel=ylabel, title=title, max_val=max_val, old_max=old_max, zero_bin=zero_bin, min_val=min_val)
     return prepare_fig(full_data, title, no_plot)
 
 
@@ -61,11 +62,21 @@ def prepare_fig(full_data, title, no_plot=False):
 def actually_plot(full_data, no_plot=False):
     fig, ax = plt.subplots()
     if full_data["type"] == "hist":
-        ax.hist(full_data["x"], **full_data["kwargs"])
+        # if full_data.get("zero_bin"):
+        #     bins = plt.hist(full_data["x"], **full_data["kwargs"])[1]
+        #     fig, ax = plt.subplots()
+        #     full_data["kwargs"]["bins"] = np.array([0]+list(bins))
+        # MPL DOES NOT display empty bins, NEVER.
+        _, bins, _ = ax.hist(full_data["x"], **full_data["kwargs"])
         ax.set_xlim(*full_data["xlim"])
         if full_data.get("cutoff_percentile") is not None:
             ax.set_xticks(list(plt.xticks()[0][:-1]) + [full_data["max_val"]])
             ax.set_xticklabels([str(round(i)) for i in plt.xticks()[0]][:-1] + [f"{full_data['max_val']}-{full_data['old_max']}"], ha="right", rotation=45)
+        if full_data.get("zero_bin") and full_data.get("min_val", 0) > 0:
+            firstbinpos = -(full_data["xlim"][1]-full_data["xlim"][0])/len(bins)
+            ax.set_xticks([firstbinpos, full_data["min_val"]] + list(plt.xticks()[0][1:]))
+            ax.set_xticklabels([0, full_data["min_val"]] + [str(round(i)) for i in plt.xticks()[0]][2:-1] + [f"{full_data['max_val']}-{full_data['old_max']}"], ha="right", rotation=45)
+            ax.set_xlim(firstbinpos, full_data["xlim"][1])
         ax.set_ylabel(full_data["ylabel"])
         ax.set_xlabel(full_data["xlabel"])
     else:

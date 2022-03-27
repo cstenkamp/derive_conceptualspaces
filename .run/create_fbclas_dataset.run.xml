@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="run_fb_classifier NEW" type="PythonConfigurationType" factoryName="Python">
+  <configuration default="false" name="create_fbclas_dataset" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
     <module name="Derive_Conceptualspace" />
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />
@@ -20,11 +20,11 @@
       <option name="IS_ENABLE_EXPERIMENTAL_INTEGRATIONS" value="false" />
       <ENTRIES>
         <ENTRY IS_ENABLED="true" PARSER="runconfig" />
-        <ENTRY IS_ENABLED="true" PARSER="env" PATH="docker/.env" />
+        <ENTRY IS_ENABLED="true" PARSER="env" PATH="config/_select_env.env" />
       </ENTRIES>
     </EXTENSION>
-    <option name="SCRIPT_NAME" value="$PROJECT_DIR$/fb_classifier/cli/run_fb_classifier.py" />
-    <option name="PARAMETERS" value="--log INFO --no-continue" />
+    <option name="SCRIPT_NAME" value="$PROJECT_DIR$/fb_classifier/cli/create_fbclas_dataset.py" />
+    <option name="PARAMETERS" value="--classes fachbereich" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="false" />
     <option name="MODULE_MODE" value="false" />

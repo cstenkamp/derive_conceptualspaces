@@ -1,11 +1,13 @@
 from functools import wraps
 import tensorflow as tf
-from derive_conceptualspace.settings import get_setting
+
+from fb_classifier.settings import DEBUG
+
 
 def debug_tf_function(fn):
     @wraps(fn)
     def wrapped(*args, **kwargs):
-        if not get_setting("DEBUG"):
+        if not DEBUG:
             return tf.function(fn(*args, **kwargs))
         return fn(*args, **kwargs)
     return wrapped
