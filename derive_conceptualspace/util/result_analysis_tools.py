@@ -103,9 +103,10 @@ def df_to_latex(df, styler, resizebox=True, bold_keys=True, rotate="45", rotate_
     rotate = str(rotate) if rotate is not False else False
     df = df.copy()
     if bold_keys:
-        indexnames = ["\\textbf{"+i+"}" for i in df.index.names]
-        if rotate and rotate_index: indexnames = ["\\rotatebox{"+rotate+"}{"+i+"}" for i in indexnames]
-        df.index = pd.MultiIndex.from_tuples([["\\textbf{"+str(j)+"}" for j in i] for i in df.index], names=indexnames)
+        if df.index.names != [None]:
+            indexnames = ["\\textbf{"+i+"}" for i in df.index.names]
+            if rotate and rotate_index: indexnames = ["\\rotatebox{"+rotate+"}{"+i+"}" for i in indexnames]
+            df.index = pd.MultiIndex.from_tuples([["\\textbf{"+str(j)+"}" for j in i] for i in df.index], names=indexnames)
         df.columns = ["\\textbf{"+(str(i[1]) if isinstance(i, (list, tuple)) else i)+"}" for i in df.columns] #i[1] if it's a named index
     res = styler(df)
     if rotate: res.applymap_index(lambda v: "rotatebox:{"+rotate+"}--rwrap--latex;", axis=1)
@@ -116,7 +117,7 @@ def df_to_latex(df, styler, resizebox=True, bold_keys=True, rotate="45", rotate_
         if txt[nrow].startswith("\\cline") and txt[nrow+1] == "\\bottomrule":
             txt[nrow] = ""
     txt = "\n".join([i for i in txt if i]).replace("nan", "-")
-    txt = txt.replace("≥", "$\\geq$")
+    txt = txt.replace("≥", "$\\geq$").replace("%", "\%")
     return txt
 
 
@@ -137,7 +138,7 @@ def shorten_met(met, reverse=False):
     return met
 
 
-def get_best_conf(classes, nprocs=DEFAULT_N_CPUS-1, verbose=True, **kwargs): #kwargs can be: balance_classes, test_percentage_crossval, dt_depth, one_vs_rest
+def get_best_conf(classes, nprocs=DEFAULT_N_CPUS-1, verbose=True, return_all=False, **kwargs): #kwargs can be: balance_classes, test_percentage_crossval, dt_depth, one_vs_rest
     configs, print_cnf = getfiles_allconfigs("clusters", verbose=True)
     def get_tree_perf(conf, print_cnf):
         ctx = SnakeContext.loader_context(config=conf, silent=True, warn_filters=["DifferentFileWarning"])
@@ -151,6 +152,10 @@ def get_best_conf(classes, nprocs=DEFAULT_N_CPUS-1, verbose=True, **kwargs): #kw
     best = max(perconf_list, key=lambda x:x[1])
     if verbose:
         if len(set(dict(perconf_list))-{tuple()}) > 0:
-            display(pd.DataFrame(dict(perconf_list).values(), index=dict(perconf_list).keys(), columns=["Accuracy"]).unstack(level=[0,1,2]))
+            table = pd.DataFrame(dict(perconf_list).values(), index=dict(perconf_list).keys(), columns=["Accuracy"]).unstack(level=[0,1,2])
+            display(table)
         print(f"Best Accuracy: {best[1]:.2%}")
-    return ({**{k: v for k, v in print_cnf.items() if not isinstance(v, list)}, **dict(zip([k for k, v in print_cnf.items() if isinstance(v, list)],best[0]))}, best[1])
+    if return_all:
+        return pd.DataFrame(dict(perconf_list), columns=pd.MultiIndex.from_arrays(list(zip(*dict(perconf_list).keys())), names=[k for k,v in print_cnf.items() if isinstance(v, list)]), index=["accuracy"])
+    res = ({**{k: v for k, v in print_cnf.items() if not isinstance(v, list)}, **dict(zip([k for k, v in print_cnf.items() if isinstance(v, list)],best[0]))}, best[1])
+    return res

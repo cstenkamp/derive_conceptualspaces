@@ -28,7 +28,7 @@ def generate_filepath(title, ext=".png"):
     print(f"Saving figure `{title}` under `{save_path}`")
     return save_path
 
-def show_hist(x, title="", xlabel="Data", ylabel="Count", cutoff_percentile=95, no_plot=False, zero_bin=False, **kwargs): # density=False shows counts
+def show_hist(x, title="", xlabel="Data", ylabel="Count", cutoff_percentile=95, no_plot=False, zero_bin=False, fig_kwargs=None, **kwargs): # density=False shows counts
     #see https://stackoverflow.com/a/33203848/5122790
     #Freedman–Diaconis number of bins
     x = np.array(x)
@@ -47,26 +47,27 @@ def show_hist(x, title="", xlabel="Data", ylabel="Count", cutoff_percentile=95, 
         kwargs["bins"] = round(bins)
     full_data = dict(type="hist", x=x, kwargs=kwargs, xlim=(0, max_val), cutoff_percentile=cutoff_percentile, xlabel=xlabel,
                      ylabel=ylabel, title=title, max_val=max_val, old_max=old_max, zero_bin=zero_bin, min_val=min_val)
-    return prepare_fig(full_data, title, no_plot)
+    return prepare_fig(full_data, title, no_plot, fig_kwargs)
 
 
-def prepare_fig(full_data, title, no_plot=False):
+def prepare_fig(full_data, title, no_plot=False, fig_kwargs=None):
     serialize_plot(title, full_data)
     if threading.current_thread() is not threading.main_thread():
         #mpl needs main-thread, snakemake often is not mainthread!
         warnings.warn("Cannot plot the figure as we are not in the main-thread!")
         return
-    return actually_plot(full_data, no_plot)
+    return actually_plot(full_data, no_plot, fig_kwargs)
 
 
-def actually_plot(full_data, no_plot=False):
-    fig, ax = plt.subplots()
+def actually_plot(full_data, no_plot=False, fig_kwargs=None):
+    fig, ax = plt.subplots(**(fig_kwargs or {}))
     if full_data["type"] == "hist":
-        # if full_data.get("zero_bin"):
-        #     bins = plt.hist(full_data["x"], **full_data["kwargs"])[1]
-        #     fig, ax = plt.subplots()
-        #     full_data["kwargs"]["bins"] = np.array([0]+list(bins))
-        # MPL DOES NOT display empty bins, NEVER.
+        if full_data.get("zero_bin"):
+            nums, bins = plt.hist(full_data["x"], **full_data["kwargs"])[:2]
+            plt.close()
+            bins = list(bins)
+            fig, ax = plt.subplots()
+            full_data["kwargs"]["bins"] = [bins[0]]+[bins[1]/2]+bins[1:]
         _, bins, _ = ax.hist(full_data["x"], **full_data["kwargs"])
         ax.set_xlim(*full_data["xlim"])
         if full_data.get("cutoff_percentile") is not None:

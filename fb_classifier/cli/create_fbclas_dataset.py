@@ -9,6 +9,7 @@ from derive_conceptualspace.pipeline import SnakeContext, load_envfiles
 def parse_command_line_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--classes', help="Which classes should be targets for the dataset")
+    parser.add_argument('-n', '--named', default=False, help='If the labels should be stored with name', action='store_true')
     return parser.parse_args()
 
 
@@ -20,8 +21,8 @@ def main():
 
     ctx = SnakeContext.loader_context(silent=False)
     descriptions = ctx.load("pp_descriptions")
-    res = extract_classes(descriptions, args.classes, ctx.obj["dataset_class"])
-    fname = join(ctx.p.in_dir,  "fb_classifier", f"{DATASET}_{args.classes}.csv")
+    res = extract_classes(descriptions, args.classes, ctx.obj["dataset_class"], use_name=args.named)
+    fname = join(ctx.p.in_dir,  "fb_classifier", f"{DATASET}_{args.classes}{'_named' if args.named else ''}.csv")
     res.reset_index().to_csv(fname)
     print(f"Saved under {fname}.")
 
