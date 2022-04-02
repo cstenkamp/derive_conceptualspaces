@@ -15,6 +15,8 @@ class KeybertRepr():
     def __init__(self, lang):
         if lang == "de":
             self.model = KeyBERT("dbmdz/bert-base-german-uncased")
+        elif lang == "en":
+            self.model = KeyBERT("paraphrase-MiniLM-L6-v2")
         else:
             raise NotImplementedError()
 
@@ -36,9 +38,13 @@ class KeybertRepr():
         return max(trials, key=lambda x:x[1])[0]
 
 class GensimRepr():
-    def __init__(self, model_path):
+    def __init__(self, model_path, lang):
         self.model = gensim.models.KeyedVectors.load_word2vec_format(model_path, binary=True)
-        self.init_replacers()
+        if lang == "de":
+            self.init_replacers()
+        else:
+            self.replacers = {}
+
 
     def init_replacers(self):
         changeds = {}
@@ -67,7 +73,7 @@ class GensimRepr():
 
 def get_cluster_reprs(clusters, featureaxes, filtered_dcm, metric, model_path, lang):
     res = {}
-    gnsim = GensimRepr(model_path)
+    gnsim = GensimRepr(model_path, lang=lang)
     kbert = KeybertRepr(lang)
     # clusters = list(clusters.items())[:20]
     for k, v in tqdm(clusters.items(), desc="Finding Cluster Representations"):

@@ -1,12 +1,17 @@
 [project]
 name = "derive-conceptualspace"
 description = "Codebase for Data-Driven Embedding of educational resources in a vector-space with interpretable Dimensions for Explainable Recommendation"
-authors = ["Chris Stenkamp <cstenkamp@uos.de>"]
+authors = [
+  {email = "cstenkamp@uos.de"},
+  {name = "Chris Stenkamp "}
+]
 readme = "README.md"
-python = ">=3.10.0"
-homepage = "https://github.com/cstenkamp/MastersThesisText/"
-repository = "https://github.com/cstenkamp/derive_conceptualspaces/"
-documentation = "TODO"
+requires-python = ">=3.10.0"
+version = "1.1.20220225" # why can't that dynamic from the _version.py anymore!
+#homepage = "https://github.com/cstenkamp/MastersThesisText/"
+#repository = "https://github.com/cstenkamp/derive_conceptualspaces/"
+#documentation = "TODO"
+# https://github.com/pypa/setuptools/issues/3199
 
 
 [build-system]

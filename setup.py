@@ -16,7 +16,7 @@ from os.path import (
 import toml
 from setuptools import find_packages, setup
 
-TOML_TAKE = {"name", "version", "description", "repository", "python"}
+TOML_TAKE = {"name", "description", "repository", "python"}
 TOML_CHANGE = {"repository": "url", "python": "python_requires"}
 
 SUPER_FOLDER = None
@@ -86,10 +86,18 @@ def _parse_project_toml(pyproject_path, app_name):
     setup_data = {key: val for key, val in pyproject_data["project"].items() if key in TOML_TAKE}
     setup_data = {TOML_CHANGE.get(key, key): val for key, val in setup_data.items()}
     if "authors" in pyproject_data["project"]:
-        setup_data["author"] = " ".join([i[: i.find("<")].strip() for i in pyproject_data["project"]["authors"]])
-        setup_data["author_email"] = " ".join(
-            [i[i.find("<") + 1 : i.find(">")].strip() for i in pyproject_data["project"]["authors"]]
-        )
+        try:
+            setup_data["author"] = " ".join([i[: i.find("<")].strip() for i in pyproject_data["project"]["authors"]])
+            setup_data["author_email"] = " ".join(
+                [i[i.find("<") + 1 : i.find(">")].strip() for i in pyproject_data["project"]["authors"]]
+            )
+        except Exception:
+            setup_data["author"] = " ".join(
+                [i.get("email") for i in pyproject_data["project"]["authors"] if i.get("email")]
+            )
+            setup_data["author_email"] = " ".join(
+                [i.get("name") for i in pyproject_data["project"]["authors"] if i.get("name")]
+            )
     if "readme" in pyproject_data["project"]:
         with open(pyproject_data["project"]["readme"], "r") as fh:
             setup_data["long_description"] = fh.read()
