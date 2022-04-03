@@ -19,7 +19,7 @@ max_ngram:                    5                   # not explicitly, but it takes
 dcm_quant_measure:            [count, ppmi, tfidf]
 classifier:                   SVM
 kappa_weights:                quadratic
-classifier_succmetric:        [kappa_rank2rank_onlypos_min, kappa_digitized_onlypos_2] #kappa_count2rank_onlypos
+classifier_succmetric:        [kappa_rank2rank_onlypos_min, kappa_digitized_onlypos_2, kappa_count2rank_onlypos]
 prim_lambda:                  0.5
 sec_lambda:                   0.2
 __perdataset__:

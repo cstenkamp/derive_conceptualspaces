@@ -138,7 +138,7 @@ def shorten_met(met, reverse=False):
     return met
 
 
-def get_best_conf(classes, nprocs=DEFAULT_N_CPUS-1, verbose=True, return_all=False, **kwargs): #kwargs can be: balance_classes, test_percentage_crossval, dt_depth, one_vs_rest
+def get_best_conf(classes, nprocs=DEFAULT_N_CPUS-1, verbose=True, return_all=False, **kwargs): #kwargs can be: balance_classes, test_percentage_crossval, dt_depth, one_vs_rest, metric
     configs, print_cnf = getfiles_allconfigs("clusters", verbose=True)
     def get_tree_perf(conf, print_cnf):
         ctx = SnakeContext.loader_context(config=conf, silent=True, warn_filters=["DifferentFileWarning"])

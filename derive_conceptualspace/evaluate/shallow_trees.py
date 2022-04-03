@@ -11,6 +11,7 @@ import graphviz
 from sklearn import tree
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import cross_val_score, train_test_split
+from sklearn.metrics import get_scorer
 from scipy.stats import rankdata
 
 from derive_conceptualspace.semantic_directions.cluster_names import get_name_dict
@@ -40,7 +41,7 @@ def classify_shallowtree_multi(clusters, embedding, descriptions, dataset_class,
 
 
 def classify_shallowtree(clusters, embedding, descriptions, dataset_class, one_vs_rest, dt_depth, test_percentage_crossval,
-                         classes=None, cluster_reprs=None, do_plot=False, verbose=False, return_features=True,
+                         classes=None, cluster_reprs=None, do_plot=False, verbose=False, return_features=True, metric="acc",
                          balance_classes=True, clus_rep_algo=None, shutup=False, **kwargs):
     clusters, planes = clusters.values()
     if classes is None:
@@ -89,7 +90,7 @@ def classify_shallowtree(clusters, embedding, descriptions, dataset_class, one_v
         plottree_strs = []
         for cat in set(cats.values()):
             targets = np.array(np.array(list(cats.values())) == cat, dtype=int)
-            scores[cat], plottree_str = classify(ranked.values, targets, list(ranked.columns), ["other", cat], dt_depth, test_percentage_crossval,
+            scores[cat], plottree_str = classify(ranked.values, targets, list(ranked.columns), ["other", cat], dt_depth, test_percentage_crossval, metric=metric,
                                                  do_plot=do_plot, features_outvar=features_outvar, balance_classes=balance_classes, do_render=False)
             plottree_strs.append(plottree_str)
             all_targets.append(targets)
@@ -120,8 +121,8 @@ def classify_shallowtree(clusters, embedding, descriptions, dataset_class, one_v
             warnings.warn(f"There are more classes ({len(set(cats.values()))}) than your decision-tree can possibly classify ({2**dt_depth})")
         targets = np.array(list(cats.values()))
         all_targets.append(targets)
-        score,_ = classify(ranked.values, targets, list(ranked.columns), list(catnames.values()), dt_depth, test_percentage_crossval, do_plot=do_plot,
-                         features_outvar=features_outvar, balance_classes=balance_classes, do_render = False)
+        score,_ = classify(ranked.values, targets, list(ranked.columns), list(catnames.values()), dt_depth, test_percentage_crossval, metric=metric,
+                           do_plot=do_plot, features_outvar=features_outvar, balance_classes=balance_classes, do_render=False)
         all_classes.append(list(catnames.values()))
         if not shutup:
             print(f"Accuracy: {score:.2f}")
@@ -133,32 +134,40 @@ def classify_shallowtree(clusters, embedding, descriptions, dataset_class, one_v
     return score
 
 
-def classify(input, target, axnames, catnames, dt_depth, test_percentage_crossval, do_plot=False,
-             features_outvar=None, balance_classes=True, do_render=False):
+def classify(input, target, axnames, catnames, dt_depth, test_percentage_crossval, metric,
+             do_plot=False, features_outvar=None, balance_classes=True, do_render=False):
     # input[:, 99] = (target == "Shops&Services"); axnames[99] = "is_shop"
     # input[:, 98] = (target == "Food"); axnames[98] = "is_food"
+    metric = metric.replace("acc", "accuracy") #https://scikit-learn.org/stable/modules/model_evaluation.html#common-cases-predefined-values
     kwargs = dict(class_weight="balanced") if balance_classes else {}
     clf = DecisionTreeClassifier(random_state=get_setting("RANDOM_SEED"), max_depth=dt_depth, **kwargs)
     if test_percentage_crossval > 1:
-        scores = cross_val_score(clf, input, target, cv=test_percentage_crossval)
+        scores = cross_val_score(clf, input, target, cv=test_percentage_crossval, scoring=metric)
         score = scores.mean()
         clf.fit(input, target)
-        assert clf.score(input, target) == np.array([res==target[i] for i, res in enumerate(clf.predict(input))]).mean()#have to to be able to plot_tree
+        assert get_score(clf, input, target, metric) == np.array([res==target[i] for i, res in enumerate(clf.predict(input))]).mean()#have to to be able to plot_tree
         # print(f"Doing {test_percentage_crossval}-fold cross-validation. Best Score: {scores.max():.2f}, Mean: {score}:.2f")
     elif test_percentage_crossval == 0:
         warnings.warn("Using the full data as training set without a test-set!")
         clf.fit(input, target)
-        score = clf.score(input, target)
+        score = get_score(clf, input, target, metric)
     else:
         X_train, X_test, y_train, y_test = train_test_split(input, target, test_size=test_percentage_crossval) #TODO: stratify? https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.train_test_split.html
         clf.fit(X_train, y_train)
-        score = clf.score(X_test, y_test)
+        score = get_score(clf, X_test, y_test, metric)
     if features_outvar is not None:
         features_outvar.append(clf)
     if do_plot:
         if catnames: assert len(clf.classes_) == len(catnames)
         return score, plot_tree(clf, axnames, (catnames or [str(i) for i in clf.classes_]), do_render=do_render)
     return score, None
+
+def get_score(clf, X_test, y_test, metric):
+    if metric == "acc":
+        return clf.score(X_test, y_test)
+    return get_scorer(metric)(clf, X_test, y_test)
+
+
 
 
 def plot_tree(clf, axnames=None, catnames=None, do_render=False):

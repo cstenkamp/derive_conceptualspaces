@@ -317,7 +317,7 @@ def generate_conceptualspace(ctx, json_persister):
 @click_pass_add_context
 def create_candidate_svm(ctx):
     ctx.obj["pp_descriptions"] = ctx.p.load(None, "pp_descriptions", loader=DescriptionList.from_json, silent=True)
-    with InterruptibleLoad(ctx, "featureaxes.json", loader=lambda x:x) as mgr:
+    with InterruptibleLoad(ctx, "featureaxes.json", loader=lambda **kwargs:{k: (v if k != "quant_s" else None) for k,v in kwargs.items()}) as mgr: #ignore quant_s, that can be regenerated quickly
         quants_s, decision_planes, metrics, metainf = create_candidate_svms_base(ctx.obj["filtered_dcm"], ctx.obj["embedding"], ctx.obj["pp_descriptions"], verbose=ctx.get_config("verbose"), **mgr.kwargs)
     mgr.save(quants_s=quants_s, decision_planes=decision_planes, metrics=metrics, metainf=metainf)
 

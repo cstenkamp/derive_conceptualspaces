@@ -39,16 +39,17 @@ def cohen_kappa(y_test, y_pred, **kwargs):
 
 def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=None):
     #TODO I am still not sure about if I am calculating with vectors somewhere where when I should be working with points
+    if hasattr(embedding, "embedding_"): embedding = embedding.embedding_
     decision_planes = {}
     metrics = {}
     terms = list(dcm.all_terms.values())
     metainf = {}
     if get_setting("DEBUG"):
-        maxlen = min(len(terms), len(embedding.embedding_), get_setting("DEBUG_N_ITEMS"), len(dcm.dtm))
+        maxlen = min(len(terms), len(embedding), get_setting("DEBUG_N_ITEMS"), len(dcm.dtm))
         working_inds = [nterm for nterm, term in enumerate(terms[:maxlen]) if np.array(dcm.term_quants(term)[:maxlen], dtype=bool).std()] #those with >1 class
         term_inds = unique(flatten([j[0] for j in dcm.dtm[i]] for i in working_inds))
         terms = [dcm.all_terms[i] for i in term_inds]
-        embedding.embedding_ = embedding.embedding_[working_inds]
+        embedding = embedding[working_inds]
         ind_translator = {v: k for k, v in enumerate(term_inds)}
         dcm = DocTermMatrix([[[ind_translator[j[0]],j[1]] for j in dcm.dtm[i]] for i in working_inds],
                             {ind_translator[i]: dcm.all_terms[i] for i in term_inds}, dcm.quant_name)
@@ -68,14 +69,14 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
     if ncpu == 1:  #TODO Interruptible: for ncpu==1, I'm adding direct key-value-pairs, in the ncpu>1 version I'm appending to a list -> they are incompatible!
         with Interruptible(zip(terms, quants_s), ([], decision_planes, metrics), metainf, continue_from=continue_from, pgbar="Creating Candidate SVMs [1 proc]", total=len(terms), name="SVMs") as iter:
             for term, quants in iter: #in tqdm(zip(terms, quants_s), desc="Creating Candidate SVMs", total=len(terms))
-                cand_mets, decision_plane, term = create_candidate_svm(embedding.embedding_, term, quants, classifier=get_setting("CLASSIFIER"), descriptions=descriptions, quant_name=dcm.quant_name)
+                cand_mets, decision_plane, term = create_candidate_svm(embedding, term, quants, classifier=get_setting("CLASSIFIER"), descriptions=descriptions, quant_name=dcm.quant_name)
                 metrics[term] = cand_mets
                 decision_planes[term] = decision_plane
     else:
         print(f"Starting Multiprocessed with {ncpu} CPUs")
         with Interruptible(zip(terms, quants_s), [None, [], None], metainf, continue_from=continue_from, contains_mp=True, name="SVMs", total=len(quants_s)) as iter:
             with tqdm(total=iter.n_elems, desc=f"Creating Candidate SVMs [{ncpu} procs]") as pgbar, ThreadPool(ncpu, comqu=iter.comqu) as p:
-                res, interrupted = p.starmap(create_candidate_svm, zip(repeat(embedding.embedding_, iter.n_elems), repeat("next_0"), repeat("next_1"), repeat(get_setting("CLASSIFIER")), repeat(False), repeat(None), repeat(dcm.quant_name), repeat(pgbar)), draw_from=iter.iterable)
+                res, interrupted = p.starmap(create_candidate_svm, zip(repeat(embedding, iter.n_elems), repeat("next_0"), repeat("next_1"), repeat(get_setting("CLASSIFIER")), repeat(False), repeat(None), repeat(dcm.quant_name), repeat(pgbar)), draw_from=iter.iterable)
             _, res, _ = iter.notify([None, res, None], exception=interrupted)
             if interrupted is not False:
                 return quants_s, res, None, metainf
@@ -92,16 +93,16 @@ def create_candidate_svms(dcm, embedding, descriptions, verbose, continue_from=N
             print(f"\nAverage *r*{metricname}*r*: {df[metricname].mean():.5f}")
             with pd.option_context('display.max_rows', 11, 'display.max_columns', 20, 'display.expand_frame_repr', False, 'display.max_colwidth', 20, 'display.float_format', '{:.4f}'.format):
                 print(str(df.sort_values(by=metricname, ascending=False)[:10]).replace(metricname, f"*r*{metricname}*r*"))
-        if embedding.embedding_.shape[1] == 3 and IS_INTERACTIVE:
+        if embedding.shape[1] == 3 and IS_INTERACTIVE:
             best_elem = max(metrics.items(), key=lambda x:(x[1] or {}).get("f_one",0))
-            create_candidate_svm(embedding.embedding_, best_elem[0], dcm.term_quants(best_elem[0]), classifier=get_setting("CLASSIFIER"), quant_name=dcm.quant_name, plot_svm=True, descriptions=descriptions)
+            create_candidate_svm(embedding, best_elem[0], dcm.term_quants(best_elem[0]), classifier=get_setting("CLASSIFIER"), quant_name=dcm.quant_name, plot_svm=True, descriptions=descriptions)
             while (another := input("Another one to display: ").strip()) != "":
                 if "," in another:
                     highlight = [i.strip() for i in another.split(",")[1:]]
                     another = another.split(",")[0].strip()
                 else:
                     highlight = []
-                create_candidate_svm(embedding.embedding_, another, dcm.term_quants(another), classifier=get_setting("CLASSIFIER"), quant_name=dcm.quant_name, plot_svm=True, descriptions=descriptions, highlight=highlight)
+                create_candidate_svm(embedding, another, dcm.term_quants(another), classifier=get_setting("CLASSIFIER"), quant_name=dcm.quant_name, plot_svm=True, descriptions=descriptions, highlight=highlight)
     return quants_s, decision_planes, metrics, metainf
 
 

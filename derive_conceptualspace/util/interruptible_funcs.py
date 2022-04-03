@@ -44,7 +44,11 @@ class InterruptibleLoad():
             if "NEWLY_INTERRUPTED" in self.old_metainf:
                 del self.old_metainf["NEWLY_INTERRUPTED"]
             self.kwargs = dict(continue_from=(tmp2, self.old_metainf, self.metainf_countervarnames, self.metainf_ignorevarnames))
-        except (FileNotFoundError, DependencyError, json.decoder.JSONDecodeError):
+        except (FileNotFoundError, DependencyError, json.decoder.JSONDecodeError) as e:
+            if isinstance(e, json.decoder.JSONDecodeError) and e.args[0].startswith("NAME:") and "|||" in e.args[0]:
+                fname = e.args[0].split("|||")[0].removeprefix("NAME:")
+                print(f"Removing {fname} because it is broken")
+                os.remove(fname)
             self.kwargs = {}
         return self
 

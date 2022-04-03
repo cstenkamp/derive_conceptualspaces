@@ -10,6 +10,7 @@ import warnings
 from collections import ChainMap
 from datetime import datetime, timedelta
 from os.path import isfile, splitext, dirname, join, basename, isdir
+from os.path import basename as pbasename
 import shutil
 
 import ijson
@@ -164,6 +165,9 @@ def json_load(fname, **kwargs): #assert_meta=(), return_meta=False,
         else: #then it may be a sacred opened resource (https://sacred.readthedocs.io/en/stable/apidoc.html#sacred.Experiment.open_resource)
             tmp = json.load(fname, **kwargs)
         return npify_rek(tmp)
+    except json.decoder.JSONDecodeError as e:
+        print(f"{fname} doesn't work!")
+        raise json.decoder.JSONDecodeError(msg=f"NAME:{fname}|||MSG:{e.msg}", doc=e.doc, pos=e.pos) from e
     except Exception as e:
         print(f"{fname} doesn't work!")
         raise e
@@ -415,6 +419,9 @@ class JsonPersister():
                + ((f"  New forbidden Config: {', '.join(self.ctx.forbidden_configs)}. \n") if self.ctx.forbidden_configs else "")
               ).strip())
         #TODO telegram-send this string as well if telegram-functionality enabled
+        if len((sp := splitext(pbasename(name))[0].split("_"))) >= 3 and sp[-2] == "INTERRUPTED" and int(sp[-1]) >= 2:
+            warnings.warn("!! This is saved under a name I won't find it again!!")
+            raise FileNotFoundError(f"!! This is saved under a name I won't find it again: {basename(name)}")
         return name
 
     def add_plot(self, title, data):
