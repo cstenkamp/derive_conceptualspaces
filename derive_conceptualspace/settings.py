@@ -154,6 +154,7 @@ with set_noninfluentials(): #this context-manager adds all settings from here to
                   "{prim_lambda}_{sec_lambda}_{cluster_direction_algo}"]
 
     FORBIDDEN_COMBIS = ["tsne_50d", "tsne_100d", "tfidf_ppmi_quadratic/kappa_count2rank"]
+    FORBIDDEN_COMBIS2 = [{"dcm_quant_measure": "tfidf", "classifier_succmetric": "kappa_count2rank_onlypos"}, {"dcm_quant_measure": "ppmi", "classifier_succmetric": "kappa_count2rank_onlypos"}]
     NORMALIFY_PARAMS = ["QUANTIFICATION_MEASURE", "EXTRACTON_METHOD", "EMBED_ALGO", "DCM_QUANT_MEASURE"]  #for all params that are in this, eg `Tf-IdF` will become `tfidf`
     CONF_PRIORITY = ["force", "smk_wildcard", "dependency", "cmd_args", "env_vars", "smk_args", "conf_file", "dataset_class", "defaults"] #no distinction between env_file and env_var bc load_dotenv is executed eagerly and just overwrites envvars from envfile
     #note that snakemake reads the conf_file differently and sets env-vars (that however apply force) from the configurations

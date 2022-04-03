@@ -140,6 +140,7 @@ def shorten_met(met, reverse=False):
 
 def get_best_conf(classes, nprocs=DEFAULT_N_CPUS-1, verbose=True, return_all=False, **kwargs): #kwargs can be: balance_classes, test_percentage_crossval, dt_depth, one_vs_rest, metric
     configs, print_cnf = getfiles_allconfigs("clusters", verbose=True)
+    metric = kwargs.get("metric", "accuracy")
     def get_tree_perf(conf, print_cnf):
         ctx = SnakeContext.loader_context(config=conf, silent=True, warn_filters=["DifferentFileWarning"])
         clusters, embedding, descriptions = ctx.load("clusters", "embedding", "pp_descriptions")
@@ -150,12 +151,15 @@ def get_best_conf(classes, nprocs=DEFAULT_N_CPUS-1, verbose=True, return_all=Fal
     with WorkerPool(nprocs, pgbar="Getting Best-Performing Config") as pool:
         perconf_list, interrupted = pool.work(configs, partial(get_tree_perf, print_cnf=print_cnf))
     best = max(perconf_list, key=lambda x:x[1])
-    if verbose:
-        if len(set(dict(perconf_list))-{tuple()}) > 0:
-            table = pd.DataFrame(dict(perconf_list).values(), index=dict(perconf_list).keys(), columns=["Accuracy"]).unstack(level=[0,1,2])
-            display(table)
-        print(f"Best Accuracy: {best[1]:.2%}")
-    if return_all:
-        return pd.DataFrame(dict(perconf_list), columns=pd.MultiIndex.from_arrays(list(zip(*dict(perconf_list).keys())), names=[k for k,v in print_cnf.items() if isinstance(v, list)]), index=["accuracy"])
+    if return_all or verbose:
+        df = pd.DataFrame(dict(perconf_list), columns=pd.MultiIndex.from_arrays(list(zip(*dict(perconf_list).keys())),
+                          names=[k for k,v in print_cnf.items() if isinstance(v, list)]), index=[metric])
+        if verbose:
+            styles = [{'selector': 'th', 'props': [('vertical-align','top'),('text-align','left')]}] #('border-style', 'solid')  #see https://stackoverflow.com/a/55904239/5122790
+            styler = lambda df: df.style.apply(highlight_nonzero_max, axis=0).format('{:.2%}'.format, na_rep="-").set_table_styles(styles)
+            display(styler(df.unstack(level=[0, 1, 2])))
+            print(f"Best {metric}: {best[1]:.2%}")
+        if return_all:
+            return df
     res = ({**{k: v for k, v in print_cnf.items() if not isinstance(v, list)}, **dict(zip([k for k, v in print_cnf.items() if isinstance(v, list)],best[0]))}, best[1])
     return res

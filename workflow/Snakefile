@@ -66,6 +66,7 @@ from derive_conceptualspace.settings import (
     standardize_config,
     standardize_config_name,
     FORBIDDEN_COMBIS,
+    FORBIDDEN_COMBIS2,
 )
 from derive_conceptualspace.util.interruptible_funcs import InterruptibleLoad
 from misc_util.pretty_print import pretty_print as print, print_multicol
@@ -430,7 +431,8 @@ def set_envvars_generate_input_from_config(cnf):
     outputs = []
     for multival_comb in itertools.product(*lvals):
         all_vals = {**dict(zip(lkeys,multival_comb)), **othervals}
-        outputs.append(expand_output(rule_by_name(LAST_RULE).output, overwriter_di=all_vals))
+        if not any(d.items() <= all_vals.items() for d in FORBIDDEN_COMBIS2):
+            outputs.append(expand_output(rule_by_name(LAST_RULE).output, overwriter_di=all_vals))
     return outputs
 
 
