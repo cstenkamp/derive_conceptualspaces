@@ -383,13 +383,72 @@ def decision_trees(ctx):
 
 @generate_conceptualspace.command()
 @click_pass_add_context
-def rank_saldirs(ctx):
+def rank_saldirs_DEPRECATED(ctx):
     ctx.obj["pp_descriptions"] = ctx.p.load(None, "pp_descriptions", loader=DescriptionList.from_json, silent=True) #TODO really silent?
     ctx.obj["featureaxes"] = ctx.p.load(None, "featureaxes", loader=featureaxes_loader)
     ctx.obj["clusters"] = ctx.p.load(None, "clusters")
     #TODO this should rather contain the code from run_pipeline.decision_trees
     rank_saldirs_base(ctx.obj["pp_descriptions"], ctx.obj["embedding"], ctx.obj["featureaxes"], ctx.obj["filtered_dcm"],
                       prim_lambda=ctx.get_config("prim_lambda"), sec_lambda=ctx.get_config("sec_lambda"), metricname=ctx.get_config("classifier_succmetric"))
+
+#TODO move me!
+import numpy as np
+def get_decisions(X_test, clf, catnames, axnames):
+    n_nodes = clf.tree_.node_count
+    children_left = clf.tree_.children_left
+    children_right = clf.tree_.children_right
+    classes = [catnames[clf.classes_[np.argmax(i)]] for i in clf.tree_.value]
+    node_depth = np.zeros(shape=n_nodes, dtype=np.int64)
+    is_leaves = np.zeros(shape=n_nodes, dtype=bool)
+    stack = [(0, 0)]  # start with the root node id (0) and its depth (0)
+    while len(stack) > 0:
+        # `pop` ensures each node is only visited once
+        node_id, depth = stack.pop()
+        node_depth[node_id] = depth
+        # If the left and right child of a node is not the same we have a split node
+        is_split_node = children_left[node_id] != children_right[node_id]
+        # If a split node, append left and right children and depth to `stack` so we can loop through them
+        if is_split_node:
+            stack.append((children_left[node_id], depth + 1))
+            stack.append((children_right[node_id], depth + 1))
+        else:
+            is_leaves[node_id] = True
+    alls = {}
+    for i in range(n_nodes):
+        if not is_leaves[i]:
+            alls.setdefault(node_depth[i], []).append((axnames[clf.tree_.feature[i]], clf.tree_.threshold[i]))
+    return (alls[0]+alls[1]) if len(alls) > 1 else alls[0]
+
+@generate_conceptualspace.command()
+@click_pass_add_context
+def rank_saldirs(ctx):
+    from derive_conceptualspace.semantic_directions.cluster_names import get_name_dict
+    from tqdm import tqdm
+    import pandas as pd
+    from derive_conceptualspace.evaluate.shallow_trees import classify_shallowtree
+    clusters = ctx.obj["clusters"] = ctx.p.load(None, "clusters", loader=cluster_loader)
+    cluster_reprs = ctx.obj["cluster_reprs"] = ctx.p.load(None, "cluster_reprs")
+    embedding = ctx.obj["embedding"] = ctx.p.load(None, "embedding")
+    descriptions = ctx.obj["pp_descriptions"] = ctx.p.load(None, "pp_descriptions", loader=DescriptionList.from_json, silent=True) #TODO really silent?
+    embedding = embedding["embedding"].embedding_
+
+    clus_rep_algo = "top_1" #TODO obvs from config
+    cluster_names = get_name_dict(clusters["clusters"], cluster_reprs, clus_rep_algo)
+    #first I want the distances to the origins of the respective dimensions (induced by the clusters), what induces the respective rankings (see DESC15 p.24u, proj2 of load_semanticspaces.load_projections)
+    axis_dists = {i: {k: v.dist(embedding[i]) for k, v in clusters["directions"].items()} for i in tqdm(range(len(embedding)))}
+    df = pd.DataFrame(axis_dists).T
+    best_per_dim = {k: descriptions._descriptions[v].title for k, v in df.idxmax().to_dict().items()}
+
+    print("Highest-ranking descriptions per dimension:\n    "+"\n    ".join([f"*b*{cluster_names[k].rjust(max([len(cluster_names[i]) for i in best_per_dim.keys()][:20]))}*b*: {v}" for k, v in best_per_dim.items()][:20]))
+    #TODO also show places 2, 3, 4 - hier sehen wir wieder sehr ähnliche ("football stadium", "stadium", "fan" for "goalie")
+    #TODO axis_dists is all I need for the movietuner already!! I can say "give me something like X, only with more Y"
+    tr = classify_shallowtree(clusters, embedding, descriptions, ctx.obj["dataset_class"], one_vs_rest=True, dt_depth=1, test_percentage_crossval=0.33,
+                           classes="fachbereich", cluster_reprs=cluster_reprs, verbose=False, return_features=True, balance_classes=True, do_plot=False)
+    important_directions = [get_decisions(embedding, t, [i[1] for i in tr[4]], tr[-1])[0][0] for t in tr[0]]
+    best_importants = {f"{cluster_names[i]} ({j[1]})": best_per_dim[i] for i,j in zip(important_directions, tr[4])}
+    print("Highest-ranking descriptions per important dimension:\n    " + "\n    ".join(
+        [f"*b*{k.rjust(max([len(i) for i in best_importants.keys()]))}*b*: {v}" for k, v in best_importants.items()]))
+
 
 
 @cli.command()

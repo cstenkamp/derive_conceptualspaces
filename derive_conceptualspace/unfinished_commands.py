@@ -104,6 +104,7 @@ def show_data_info(ctx):
 
 def rank_saldirs(pp_descriptions, embedding, featureaxes, filtered_dcm, prim_lambda, sec_lambda, metricname):
     # TODO this should rather contain the code from run_pipeline.decision_trees
+    raise Exception("This is VASTLY deprecated, it doesn't even use the clusters!! Some stuff is nice future work, but this certainly doesn't rank-saldirs!")
     from derive_conceptualspace.semantic_directions.create_candidate_svm import select_salient_terms
     pp_descriptions.add_embeddings(embedding.embedding_)
     decision_planes, metrics = featureaxes.values()

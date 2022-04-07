@@ -93,5 +93,6 @@ def get_name_dict(clusters, cluster_reprs, clus_rep_algo=None):
     if clus_rep_algo.startswith("top"):
         topwhat = int(clus_rep_algo.split("_")[1])
         return {k: ",".join(([k]+v)[:topwhat]) for k, v in clusters.items()}
-    elif clus_rep_algo in ["keybert", "gensim", "gensim_w1", "gensim_w2", "gensim_w3"]:
+    elif clus_rep_algo in list(cluster_reprs.values())[0].keys():
         return {k: v[clus_rep_algo] for k, v in cluster_reprs.items()}
+    raise NotImplementedError()

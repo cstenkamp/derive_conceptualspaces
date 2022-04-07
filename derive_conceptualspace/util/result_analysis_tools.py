@@ -98,6 +98,9 @@ def highlight_nonzero_max(data):
     # return [f'font-weight: bold' if v == data.max() and v > 0 else '' for v in data]
     return [f'background-color: lightgreen' if v == data.max() and v > 0 else '' for v in data]
 
+def highlight_max(s, props='background-color:lightgreen'):
+    # https://pandas.pydata.org/docs/user_guide/style.html#Acting-on-Data
+    return np.where(s == np.nanmax(s.values), props, '')
 
 def df_to_latex(df, styler, resizebox=True, bold_keys=True, rotate="45", rotate_index=False, caption=None):
     rotate = str(rotate) if rotate is not False else False
@@ -107,7 +110,12 @@ def df_to_latex(df, styler, resizebox=True, bold_keys=True, rotate="45", rotate_
             indexnames = ["\\textbf{"+i+"}" for i in df.index.names]
             if rotate and rotate_index: indexnames = ["\\rotatebox{"+rotate+"}{"+i+"}" for i in indexnames]
             df.index = pd.MultiIndex.from_tuples([["\\textbf{"+str(j)+"}" for j in i] for i in df.index], names=indexnames)
-        df.columns = ["\\textbf{"+(str(i[1]) if isinstance(i, (list, tuple)) else i)+"}" for i in df.columns] #i[1] if it's a named index
+        if df.index.names != [None]:
+            indexnames = ["\\textbf{"+i+"}" for i in df.columns.names[1:]]
+            if rotate and rotate_index: indexnames = ["\\rotatebox{"+rotate+"}{"+i+"}" for i in indexnames]
+            df.columns = pd.MultiIndex.from_tuples([["\\textbf{"+str(j)+"}" for j in i[1:]] for i in df.columns], names=indexnames)
+        else:
+            df.columns = ["\\textbf{"+(str(i[1]) if isinstance(i, (list, tuple)) else i)+"}" for i in df.columns] #i[1] if it's a named index
     res = styler(df)
     if rotate: res.applymap_index(lambda v: "rotatebox:{"+rotate+"}--rwrap--latex;", axis=1)
     txt = res.to_latex(convert_css=True, clines="skip-last;index", multirow_align="t", hrules=True, siunitx=False, caption=caption)
@@ -134,13 +142,15 @@ SHORTEN_DICT = {
 }
 def shorten_met(met, reverse=False):
     for k, v in ({v2: k2 for k2, v2 in SHORTEN_DICT.items()} if reverse else SHORTEN_DICT).items():
-        met = met.replace(k, v)
+        if isinstance(met, str) and k in met: met = met.replace(k, v)
     return met
 
 
 def get_best_conf(classes, nprocs=DEFAULT_N_CPUS-1, verbose=True, return_all=False, **kwargs): #kwargs can be: balance_classes, test_percentage_crossval, dt_depth, one_vs_rest, metric
-    configs, print_cnf = getfiles_allconfigs("clusters", verbose=True)
+    configs, print_cnf = getfiles_allconfigs("clusters", verbose=verbose if "forward_verbose" not in kwargs else kwargs["forward_verbose"])
+    if "forward_verbose" in kwargs: del kwargs["forward_verbose"]
     metric = kwargs.get("metric", "accuracy")
+    numberfmt = '{:.2%}' if metric in ["acc", "accuracy"] else '{:.3f}'
     def get_tree_perf(conf, print_cnf):
         ctx = SnakeContext.loader_context(config=conf, silent=True, warn_filters=["DifferentFileWarning"])
         clusters, embedding, descriptions = ctx.load("clusters", "embedding", "pp_descriptions")
@@ -156,9 +166,9 @@ def get_best_conf(classes, nprocs=DEFAULT_N_CPUS-1, verbose=True, return_all=Fal
                           names=[k for k,v in print_cnf.items() if isinstance(v, list)]), index=[metric])
         if verbose:
             styles = [{'selector': 'th', 'props': [('vertical-align','top'),('text-align','left')]}] #('border-style', 'solid')  #see https://stackoverflow.com/a/55904239/5122790
-            styler = lambda df: df.style.apply(highlight_nonzero_max, axis=0).format('{:.2%}'.format, na_rep="-").set_table_styles(styles)
-            display(styler(df.unstack(level=[0, 1, 2])))
-            print(f"Best {metric}: {best[1]:.2%}")
+            styler = lambda df: df.style.apply(highlight_max, axis=None).format(numberfmt.format, na_rep="-").set_table_styles(styles)
+            display(styler(df.T.unstack(level=[0, 1, 2])))
+            print(f"Best {metric}: {best[1]:.4f}")
         if return_all:
             return df
     res = ({**{k: v for k, v in print_cnf.items() if not isinstance(v, list)}, **dict(zip([k for k, v in print_cnf.items() if isinstance(v, list)],best[0]))}, best[1])

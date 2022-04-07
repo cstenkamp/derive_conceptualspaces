@@ -6,8 +6,8 @@ authors = [
   {name = "Chris Stenkamp "}
 ]
 readme = "README.md"
-requires-python = ">=3.10.0"
-version = "1.1.20220225" # why can't that dynamic from the _version.py anymore!
+requires-python = ">=3.9.0" #actually 3.10 but there's an annoying numpy-bug
+version = "1.2.20220407" # why can't that dynamic from the _version.py anymore!
 #homepage = "https://github.com/cstenkamp/MastersThesisText/"
 #repository = "https://github.com/cstenkamp/derive_conceptualspaces/"
 #documentation = "TODO"

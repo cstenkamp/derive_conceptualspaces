@@ -1,7 +1,12 @@
 import time
 from multiprocessing import JoinableQueue, Process
 
-from tqdm import tqdm
+from misc_util.pretty_print import isnotebook
+
+if isnotebook():
+    from tqdm import tqdm_notebook as tqdm
+else:
+    from tqdm import tqdm
 
 class WorkerPool():
     def __init__(self, n_workers, workerobj=None, pgbar=None, comqu=None):
