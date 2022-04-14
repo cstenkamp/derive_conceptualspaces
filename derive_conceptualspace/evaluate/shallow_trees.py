@@ -41,7 +41,8 @@ def classify_shallowtree_multi(clusters, embedding, descriptions, dataset_class,
                         for metric in ["accuracy", "f1"]:
                             print("=="*50)
                             score = classify_shallowtree(clusters, embedding, descriptions, dataset_class, one_vs_rest, dt_depth, test_percentage_crossval,
-                                                         classes, verbose=verbose, return_features=False, balance_classes=balance_classes, metric=metric, **kwargs)
+                                                         classes, verbose=verbose, return_features=False, balance_classes=balance_classes, metric=metric,
+                                                         also_unweighted=True, **kwargs)
                             results[(classes, test_percentage_crossval, one_vs_rest, dt_depth, balance_classes)][metric] = score
     df = pd.DataFrame(results, columns=pd.MultiIndex.from_tuples([i for i in results.keys()], names=("classes","test%/Xval","1vsRest","Tree-Depth","balanced")))
     with pd.option_context('display.max_rows', 51, 'display.max_columns', 20, 'display.expand_frame_repr', False,
@@ -52,7 +53,7 @@ def classify_shallowtree_multi(clusters, embedding, descriptions, dataset_class,
 
 def classify_shallowtree(clusters, embedding, descriptions, dataset_class, one_vs_rest, dt_depth, test_percentage_crossval,
                          classes=None, cluster_reprs=None, do_plot=False, verbose=False, return_features=True, metric="acc",
-                         balance_classes=True, clus_rep_algo=None, shutup=False, repeat=1, pgbar=None, **kwargs):
+                         balance_classes=True, clus_rep_algo=None, shutup=False, repeat=1, pgbar=None, also_unweighted=False, **kwargs):
     cm = (lambda *args, **kwargs: nullcontext()) if pgbar is None else tqdm
     clusters, planes = clusters.values()
     if classes is None:
@@ -155,7 +156,7 @@ def classify_shallowtree(clusters, embedding, descriptions, dataset_class, one_v
         return raw_scores, Counter(cats.values())
     if return_features:
         return [features_outvar, ranked, all_targets, list(scores.values()) if one_vs_rest else [score], all_classes, list(ranked.columns)]
-    return score
+    return score if not also_unweighted else (score, sum(scores.values()) / len(scores.values()) if one_vs_rest else np.nan)
 
 
 def classify(input, target, axnames, catnames, dt_depth, test_percentage_crossval, metric,

@@ -8,7 +8,8 @@ from derive_conceptualspace.load_data.load_semanticspaces import (
     get_all_goodkappa,
     display_svm as display_svm_base,
     get_all as get_all_base,
-    count_raw_places_dataset
+    count_raw_places_dataset,
+    get_all_places, get_all_movies
 )
 
 #TODO: make this usable! No absolute paths in the derive_conceptualspace.load_data.load_semanticspaces file, properly do logging and env-vars and arguments here, ...
@@ -40,7 +41,7 @@ def raw_places_dataset():
 
 @main.command()
 def all_goodkappa():
-    get_all_goodkappa()
+    get_all_goodkappa("places")
 
 @main.command()
 def display_svm():
@@ -54,8 +55,16 @@ def get_all():
 def count_places():
     count_raw_places_dataset()
 
+@main.command()
+def stats_places():
+    get_all_places()
+
+@main.command()
+def stats_movies():
+    get_all_movies()
 
 
 
 if __name__ == "__main__":
     main(obj={})
+

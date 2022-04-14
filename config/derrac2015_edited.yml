@@ -9,7 +9,7 @@ translate_policy:             onlyorig
 quantification_measure:       [ppmi, tfidf]
 dissim_measure:               norm_ang_dist
 embed_algo:                   mds
-embed_dimensions:             [3, 50, 100, 200]
+embed_dimensions:             [50, 100, 200] #,3
 extraction_method:            tfidf
 #TODO: DESC15 hat darauf abgezielt ~22k keywords zu haben => mit meinen params dafür sorgen dass ich auch auf sowas komme, mit den aktuellen ists nur 2402!
 #candidate_min_term_count:     25 #movies has samples-to-threshold value of 100, placetypes has 35, 20newsgrups has 614, so for 8000 courses any threshold from 2 to 25 seems reasonable (BUT see above, I get too little)!!
@@ -19,7 +19,7 @@ max_ngram:                    5                   # not explicitly, but it takes
 dcm_quant_measure:            [count, ppmi, tfidf]
 classifier:                   SVM
 kappa_weights:                quadratic
-classifier_succmetric:        [kappa_rank2rank_onlypos_min, kappa_digitized_onlypos_2, kappa_count2rank_onlypos]
+classifier_succmetric:        [kappa_rank2rank_onlypos_min, kappa_digitized_onlypos_2, kappa_count2rank_onlypos, accuracy]
 prim_lambda:                  0.5
 sec_lambda:                   0.1
 __perdataset__:

@@ -48,8 +48,8 @@ def get_raw_places_dataset():
     json_dump(dict(vecs=vecs, classes=classes), "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/placetypes/raw_descriptions.json")
 
 
-def get_all_goodkappa():
-    data_base, data_set = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/", "places"
+def get_all_goodkappa(dataset):
+    data_base, data_set = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/", dataset
     greats, goods = set(), set()
     for n_dims in (20, 50, 100, 200):
         clusters = get_clusters(data_base, data_set, n_dims)
@@ -57,12 +57,17 @@ def get_all_goodkappa():
         goods |= set(flatten(clusters.values()))
     print(greats)
 
-def main():
-    data_base, data_set, n_dims = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/", "places", 20
+def get_all_places():
+    data_base, data_set, n_dims = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/", "places", 200
     canditerms, cluster_directions, mds_class_dict = get_all(data_base, data_set, n_dims)
     three_dims = list(cluster_directions.keys())[:3]
     entities = {k: (v[1], np.array([v[2][k2] for k2 in three_dims])) for k, v in mds_class_dict.items()}
     display_svm(entities, {k: cluster_directions[k] for k in three_dims})
+
+def get_all_movies():
+    data_base, data_set, n_dims = "/home/chris/Documents/UNI_neu/Masterarbeit/data_new/semanticspaces/", "places", 200
+    canditerms, cluster_directions, mds_class_dict = get_all(data_base, data_set, n_dims)
+
 
 
 def display_svm(entities, cluster_directions):
@@ -118,7 +123,7 @@ def get_all(data_base, data_set, n_dims):
 
 def load_projections(data_base, data_set, n_dims):
     return (
-        np.loadtxt(join(data_base, data_set, f"d{n_dims}", "projections20.data")),
+        np.loadtxt(join(data_base, data_set, f"d{n_dims}", f"projections{n_dims}.data")),
         np.loadtxt(join(data_base, data_set, f"d{n_dims}", f"{TRANSLATE_FNAME.get(data_set, data_set)}{n_dims}.projected"))
     )
 
@@ -230,6 +235,8 @@ def get_clusters(data_base, data_set, n_dims):
         txt = [i.strip() for i in rfile.readlines()]
     iterator = iter(txt)
     clustername = None
+    if data_set == "movies" and n_dims == 100:  #wrong in their data
+        clusters[(clustername := next(iterator))] = set()
     for line in iterator:
         if line.startswith("Cluster"):
             ncluster = int(line[len("Cluster "):line.find(":")])
@@ -239,6 +246,9 @@ def get_clusters(data_base, data_set, n_dims):
             clusters[clustername] = set()
         elif not line.startswith("**"):
             clusters[clustername].add(line)
+        elif data_set == "movies" and n_dims == 100 and line.startswith("**"): #again, wrong in their shit data
+            try: clusters[(clustername := next(iterator))] = set()
+            except StopIteration: break
     return clusters
 
 

@@ -4,11 +4,10 @@
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />
     <envs>
-      <env name="PYTHONUNBUFFERED" value="1" />
       <env name="MA_DATASET" value="siddata2022" />
       <env name="MA_LANGUAGE" value="de" />
       <env name="MA_DEBUG" value="False" />
-      <env name="MA_PP_COMPONENTS" value="mfauhtcsldp" />
+      <env name="MA_PP_COMPONENTS" value="mfauhcsd2" />
       <env name="MA_TRANSLATE_POLICY" value="onlyorig" />
       <env name="MA_MIN_WORDS_PER_DESC" value="80" />
       <env name="MA_QUANTIFICATION_MEASURE" value="tfidf" />
@@ -18,7 +17,9 @@
       <env name="MA_DCM_QUANT_MEASURE" value="count" />
       <env name="MA_KAPPA_WEIGHTS" value="quadratic" />
       <env name="MA_CLASSIFIER_SUCCMETRIC" value="kappa_digitized_onlypos_2" />
-      <env name="MA_CLUSTER_DIRECTION_ALGO" value="reclassify" />
+      <env name="MA_PRIM_LAMBDA" value="0.5" />
+      <env name="MA_SEC_LAMBDA" value="0.2" />
+      <env name="MA_CLUSTER_DIRECTION_ALGO" value="reclassify cluster_reprs" />
     </envs>
     <option name="SDK_HOME" value="" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/derive_conceptualspace/cli" />

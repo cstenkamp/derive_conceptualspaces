@@ -9,7 +9,7 @@ from collections import Counter
 from tqdm import tqdm
 import sklearn.svm
 import numpy as np
-from sklearn.metrics import confusion_matrix, cohen_kappa_score
+from sklearn.metrics import confusion_matrix, cohen_kappa_score, ndcg_score
 from scipy.stats import rankdata
 import pandas as pd
 
@@ -256,6 +256,8 @@ def create_candidate_svm(embedding, term, quants, classifier, plot_svm=False, de
     res["kappa_rank2rank_min"] = cohen_kappa(rankdata(quants, method="min"), rankdata(distances, method="dense"), weights=kappa_weights) #if there are 14.900 zeros, the next one is a 14.901
     res["kappa_bin2bin"]    = cohen_kappa(bin_labels, [i > 0 for i in distances], weights=kappa_weights)
     res["kappa_digitized"]  = cohen_kappa(np.digitize(quants, np.histogram_bin_edges(quants)[1:]), np.digitize(distances, np.histogram_bin_edges(distances)[1:]), weights=kappa_weights)
+    res["ndcg_all"] = ndcg_score(np.array([quants]), np.expand_dims(distances,0))
+    res["ndcg_onlypos"] = ndcg_score(np.array([quants]), np.expand_dims(distances, 0), k=np.count_nonzero(np.array(quants)))
     nonzero_indices = np.where(np.array(quants) > 0)[0]
     q2, d2 = np.array(quants)[nonzero_indices], np.array(distances)[nonzero_indices]
     with nullcontext(): #warnings.catch_warnings(): #TODO get rid of what cuases the nans here!!!
@@ -306,4 +308,41 @@ def display_svm(X, y, svm, term=None, name=None, descriptions=None, quants=None,
         fig.add_markers([0, 0, 0], size=3, name="Coordinate Center")  # coordinate center
         # fig.add_line(-decision_plane.normal * 5, decision_plane.normal * 5)  # orthogonal of decision hyperplane through [0,0,0]
         # fig.add_sample_projections(X, decision_plane.normal)  # orthogonal lines from the samples onto the decision hyperplane orthogonal
+        fig.show()
+
+
+# TODO obviously merge these, but the lower is used in `3dembedding_svm_mathe.ipynb` and the upper elsewhere and I don't have the time to ensure both work correctly
+def display_svm2(X, y, svm, term=None, name=None, descriptions=None, quants=None, distances=None,
+                highlight=None, stretch_fact=2, legend_inside=False, show_center=False, **kwargs):
+    assert X.shape[1] == 3
+    decision_plane = ThreeDPlane(svm.coef_[0], svm.intercept_[0])
+    occurences = [descriptions._descriptions[i].count_phrase(term) for i in range(len(X))]
+    percentile = lambda percentage: np.percentile(np.array([i for i in occurences if i]), percentage)
+    if descriptions._descriptions[0].text is not None:
+        extras = [{**{"Name": descriptions._descriptions[i].title, "Occurences": occurences[i],
+                      "extra": {"Description": shorten(descriptions._descriptions[i].text, 200)}},
+                   **({"Quants": quants[i]} if quants is not None else {}),
+                   **({"Distance": distances[i]} if distances is not None else {})}
+                  for i in range(len(X))]
+    else:
+        extras = [{**{"Name": descriptions._descriptions[i].title, "Quants": quants[i], "Occurences": occurences[i],
+                      "extra": {"BoW": ", ".join([f"{k}: {v}" for k, v in sorted(descriptions._descriptions[i].bow().items(), key=lambda x:x[1], reverse=True)[:10]])}},
+                   **({"Quants": quants[i]} if quants is not None else {}),
+                   **({"Distance": distances[i]} if distances is not None else {})}
+                  for i in range(len(X))]
+    highlight_inds = [n for n, i in enumerate(descriptions._descriptions) if i.title in highlight] if highlight else []
+    with ThreeDFigure(name=name, **kwargs) as fig:
+        fig.add_markers(X[np.where(np.logical_not(y))], color="blue", size=0.7, custom_data=[extras[i] for i in np.where(np.logical_not(y))[0]], linelen_right=50, name="Negative samples", opacity=0.3)
+        fig.add_markers(X[np.where(y)], color="red", size=[9 if occurences[i] > percentile(70) else 4 for i in np.where(y)[0]], custom_data=[extras[i] for i in np.where(y)[0]], linelen_right=50, name="Positive samples")
+        if highlight_inds:
+            highlight_mask = np.array([i in highlight_inds for i in range(len(y))], dtype=int)
+            fig.add_markers(X[np.where(highlight_mask)], color="green", size=9, custom_data=[extras[i] for i in np.where(highlight_mask)[0]], linelen_right=50, name="Highlighted")
+        fig.add_surface(decision_plane, X, y, color="gray", name="Decision Plane", showlegend=True)
+        fig.add_line(X.mean(axis=0)-decision_plane.normal*stretch_fact, X.mean(axis=0)+decision_plane.normal*stretch_fact, width=2, name="Dec.Plane Orthogonal")  # orthogonal of decision hyperplane through mean of points
+        if show_center:
+            fig.add_markers([0, 0, 0], size=3, name="Coordinate Center")  # coordinate center
+        # fig.add_line(-decision_plane.normal * 5, decision_plane.normal * 5)  # orthogonal of decision hyperplane through [0,0,0]
+        # fig.add_sample_projections(X, decision_plane.normal)  # orthogonal lines from the samples onto the decision hyperplane orthogonal
+        if legend_inside:
+            fig.fig.update_layout(legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01))
         fig.show()
