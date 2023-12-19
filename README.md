@@ -4,7 +4,7 @@ Master's thesis deriving conceptual spaces from course data, following [DESC15] 
 
 ### Other Pages:
 
-* [referenced plots](https://github.com/cstenkamp/derive_conceptualspaces/blob/main/doc/install_docker.md)
+* [referenced plots](https://github.com/cstenkamp/derive_conceptualspaces/blob/main/doc/referenced_plots.md)
 * [Repo with Thesis-Text](https://github.com/cstenkamp/MastersThesisText)
 * [Repo with Analysis-Notebooks (including output-cells)](https://github.com/cstenkamp/MAAnalysisNotebooks)
 
